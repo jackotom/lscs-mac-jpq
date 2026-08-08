@@ -1339,6 +1339,9 @@ export class TrackerService {
     }
 
     const arenaState = this.arena.getState();
+    const redraftTrackerDeck = arenaState.awaitingExactDeck
+      ? arenaState.redraftTrackerDeck ?? []
+      : [];
     if (arenaState.status === "drafting") {
       this.lastArenaDeckSignature = undefined;
       this.engine.clearArenaDeck();
@@ -1346,7 +1349,8 @@ export class TrackerService {
     }
     if (
       arenaState.status === "redrafting" &&
-      arenaState.deck.length === 0
+      arenaState.deck.length === 0 &&
+      redraftTrackerDeck.length === 0
     ) {
       this.lastArenaDeckSignature = undefined;
       this.engine.clearArenaDeck();
@@ -1360,13 +1364,23 @@ export class TrackerService {
       return;
     }
 
-    const unresolvedCount = arenaState.unresolvedCount ?? 0;
+    const baseDeck = redraftTrackerDeck.length > 0
+      ? redraftTrackerDeck
+      : arenaState.deck;
+    const knownRedraftCount = redraftTrackerDeck.reduce((total, card) => total + card.count, 0);
+    const unresolvedCount = redraftTrackerDeck.length > 0
+      ? Math.max(0, 30 - knownRedraftCount)
+      : arenaState.unresolvedCount ?? 0;
     const trackerDeck = unresolvedCount > 0
       ? [
-          ...arenaState.deck,
-          { name: "未解析竞技场牌", count: unresolvedCount, unresolved: true as const }
+          ...baseDeck,
+          {
+            name: redraftTrackerDeck.length > 0 ? "待确认重选牌" : "未解析竞技场牌",
+            count: unresolvedCount,
+            unresolved: true as const
+          }
         ]
-      : arenaState.deck;
+      : baseDeck;
     const trackerEngineDeck = trackerDeck.map(({ pickRate: _pickRate, deckImpact: _deckImpact, ...card }) => card);
     const signature = JSON.stringify({
       phase: arenaState.status === "redrafting" ? "redrafting" : "final",

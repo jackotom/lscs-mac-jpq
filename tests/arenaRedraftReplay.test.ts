@@ -165,8 +165,9 @@ describe("de-identified Arena redraft replay", () => {
     ]));
     expect(service.getState().arena).toMatchObject({ draftCount: 29, unresolvedCount: 30, awaitingExactDeck: true });
     expect(service.getState().deck).toEqual(expect.arrayContaining([
-      expect.objectContaining({ unresolved: true, count: 30 })
+      expect.objectContaining({ name: "待确认重选牌", unresolved: true, count: 1 })
     ]));
+    expect(service.getState().deck.filter((card) => !card.unresolved)).toHaveLength(29);
     expect(service.getState().arena?.deck.some((card) => /^Unknown card\s+\d+$/i.test(card.name))).toBe(false);
     await service.dispose();
   });

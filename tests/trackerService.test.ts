@@ -1736,7 +1736,10 @@ describe("TrackerService log selection", () => {
     expect(service.getState().arena?.deck).toEqual([]);
     expect(service.getState().summary).toMatchObject({ totalCards: 30, remainingCards: 30 });
     expect(service.getState().deck).toEqual(expect.arrayContaining([
-      expect.objectContaining({ unresolved: true, count: 30 })
+      expect.objectContaining({ cardId: "TEST_001", count: 25 }),
+      expect.objectContaining({ cardId: "TEST_002", count: 2 }),
+      expect.objectContaining({ cardId: "TEST_003", count: 2 }),
+      expect.objectContaining({ name: "待确认重选牌", unresolved: true, count: 1 })
     ]));
     await service.dispose();
   });
@@ -2144,9 +2147,10 @@ describe("TrackerService log selection", () => {
     ]);
     expect(service.getState().arena?.pendingRedraftChoices).toHaveLength(5);
     expect(service.getState().deckName).toBe("竞技场牌库");
-    expect(service.getState().deck).toEqual([
-      expect.objectContaining({ cardId: "TEST_003", count: 30 })
-    ]);
+    expect(service.getState().deck).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "TEST_001", count: 29 }),
+      expect.objectContaining({ name: "待确认重选牌", unresolved: true, count: 1 })
+    ]));
     await service.dispose();
   });
 
@@ -2356,9 +2360,11 @@ describe("TrackerService log selection", () => {
         awaitingExactDeck: true
       });
     }, { timeout: 2_000, interval: 50 });
-    expect(service.getState().deck).toEqual([
-      expect.objectContaining({ cardId: "TEST_OLD_EXACT", count: 30 })
-    ]);
+    expect(service.getState().deck).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "TEST_001", count: 24 }),
+      expect.objectContaining({ cardId: "TEST_002", count: 1 }),
+      expect.objectContaining({ name: "待确认重选牌", unresolved: true, count: 5 })
+    ]));
     await service.dispose();
   });
 
@@ -2435,7 +2441,18 @@ describe("TrackerService log selection", () => {
         expect(state.arena?.pendingRedraftChoices?.at(-1)).toMatchObject({
           cardId: `TEST_REPLACEMENT_${index}`
         });
-        expect(state.deckName).toBeUndefined();
+        expect(state.deckName).toBe("竞技场牌库");
+        expect(state.summary.totalCards).toBe(30);
+        expect(state.deck.reduce((total, card) => total + card.count, 0)).toBe(30);
+        for (let chosen = 1; chosen <= index; chosen += 1) {
+          expect(state.deck).toEqual(expect.arrayContaining([
+            expect.objectContaining({ cardId: `TEST_REPLACEMENT_${chosen}`, count: 1 })
+          ]));
+        }
+        expect(state.deck).toEqual(expect.arrayContaining([
+          expect.objectContaining({ cardId: `TEST_REPLACEMENT_${index}`, count: 1 }),
+          expect.objectContaining({ name: "待确认重选牌", count: 6 - index, unresolved: true })
+        ]));
       }, { timeout: 2_000, interval: 25 });
     }
 
@@ -2478,6 +2495,18 @@ describe("TrackerService log selection", () => {
       expect(state.arena?.pendingRedraftChoices?.at(-1)).toMatchObject({
         cardId: "TEST_REPLACEMENT_5"
       });
+      expect(state.deckName).toBe("竞技场牌库");
+      expect(state.summary.totalCards).toBe(30);
+      expect(state.deck.reduce((total, card) => total + card.count, 0)).toBe(30);
+      for (let chosen = 1; chosen <= 5; chosen += 1) {
+        expect(state.deck).toEqual(expect.arrayContaining([
+          expect.objectContaining({ cardId: `TEST_REPLACEMENT_${chosen}`, count: 1 })
+        ]));
+      }
+      expect(state.deck).toEqual(expect.arrayContaining([
+        expect.objectContaining({ cardId: "TEST_REPLACEMENT_5", count: 1 }),
+        expect.objectContaining({ name: "待确认重选牌", count: 1, unresolved: true })
+      ]));
     }, { timeout: 2_000, interval: 25 });
 
     await appendFile(arenaLog, "D 19:11:57.365 Arena.SetDraftMode - ACTIVE_DRAFT_DECK\n", "utf8");
@@ -2489,10 +2518,12 @@ describe("TrackerService log selection", () => {
         unresolvedCount: 30,
         awaitingExactDeck: true
       });
+      expect(state.deckName).toBe("竞技场牌库");
       expect(state.summary.totalCards).toBe(30);
-      expect(state.deck).toEqual([
-        expect.objectContaining({ name: "未解析竞技场牌", count: 30, unresolved: true })
-      ]);
+      expect(state.deck).toEqual(expect.arrayContaining([
+        expect.objectContaining({ cardId: "TEST_REPLACEMENT_5", count: 1 }),
+        expect.objectContaining({ name: "待确认重选牌", count: 1, unresolved: true })
+      ]));
     }, { timeout: 2_000, interval: 25 });
 
     await service.dispose();
@@ -2540,7 +2571,7 @@ describe("TrackerService log selection", () => {
     await service.dispose();
   });
 
-  it("keeps the formal 30-card deck while all 35 redraft candidates await confirmation", async () => {
+  it("shows live replacements over the retained redraft snapshot while the exact deck awaits confirmation", async () => {
     vi.resetModules();
     const { TrackerService } = await import("../src/main/trackerService.js");
     const sessionDir = await createSessionDir();
@@ -2565,7 +2596,7 @@ describe("TrackerService log selection", () => {
       "D 16:53:24.100 DraftManager.OnRedraftBegin - Got new redraft deck with ID: 9466340633",
       "D 16:53:25.000 DraftManager.OnChoicesAndContents - Draft Deck ID: 9466340632, Hero Card = HERO_05",
       ...Array.from(
-        { length: 26 },
+        { length: 25 },
         (_value, index) => `D 16:53:25.${String(index).padStart(3, "0")} DraftManager.OnChoicesAndContents - Draft deck contains card TEST_001`
       ),
       ...Array.from(
@@ -2590,6 +2621,11 @@ describe("TrackerService log selection", () => {
       expect(state.arena?.deck.reduce((total, card) => total + card.count, 0)).toBe(30);
       expect(state.arena?.pendingRedraftChoices).toHaveLength(3);
       expect(state.arena?.redraftPool?.reduce((total, card) => total + card.count, 0)).toBe(33);
+      expect(state.deck).toEqual(expect.arrayContaining([
+        expect.objectContaining({ cardId: "TEST_001", count: 25 }),
+        expect.objectContaining({ cardId: "TEST_002", count: 3 }),
+        expect.objectContaining({ name: "待确认重选牌", count: 2, unresolved: true })
+      ]));
     }, { timeout: 2_000, interval: 50 });
 
     await appendFile(arenaLog, [
@@ -2610,9 +2646,10 @@ describe("TrackerService log selection", () => {
       expect(service.getState().arena?.redraftPool?.reduce((total, card) => total + card.count, 0)).toBe(35);
       expect(service.getState().deckName).toBe("竞技场牌库");
       expect(service.getState().summary.totalCards).toBe(30);
-      expect(service.getState().deck).toEqual([
-        expect.objectContaining({ cardId: "TEST_001", count: 30 })
-      ]);
+      expect(service.getState().deck).toEqual(expect.arrayContaining([
+        expect.objectContaining({ cardId: "TEST_001", count: 25 }),
+        expect.objectContaining({ cardId: "TEST_002", count: 5 })
+      ]));
     }, { timeout: 2_000, interval: 50 });
     await service.dispose();
   });
@@ -3211,7 +3248,7 @@ describe("TrackerService log selection", () => {
         summary: { totalCards: 30, remainingCards: 29, drawnCards: 1 }
       });
       expect(service.getState().deck).toEqual([
-        expect.objectContaining({ unresolved: true, count: 30, remaining: 29, drawn: 1 })
+        expect.objectContaining({ cardId: "TEST_001", count: 30, remaining: 29, drawn: 1 })
       ]);
     }, { timeout: 2_000, interval: 25 });
     await service.dispose();

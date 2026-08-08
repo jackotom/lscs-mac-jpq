@@ -305,3 +305,10 @@ Legacy shared fields remain for one compatibility version, but renderer state is
 - While the friendly controller is unknown, controller-bearing zone changes stay pending. They replay in original order after friendly identity is confirmed; opponent ownership requires positive controller evidence.
 - A more precise Arena deck received during an active match reconciles base deck rows in place. Matching prefers `cardId` and uses normalized names only when the match is unique; match activity, turns, entities, hand state, opponent records, and match statistics remain intact.
 - Heuristic collection-deck matching requires at least two distinct friendly card observations and a unique best candidate or a strict score lead. Explicit Hearthstone deck selection remains immediate and does not use this threshold.
+
+## v0.3.14 live Arena redraft contract
+
+- Every `Client chooses` replacement is published to the tracker immediately; `ACTIVE_DRAFT_DECK` is not required for visibility.
+- The provisional tracker deck uses the latest retained-card snapshot plus replacements that arrived after that snapshot. It never uses the 31–35 card evidence pool as a playable deck.
+- A provisional deck below 30 cards is padded only with an explicit `待确认重选牌` unresolved row. If the retained snapshot is ambiguous or exceeds 30 with pending choices, only directly observed replacements are trusted and the rest stay unresolved.
+- A matching exact 30-card deck replaces the provisional deck. Old, mismatched, incomplete, or delayed exact snapshots cannot overwrite a newer redraft generation.

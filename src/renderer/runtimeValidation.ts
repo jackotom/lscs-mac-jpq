@@ -495,6 +495,7 @@ function isArenaState(value: unknown): boolean {
       !Array.isArray(value.picks) || !value.picks.every(isArenaPick) ||
       !Array.isArray(value.deck) || !value.deck.every(isDeckCard) ||
       (value.redraftPool !== undefined && (!Array.isArray(value.redraftPool) || !value.redraftPool.every(isDeckCard))) ||
+      (value.redraftTrackerDeck !== undefined && (!Array.isArray(value.redraftTrackerDeck) || !value.redraftTrackerDeck.every(isDeckCard))) ||
       (value.pendingRedraftChoices !== undefined &&
         (!Array.isArray(value.pendingRedraftChoices) || !value.pendingRedraftChoices.every(isArenaCardChoice))) ||
       (value.awaitingExactDeck !== undefined && typeof value.awaitingExactDeck !== "boolean") ||

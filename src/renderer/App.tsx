@@ -1301,7 +1301,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石助手</strong>
-          <small>v0.3.13</small>
+          <small>v0.3.14</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作区">

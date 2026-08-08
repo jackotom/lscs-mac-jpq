@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.3.13");
+    expect(packageJson.version).toBe("0.3.14");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');

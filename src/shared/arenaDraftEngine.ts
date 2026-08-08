@@ -352,6 +352,15 @@ export class ArenaDraftEngine {
     const redraftCandidates = hasConfirmedDeck
       ? mergeDeckCards([...this.confirmedDeck, ...pendingRedraftDeck])
       : snapshotRedraftCandidates;
+    const snapshotRedraftCandidateCount = snapshotRedraftCandidates.reduce(
+      (total, card) => total + card.count,
+      0
+    );
+    const redraftTrackerDeck = this.awaitingExactDeck
+      ? snapshotRedraftCandidateCount > 0 && snapshotRedraftCandidateCount <= 30
+        ? snapshotRedraftCandidates
+        : pendingRedraftDeck
+      : undefined;
     const confirmedCardCount = deck.reduce((total, card) => total + card.count, 0);
     const draftCount = this.awaitingExactDeck
       ? hasConfirmedDeck ? 30 : Math.min(30, this.redraftContentsPicks.length + pendingChoicesAfterSnapshot.length)
@@ -371,6 +380,9 @@ export class ArenaDraftEngine {
       redraftPool: this.awaitingExactDeck && redraftCandidates.length > 0
         ? redraftCandidates
         : this.status === "redrafting" && hasAmbiguousCandidates ? candidateDeck : undefined,
+      redraftTrackerDeck: redraftTrackerDeck?.length
+        ? redraftTrackerDeck.map(cloneDeckCard)
+        : undefined,
       awaitingExactDeck: this.awaitingExactDeck,
       pendingRedraftChoices: this.pendingRedraftChoices.map((choice) => ({ ...choice })),
       draftCount,
