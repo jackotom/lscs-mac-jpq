@@ -1,9 +1,9 @@
-/* Hearthstone tavern skin, scoped to the main desktop window only. */
+/* Ice-blue monitoring skin, scoped to the main desktop window only. */
 html body:has(.desktop-frame):not(:has(.overlay-shell)) {
   min-width: 0;
   min-height: 100vh;
   overflow: hidden;
-  background: #050403;
+  background: #050914;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) #root {
@@ -11,19 +11,19 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) #root {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame {
-  --replica-bg: #090806;
-  --replica-sidebar: #100d09;
-  --replica-sidebar-deep: #080706;
-  --replica-panel: #15110c;
-  --replica-panel-raised: #1d160e;
-  --replica-panel-soft: #251a0f;
-  --replica-border: #634316;
-  --replica-border-soft: rgba(194, 132, 37, 0.24);
-  --replica-blue: #c88922;
-  --replica-blue-light: #f0bd55;
-  --replica-gold: #d69a2c;
-  --replica-text: #f0e2c1;
-  --replica-muted: #a38d69;
+  --replica-bg: #070d1c;
+  --replica-sidebar: #091121;
+  --replica-sidebar-deep: #060c18;
+  --replica-panel: #0c1528;
+  --replica-panel-raised: #101d34;
+  --replica-panel-soft: #111d30;
+  --replica-border: rgba(74, 106, 174, 0.52);
+  --replica-border-soft: rgba(68, 91, 139, 0.34);
+  --replica-blue: #255bdc;
+  --replica-blue-light: #64b5ff;
+  --replica-gold: #64b5ff;
+  --replica-text: #f4f7ff;
+  --replica-muted: #8593ad;
   display: grid;
   grid-template-columns: 184px minmax(0, 1fr);
   width: 100vw;
@@ -32,11 +32,11 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame {
   overflow: hidden;
   color: var(--replica-text);
   background:
-    radial-gradient(circle at 58% -16%, rgba(151, 86, 17, 0.13), transparent 42%),
+    radial-gradient(circle at 58% -16%, rgba(28, 76, 176, 0.16), transparent 42%),
     var(--replica-bg);
-  border: 1px solid #795018;
+  border: 1px solid rgba(74, 106, 174, 0.52);
   border-radius: 8px;
-  box-shadow: inset 0 1px 0 rgba(255, 213, 132, 0.09), 0 0 34px rgba(96, 52, 7, 0.18);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.06), 0 0 34px rgba(0, 26, 78, 0.24);
   font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -51,12 +51,12 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .app-sidebar {
   padding: 27px 8px 12px;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid #5a3a13;
+  border-right: 1px solid rgba(68, 91, 139, 0.34);
   background:
-    radial-gradient(circle at 48px 74px, rgba(185, 112, 25, 0.18), transparent 96px),
-    radial-gradient(circle at 34px 96%, rgba(191, 103, 16, 0.13), transparent 95px),
-    linear-gradient(180deg, #151008 0%, var(--replica-sidebar) 46%, var(--replica-sidebar-deep) 100%);
-  box-shadow: inset -1px 0 0 rgba(218, 151, 51, 0.09);
+    radial-gradient(circle at 48px 74px, rgba(45, 105, 224, 0.16), transparent 96px),
+    radial-gradient(circle at 34px 96%, rgba(29, 79, 181, 0.12), transparent 95px),
+    linear-gradient(180deg, #0b1730 0%, var(--replica-sidebar) 46%, var(--replica-sidebar-deep) 100%);
+  box-shadow: inset -1px 0 0 rgba(113, 157, 232, 0.08);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-window-controls {
@@ -114,7 +114,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand > span:la
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand strong {
   overflow: hidden;
-  color: #f1c665;
+  color: var(--replica-text);
   font-size: 20px;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -123,7 +123,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand strong {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand small {
-  color: #8f7958;
+  color: var(--replica-muted);
   font-size: 9px;
 }
 
@@ -134,7 +134,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav {
   padding: 6px 0;
 }
 
-html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item {
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button {
   display: grid;
   grid-template-columns: 25px minmax(0, 1fr);
   width: 100%;
@@ -144,7 +145,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item {
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #b7a17c;
+  color: #9da8c0;
   background: transparent;
   box-shadow: none;
   font-size: 13px;
@@ -152,25 +153,27 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item {
   text-align: left;
 }
 
-html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item svg {
-  color: #a88a5d;
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item svg,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button svg {
+  color: #8390aa;
 }
 
-html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item:hover {
-  border-color: rgba(190, 130, 39, 0.26);
-  color: #f4e7ca;
-  background: rgba(87, 54, 17, 0.46);
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item:hover,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button:hover {
+  border-color: rgba(74, 123, 213, 0.28);
+  color: #f4f7ff;
+  background: rgba(28, 63, 126, 0.42);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item.is-active {
-  border-color: rgba(218, 151, 47, 0.48);
-  color: #fff0c9;
-  background: linear-gradient(90deg, #50300d, #271a0c);
-  box-shadow: inset 3px 0 0 #e2a73c, 0 5px 18px rgba(0, 0, 0, 0.22);
+  border-color: rgba(63, 126, 245, 0.72);
+  color: #f4f7ff;
+  background: linear-gradient(105deg, rgba(30, 72, 163, .9), rgba(18, 42, 90, .62));
+  box-shadow: inset 3px 0 0 #64b5ff, 0 5px 18px rgba(0, 20, 65, 0.28);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item.is-active svg {
-  color: #f0bd55;
+  color: #76b8ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer {
@@ -181,16 +184,16 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer {
   gap: 8px;
   margin-top: auto;
   padding: 12px 8px 4px;
-  border-top: 1px solid rgba(174, 117, 33, 0.24);
+  border-top: 1px solid rgba(68, 91, 139, 0.34);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-status-dot {
   width: 30px;
   height: 30px;
-  border: 1px solid #cfaa55;
+  border: 1px solid #4a6fae;
   border-radius: 50%;
-  background: radial-gradient(circle, #d99524 0 28%, #30200d 30% 100%);
-  box-shadow: inset 0 0 0 3px #100c07, 0 0 12px rgba(211, 139, 34, 0.18);
+  background: radial-gradient(circle, #5e789d 0 28%, #15213a 30% 100%);
+  box-shadow: inset 0 0 0 3px #070d1c, 0 0 12px rgba(72, 132, 226, 0.16);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer > span:last-child {
@@ -200,13 +203,13 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer > span:l
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer strong {
-  color: #e9d8b5;
+  color: #dce6f7;
   font-size: 11px;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-footer small {
   overflow: hidden;
-  color: #806f54;
+  color: #66748e;
   font-size: 8.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -222,8 +225,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .app-shell {
   padding: 10px 12px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 92% 4%, rgba(136, 77, 13, 0.15), transparent 38%),
-    linear-gradient(180deg, #0d0a07, #080706);
+    radial-gradient(circle at 92% 4%, rgba(28, 76, 176, 0.14), transparent 38%),
+    linear-gradient(180deg, #080e1d, #050a15);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .app-shell.view-settings {
@@ -1795,25 +1798,25 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-actions button
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-page, .settings-window) {
   border-color: var(--replica-border);
   background: var(--replica-panel);
-  box-shadow: inset 0 1px 0 rgba(241, 190, 92, 0.045);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.045);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-header {
   border-color: var(--replica-border-soft);
   background:
-    radial-gradient(circle at 12% 0%, rgba(184, 111, 23, 0.15), transparent 42%),
-    linear-gradient(180deg, rgba(35, 26, 14, 0.96), rgba(20, 16, 11, 0.96));
+    radial-gradient(circle at 12% 0%, rgba(51, 126, 223, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(23, 35, 61, 0.96), rgba(12, 21, 40, 0.96));
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-title-icon {
-  border-color: rgba(220, 155, 50, 0.55);
-  color: #efbc55;
-  background: linear-gradient(145deg, #4d2f0e, #24180b);
-  box-shadow: inset 0 1px 0 rgba(255, 228, 164, 0.13), 0 7px 20px rgba(0, 0, 0, 0.25);
+  border-color: rgba(77, 145, 239, 0.52);
+  color: #8bc8ff;
+  background: linear-gradient(145deg, #1d3d6d, #15284a);
+  box-shadow: inset 0 1px 0 rgba(151, 205, 255, 0.09), 0 7px 20px rgba(0, 0, 0, 0.25);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-eyebrow {
-  color: #c68a2e;
+  color: #6faeea;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
@@ -1846,22 +1849,22 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-section-content {
   background:
-    radial-gradient(circle at 74% 0%, rgba(127, 73, 15, 0.12), transparent 42%),
-    #0f0c08;
-  scrollbar-color: #704817 transparent;
+    radial-gradient(circle at 74% 0%, rgba(48, 97, 189, 0.12), transparent 42%),
+    #070d1c;
+  scrollbar-color: #2f4772 transparent;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-all-sections > .settings-form-section {
   border-color: var(--replica-border-soft);
-  background: rgba(23, 17, 10, 0.72);
-  box-shadow: inset 0 1px 0 rgba(242, 190, 92, 0.035);
+  background: rgba(12, 21, 40, 0.72);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.035);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-section-header,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-choice-row,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-control-row,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-switches button {
-  border-color: rgba(173, 116, 33, 0.2);
+  border-color: rgba(68, 91, 139, 0.28);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
@@ -1873,14 +1876,14 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
   .settings-info-row
 ) {
   border-color: var(--replica-border-soft);
-  background: rgba(18, 14, 9, 0.7);
+  background: rgba(10, 18, 34, 0.7);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
   button.settings-control-row:hover:not(:disabled),
   .settings-switches button:hover:not(:disabled)
 ) {
-  background: rgba(86, 53, 15, 0.38);
+  background: rgba(35, 66, 121, 0.38);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-switch-icon,
@@ -1892,38 +1895,38 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-about-mark {
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-mode-tabs button,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button, .settings-font-choices button),
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-select-row select {
-  border-color: #503718;
-  color: #bba781;
-  background: #120e09;
+  border-color: #2c3b59;
+  color: #9daac0;
+  background: #091121;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-mode-tabs button.is-selected,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button.is-selected, .settings-font-choices button.is-selected) {
-  border-color: #c28629;
-  color: #fff0ca;
-  background: linear-gradient(180deg, #4a2d0d, #2c1d0d);
-  box-shadow: inset 0 0 0 1px rgba(230, 171, 67, 0.12);
+  border-color: #3c78cf;
+  color: #eef6ff;
+  background: linear-gradient(180deg, #21498c, #162f5f);
+  box-shadow: inset 0 0 0 1px rgba(88, 157, 255, 0.14);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-mode-tabs button small {
-  color: #8f7856;
+  color: #7f8da7;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-switch-track, .settings-switch-state > span) {
-  border-color: #c78625;
-  background: linear-gradient(180deg, #d99c32, #a56213);
+  border-color: #2d78dc;
+  background: linear-gradient(180deg, #4b9dff, #255bdc);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(
   .settings-toggle[aria-checked="false"] .settings-switch-track,
   .settings-switches button[aria-checked="false"] .settings-switch-state > span
 ) {
-  border-color: #59472f;
-  background: #33281b;
+  border-color: #43506a;
+  background: #303b53;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-switch-state strong {
-  color: #e1aa45;
+  color: #64b5ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-range-control input {
@@ -1932,51 +1935,51 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-range-control 
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-range-control output,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-choice-row > strong {
-  color: #c9b58d;
+  color: #b8c6dc;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-shortcut-card kbd {
-  border-color: #765222;
-  color: #f0dfbd;
-  background: #261a0c;
+  border-color: #354662;
+  color: #dce9f8;
+  background: #111a2d;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-inline-note {
   border-color: var(--replica-border-soft);
-  background: rgba(62, 42, 17, 0.32);
+  background: rgba(36, 77, 121, 0.18);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-actions button {
-  border-color: #5b411e;
-  color: #d9c6a1;
-  background: #21170d;
+  border-color: #354662;
+  color: #cbd7e8;
+  background: #18233a;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-actions button:hover:not(:disabled) {
-  border-color: #aa7427;
-  color: #fff0ca;
-  background: #38240d;
+  border-color: #4b79bb;
+  color: #eef6ff;
+  background: #21375f;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-note-list article > span {
   border-color: var(--replica-border-soft);
-  color: #b6a17d;
-  background: #181109;
+  color: #91a4bf;
+  background: #111b2f;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-about-mark {
-  border-color: #b47a28;
-  background: #39230c;
+  border-color: #4d91ef;
+  background: #15325d;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-message,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-saving-status {
-  border-color: rgba(195, 133, 38, 0.38);
-  color: #d8bc86;
-  background: rgba(83, 51, 14, 0.36);
+  border-color: rgba(64, 126, 202, 0.38);
+  color: #a9d2f6;
+  background: rgba(20, 39, 68, 0.88);
 }
 
-/* Retain the detailed tracker routes, but bring them into the same tavern shell. */
+/* Retain the detailed tracker routes, but bring them into the same blue shell. */
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .top-bar,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .panel,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .dashboard-overview > article {
@@ -1985,20 +1988,51 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .dashboard-overview > ar
   background: linear-gradient(180deg, var(--replica-panel-raised), var(--replica-panel));
 }
 
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .brand-mark {
+  border-color: rgba(77, 145, 239, 0.52);
+  color: var(--replica-blue-light);
+  background: #15325d;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .brand-block h1 {
+  color: var(--replica-text);
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .brand-block p {
+  color: var(--replica-muted);
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.overview-card, .overview-stat) > svg,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.overview-card, .overview-stat) strong {
+  color: var(--replica-blue-light);
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.overview-card, .overview-stat) :is(span, small) {
+  color: var(--replica-muted);
+}
+
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .top-actions button,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .status-strip {
-  border-color: #5b411e;
-  color: #ddc9a4;
-  background: #1b140c;
+  border-color: #354662;
+  color: #cbd7e8;
+  background: #101a2f;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .status-strip strong {
+  color: var(--replica-text);
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .status-strip span:last-child {
+  color: var(--replica-muted);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .top-actions .primary-action {
-  border-color: #dc9f36;
-  color: #241506;
-  background: linear-gradient(180deg, #e2aa41, #a96914);
+  border-color: #4b9dff;
+  color: #f4f9ff;
+  background: linear-gradient(180deg, #3187ef, #1d65c8);
 }
 
-/* Keep every detailed desktop route on the same tavern materials. */
+/* Keep every detailed desktop route on the same blue materials. */
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .panel-heading {
   padding-bottom: 9px;
   border-bottom: 1px solid var(--replica-border-soft);
@@ -2016,7 +2050,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.eyebrow, .deck-summ
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .panel-icon {
   border: 1px solid var(--replica-border-soft);
   color: var(--replica-gold);
-  background: #2a1c0c;
+  background: #142744;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .panel-icon.danger {
@@ -2029,7 +2063,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary:has(.meter span[style*="width: 0%"]),
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary:has(.meter span[style*="width: 0%"]):hover {
   border-color: var(--replica-border-soft);
-  background: linear-gradient(135deg, #2b1d0d, var(--replica-panel));
+  background: linear-gradient(135deg, #142744, var(--replica-panel));
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary span,
@@ -2038,12 +2072,12 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-main small, .p
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .meter {
-  border: 1px solid rgba(118, 77, 22, 0.42);
-  background: #090603;
+  border: 1px solid rgba(68, 91, 139, 0.42);
+  background: #060b17;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .meter span {
-  background: linear-gradient(90deg, #a86512, #e0a43a);
+  background: linear-gradient(90deg, #255bdc, #64b5ff);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary:has(.meter span[style*="width: 0%"]):after {
@@ -2051,21 +2085,21 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-summary:has(.meter
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-list, .played-list, .timeline) {
-  scrollbar-color: #6d491d transparent;
+  scrollbar-color: #2f4772 transparent;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.deck-card-row, .played-list li, .timeline-row article) {
   border-color: var(--replica-border-soft);
-  background: linear-gradient(180deg, #20170d, #181109);
+  background: linear-gradient(180deg, #111d30, #0b1427);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.deck-card-row, .played-list li, .timeline-row article):hover {
-  border-color: rgba(214, 154, 51, 0.46);
-  background: #291b0c;
+  border-color: rgba(100, 181, 255, 0.48);
+  background: #152544;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-thumb {
-  border-color: rgba(202, 142, 48, 0.45);
+  border-color: rgba(90, 147, 229, 0.45);
   background: var(--replica-bg);
 }
 
@@ -2077,18 +2111,18 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .mana-cost {
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .event-count {
   border-color: var(--replica-border-soft);
-  color: #e7c276;
-  background: rgba(112, 70, 15, 0.28);
+  color: #8fc9ff;
+  background: rgba(36, 77, 121, 0.24);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .timeline-icon {
   border: 1px solid var(--replica-border-soft);
   color: var(--replica-gold);
-  background: #261a0d;
+  background: #142744;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .actor-me .timeline-icon {
-  color: #efbd56;
+  color: #64b5ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .actor-opponent .timeline-icon {
@@ -2097,7 +2131,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .actor-opponent .timelin
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .empty-state {
   color: var(--replica-muted);
-  background: radial-gradient(circle at 50% 42%, rgba(151, 91, 17, 0.09), transparent 54%);
+  background: radial-gradient(circle at 50% 42%, rgba(44, 100, 205, 0.1), transparent 54%);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .empty-state svg {
@@ -2105,12 +2139,12 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .empty-state svg {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .empty-state strong {
-  color: #dec99e;
+  color: #dce6f7;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .stat-tile {
   border-color: var(--replica-border-soft);
-  background: linear-gradient(180deg, #21170d, #181109);
+  background: linear-gradient(180deg, #111d30, #0b1427);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .stat-tile svg,
@@ -2129,12 +2163,12 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.last-action, .subhe
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-detail-disclosure {
   border-color: var(--replica-border-soft);
-  background: #181109;
+  background: #0b1427;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-detail-disclosure > summary:focus-visible,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-target:focus-visible {
-  outline-color: rgba(224, 168, 65, 0.72);
+  outline-color: rgba(100, 181, 255, 0.72);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-detail-body, .card-detail-empty, .card-related-list) {
@@ -2142,8 +2176,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-detail-body, .
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-detail-image {
-  border-color: rgba(198, 137, 43, 0.4);
-  background: #0e0a05;
+  border-color: rgba(90, 147, 229, 0.4);
+  background: #070d1c;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-detail-image-empty, .card-detail-empty, .card-detail-heading span, .card-detail-meta, .card-related-list > span) {
@@ -2151,19 +2185,19 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-detail-image-e
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-detail-text, .card-related-list p) {
-  color: #cbb995;
+  color: #b8c6dc;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-related-card, .card-spell-history-empty) {
   border-color: var(--replica-border-soft);
   color: var(--replica-muted);
-  background: #181109;
+  background: #0b1427;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-related-art {
-  border-color: rgba(198, 137, 43, 0.4);
+  border-color: rgba(90, 147, 229, 0.4);
   color: var(--replica-muted);
-  background: #0e0a05;
+  background: #070d1c;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-related-card strong {
@@ -2178,7 +2212,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview {
   border-color: var(--replica-border);
   color: var(--replica-text);
   background: var(--replica-bg);
-  scrollbar-color: #6d491d transparent;
+  scrollbar-color: #2f4772 transparent;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview .card-detail-body-hover {
@@ -2188,15 +2222,15 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview .car
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview .card-preview-hint {
   border-color: var(--replica-border-soft);
   color: var(--replica-muted);
-  background: rgba(14, 10, 5, 0.96);
+  background: rgba(7, 13, 28, 0.96);
 }
 
-/* Match history inherits the shell instead of its old blue slate material. */
+/* Match history inherits the shared blue material. */
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-panel {
   border-color: var(--replica-border);
   color: var(--replica-text);
   background: linear-gradient(180deg, var(--replica-panel-raised), var(--replica-panel));
-  box-shadow: inset 0 1px 0 rgba(245, 194, 94, 0.05), 0 10px 28px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.05), 0 10px 28px rgba(0, 0, 0, 0.2);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-stat {
@@ -2205,30 +2239,30 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-stat {
   border-left: 3px solid var(--replica-gold);
   border-radius: 5px;
   color: var(--replica-muted);
-  background: #20170d;
+  background: #111d30;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-stat strong {
-  color: #edc46f;
+  color: #8fc9ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-list {
   border-color: var(--replica-border-soft);
-  scrollbar-color: #6d491d transparent;
+  scrollbar-color: #2f4772 transparent;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-row {
   border-color: var(--replica-border-soft);
-  color: #ddcba7;
-  background: #181109;
+  color: #dce6f7;
+  background: #0b1427;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-row:nth-child(odd) {
-  background: #21170d;
+  background: #111d30;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-row:hover {
-  background: #2a1c0d;
+  background: #152544;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-row time,
@@ -2240,26 +2274,26 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .match-history-state[rol
   color: #ef9a87;
 }
 
-/* Card database overrides its standalone blue variables inside the desktop shell. */
+/* Card database uses the same blue variables inside the desktop shell. */
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-panel {
   --card-library-bg: var(--replica-panel);
   --card-library-surface: var(--replica-panel-raised);
-  --card-library-row: #20170d;
-  --card-library-row-hover: #2a1c0d;
+  --card-library-row: #111d30;
+  --card-library-row-hover: #152544;
   --card-library-line: var(--replica-border);
   --card-library-line-soft: var(--replica-border-soft);
   --card-library-text: var(--replica-text);
   --card-library-muted: var(--replica-muted);
   --card-library-accent: var(--replica-gold);
-  --card-library-amber: #dfa63d;
+  --card-library-amber: #64b5ff;
   border-color: var(--replica-border);
   background: linear-gradient(180deg, var(--replica-panel-raised), var(--replica-panel));
-  box-shadow: inset 0 1px 0 rgba(245, 194, 94, 0.05), 0 10px 28px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.05), 0 10px 28px rgba(0, 0, 0, 0.2);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-heading {
   border-color: var(--replica-border-soft);
-  background: linear-gradient(180deg, #21170d, #181109);
+  background: linear-gradient(180deg, #111d30, #0b1427);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-heading-copy > svg,
@@ -2271,7 +2305,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-controls,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-results-bar,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-pagination {
   border-color: var(--replica-border-soft);
-  background: #171008;
+  background: #091121;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-library-search, .card-library-select) {
@@ -2297,16 +2331,16 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-search inp
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-library-search, .card-library-select):focus-within {
   border-color: var(--replica-blue);
-  box-shadow: 0 0 0 2px rgba(200, 137, 34, 0.16);
+  box-shadow: 0 0 0 2px rgba(37, 91, 220, 0.22);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-results-bar span:first-child,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-state strong {
-  color: #dec99e;
+  color: #dce6f7;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-results {
-  scrollbar-color: #6d491d transparent;
+  scrollbar-color: #2f4772 transparent;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-stale-warning {
@@ -2322,21 +2356,21 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-card {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-library-card:hover, .card-library-card:focus-visible, .card-library-card.is-selected) {
-  border-color: rgba(224, 168, 65, 0.72);
+  border-color: rgba(100, 181, 255, 0.72);
   background: var(--card-library-row-hover);
   box-shadow: inset 2px 0 0 var(--replica-gold);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-art {
-  border-color: rgba(198, 137, 43, 0.4);
-  color: #9d7f53;
-  background: #0e0a05;
+  border-color: rgba(90, 147, 229, 0.4);
+  color: #8291aa;
+  background: #070d1c;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-art.is-empty {
   border-color: var(--replica-border-soft);
   color: var(--replica-muted);
-  background: #181109;
+  background: #0b1427;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-mana {
@@ -2347,8 +2381,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-mana {
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-stats {
   border-color: rgba(210, 151, 54, 0.42);
-  color: #f1dfba;
-  background: rgba(35, 23, 10, 0.92);
+  color: #dce6f7;
+  background: rgba(13, 25, 47, 0.92);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-card-copy strong {
@@ -2366,7 +2400,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-state.is-e
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected {
   border-color: var(--replica-border-soft);
-  background: #181109;
+  background: #0b1427;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected-heading {
@@ -2375,23 +2409,23 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected-h
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected-heading strong,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected :is(.card-detail-stats, .card-detail-heading strong) {
-  color: #e5ba60;
+  color: #8fc9ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-selected :is(.card-detail-text, .card-detail-meta) {
-  color: #cbb995;
+  color: #b8c6dc;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-library-pagination button {
   border-color: var(--replica-border);
-  color: #e6d2a9;
+  color: #dce6f7;
   background: var(--replica-panel-soft);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-library-pagination button:hover:not(:disabled), .card-library-pagination button:focus-visible) {
   border-color: var(--replica-blue-light);
-  color: #fff0c9;
-  background: #38250f;
+  color: #f4f7ff;
+  background: #1d3767;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .app-shell.view-deck-tools {
@@ -2409,8 +2443,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page {
   overflow: auto;
   color: var(--replica-text);
   background:
-    radial-gradient(circle at 88% -8%, rgba(160, 93, 17, 0.2), transparent 42%),
-    linear-gradient(180deg, #0d0a07, #080706);
+    radial-gradient(circle at 88% -8%, rgba(28, 76, 176, 0.18), transparent 42%),
+    linear-gradient(180deg, #080e1d, #050a15);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-header {
@@ -2422,9 +2456,9 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-header {
   border: 1px solid var(--replica-border);
   border-radius: 8px;
   background:
-    radial-gradient(circle at 94% 0%, rgba(176, 103, 17, 0.2), transparent 34%),
+    radial-gradient(circle at 94% 0%, rgba(51, 126, 223, 0.16), transparent 34%),
     linear-gradient(180deg, var(--replica-panel-raised), var(--replica-panel));
-  box-shadow: inset 0 1px 0 rgba(245, 194, 94, 0.07), 0 8px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.07), 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-header-icon {
@@ -2433,11 +2467,11 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-header-icon 
   height: 52px;
   flex: 0 0 52px;
   place-items: center;
-  border: 1px solid #9e681e;
+  border: 1px solid #4d91ef;
   border-radius: 8px;
   color: var(--replica-blue-light);
-  background: linear-gradient(145deg, #3a240d, #171008);
-  box-shadow: inset 0 0 0 1px rgba(239, 183, 74, 0.08), 0 0 18px rgba(184, 105, 18, 0.14);
+  background: linear-gradient(145deg, #1d3d6d, #15284a);
+  box-shadow: inset 0 0 0 1px rgba(151, 205, 255, 0.08), 0 0 18px rgba(33, 102, 211, 0.16);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-header > div {
@@ -2488,9 +2522,9 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-card {
   border: 1px solid var(--replica-border);
   border-radius: 8px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(144, 83, 14, 0.12), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(48, 97, 189, 0.12), transparent 34%),
     linear-gradient(180deg, var(--replica-panel-raised), var(--replica-panel));
-  box-shadow: inset 0 1px 0 rgba(245, 194, 94, 0.06), 0 10px 26px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 0 rgba(151, 188, 255, 0.06), 0 10px 26px rgba(0, 0, 0, 0.2);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-card > header {
@@ -2525,7 +2559,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-manual texta
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-manual textarea:focus {
   border-color: var(--replica-blue);
-  box-shadow: 0 0 0 2px rgba(200, 137, 34, 0.18);
+  box-shadow: 0 0 0 2px rgba(37, 91, 220, 0.22);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-actions {
@@ -2539,8 +2573,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-notice {
   padding: 9px 11px;
   border: 1px solid var(--replica-border-soft);
   border-radius: 6px;
-  color: #e6c886;
-  background: rgba(119, 72, 14, 0.22);
+  color: #a9d2f6;
+  background: rgba(36, 77, 121, 0.2);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -2595,7 +2629,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page .collec
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .collection-deck-main em {
-  color: #dda749;
+  color: #64b5ff;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .collection-empty {
@@ -2607,27 +2641,27 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .collection-empty {
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page button {
   min-height: 36px;
   padding: 0 16px;
-  border: 1px solid #5e431e;
+  border: 1px solid #354662;
   border-radius: 6px;
   color: var(--replica-text);
   background: var(--replica-panel-soft);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page button:hover:not(:disabled) {
-  border-color: #a87329;
-  background: #38250f;
+  border-color: #4b79bb;
+  background: #21375f;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page .primary-action {
   border-color: var(--replica-blue);
-  color: #211306;
-  background: linear-gradient(180deg, #e1a73d, #a76612);
-  box-shadow: 0 5px 14px rgba(114, 65, 8, 0.34), inset 0 1px 0 rgba(255, 233, 174, 0.32);
+  color: #f4f9ff;
+  background: linear-gradient(180deg, #3187ef, #1d65c8);
+  box-shadow: 0 5px 14px rgba(0, 70, 170, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page .primary-action:hover:not(:disabled) {
   border-color: var(--replica-blue-light);
-  background: linear-gradient(180deg, #edb94f, #bd7a1b);
+  background: linear-gradient(180deg, #4597f4, #2872d6);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page button:disabled {
@@ -2636,7 +2670,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .deck-tools-page button:
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) button:focus-visible {
-  outline: 2px solid #efb84d;
+  outline: 2px solid #64b5ff;
   outline-offset: 2px;
 }
 
@@ -2679,17 +2713,17 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item.is-active,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item[aria-current="page"],
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button.is-active,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button[aria-current="page"] {
-  border-color: rgba(218, 151, 47, 0.48);
-  color: #fff0c9;
-  background: linear-gradient(90deg, #50300d, #271a0c);
-  box-shadow: inset 3px 0 0 #e2a73c, 0 5px 18px rgba(0, 0, 0, 0.22);
+  border-color: rgba(63, 126, 245, 0.72);
+  color: #f4f7ff;
+  background: linear-gradient(105deg, rgba(30, 72, 163, .9), rgba(18, 42, 90, .62));
+  box-shadow: inset 3px 0 0 #64b5ff, 0 5px 18px rgba(0, 20, 65, 0.28);
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item.is-active svg,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-item[aria-current="page"] svg,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button.is-active svg,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-nav > button[aria-current="page"] svg {
-  color: #f0bd55;
+  color: #76b8ff;
 }
 
 html[data-tracker-theme="light"] body:has(.desktop-frame):not(:has(.overlay-shell)) {

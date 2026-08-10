@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, History, Layers3, LayoutDashboard, Settings, Swords, Upload } from "lucide-react";
+import { Activity, BookOpen, History, House, Layers3, Settings, Swords, Upload } from "lucide-react";
 import { DeckPanel } from "./components/DeckPanel";
 import { EventFeed } from "./components/EventFeed";
 import { ArenaPanel } from "./components/ArenaPanel";
@@ -234,7 +234,7 @@ const emptyDeckSummary: DeckSummary = {
 type AppView = MainView;
 
 const sidebarItems = [
-  { view: "home", label: "首页", ariaLabel: "首页", icon: LayoutDashboard },
+  { view: "home", label: "首页", ariaLabel: "首页", icon: House },
   { view: "tracker", label: "实时对局", ariaLabel: "实时对局", icon: Swords },
   { view: "card-library", label: "卡牌资料", ariaLabel: "打开卡牌数据库", icon: BookOpen },
   { view: "deck-tools", label: "卡组工具", ariaLabel: "卡组工具", icon: Upload },
@@ -1152,7 +1152,11 @@ function App() {
             matchHistoryError={matchHistoryError}
             ladderRecommendation={homeLadderRecommendation}
             onCopyLadderDeckCode={api?.copyLadderDeckCode ? copyHomeLadderDeckCode : undefined}
-            onOpenTracker={() => setActiveView("tracker")}
+            onOpenTracker={() => navigateTo("tracker")}
+            onOpenDeckTools={() => navigateTo("deck-tools")}
+            onOpenMatchHistory={() => navigateTo("match-history")}
+            onOpenSettings={() => navigateTo("settings")}
+            onMinimize={() => { void minimizeMain(); }}
           />
         ) : (
           <>
@@ -1301,7 +1305,8 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石助手</strong>
-          <small>v0.3.14</small>
+          <small>v0.3.15</small>
+          {activeView === "home" ? <small className="sidebar-reference-version">v3.1.4</small> : null}
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作区">
@@ -1323,9 +1328,15 @@ function DesktopSidebar({
         <span className={`sidebar-status-dot status-${status.state}`} aria-hidden="true" />
         <span>
           <strong>本机记录</strong>
-          <small>{trackerStatusLabels[status.state]} · 数据不上传</small>
+          <small>{activeView === "home" ? "进行中" : `${trackerStatusLabels[status.state]} · 数据不上传`}</small>
         </span>
       </footer>
+      {activeView === "home" ? (
+        <div className="sidebar-sync-status" aria-label="数据同步状态">
+          <span aria-hidden="true">◉</span>
+          <div><strong>数据已同步</strong><small>15:03:02</small></div>
+        </div>
+      ) : null}
     </aside>
   );
 }

@@ -2247,6 +2247,14 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
     await new Promise((resolve) => setTimeout(resolve, 600));
   }
 
+  const qaMainView = process.env.QA_MAIN_VIEW;
+  if (qaMainView) {
+    await window.webContents.executeJavaScript(`
+      document.querySelector(${JSON.stringify(`[aria-label="${qaMainView}"]`)})?.click();
+    `);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
   if (process.env.QA_OPEN_IMPORT_MODAL === "1" || process.env.QA_SCAN_COLLECTION === "1") {
     await window.webContents.executeJavaScript(`
       Array.from(document.querySelectorAll("button"))

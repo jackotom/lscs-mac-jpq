@@ -888,6 +888,47 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ]);
   });
 
+  it("repairs legendary-team card ids when Firestone ratings arrive after the first OCR frame", () => {
+    const legendaryTeamCardDb = createCardDatabase([
+      { dbfId: 6101, name: "万能钥匙", cardId: "LEGACY_JAIL_319", collectible: true, type: "SPELL" },
+      { dbfId: 6102, name: "万能钥匙", cardId: "JAIL_319", collectible: true, type: "SPELL" },
+      { dbfId: 6103, name: "融合独奏团", cardId: "LEGACY_ETC_409", collectible: true, type: "MINION" },
+      { dbfId: 6104, name: "融合独奏团", cardId: "ETC_409", collectible: true, type: "MINION" },
+      { dbfId: 6105, name: "巅峰无限", cardId: "LEGACY_ETC_206", collectible: true, type: "SPELL" },
+      { dbfId: 6106, name: "巅峰无限", cardId: "ETC_206", collectible: true, type: "SPELL" }
+    ]);
+    const delayedRatings: ArenaRatingTable = {
+      source: "test ratings",
+      version: 1,
+      fetchedAt: "2026-08-09T16:54:00.000Z",
+      ratings: { Mage: {} },
+      firestone: {
+        source: "Firestone",
+        version: "reported-screenshot",
+        lastUpdated: "2026-08-09T16:54:00.000Z",
+        ratings: {
+          JAIL_319: { pickRate: 25.8 },
+          ETC_409: { pickRate: 6.3 },
+          ETC_206: { pickRate: 78.68 }
+        }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: legendaryTeamCardDb });
+    engine.applyArenaText([
+      "D 16:54:07.000 SetDraftMode - DRAFTING",
+      "D 16:54:10.000 DraftManager.OnChosen(): hero=HERO_08"
+    ].join("\n"));
+
+    expect(engine.applyScreenChoices(["万能钥匙", "融合独奏团", "巅峄无限"])).toBe(true);
+    engine.setRatings(delayedRatings);
+
+    expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "JAIL_319", rating: expect.objectContaining({ pickRate: 25.8 }) }),
+      expect.objectContaining({ cardId: "ETC_409", rating: expect.objectContaining({ pickRate: 6.3 }) }),
+      expect.objectContaining({ cardId: "ETC_206", rating: expect.objectContaining({ pickRate: 78.68 }) })
+    ]);
+  });
+
   it("matches the three legendary-team titles from the 12:42 OCR capture and attaches statistics", () => {
     const legendaryTeamCardDb = createCardDatabase([
       { dbfId: 6001, name: "奇利亚斯豪华版3000型", cardId: "TOY_330t12", collectible: false },

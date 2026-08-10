@@ -702,13 +702,24 @@ export class ArenaDraftEngine {
   }
 
   private scoreChoice(choice: ArenaCardChoice): ArenaCardChoice {
-    const cardId = choice.cardId;
-    const card = (cardId ? this.cardInfoByCardId.get(normalizeCardId(cardId)) : undefined) ?? this.findCardInfoByName(choice.name);
+    let cardId = choice.cardId;
+    let card = (cardId ? this.cardInfoByCardId.get(normalizeCardId(cardId)) : undefined) ?? this.findCardInfoByName(choice.name);
+    let rating = getArenaCardRating(this.ratings, cardId, this.hero?.className);
+    if (!rating) {
+      const ratedCard = this.cardInfoByName.get(normalizeCardName(choice.name))?.find((candidate) =>
+        getArenaCardRating(this.ratings, candidate.cardId ?? candidate.id, this.hero?.className) !== undefined
+      );
+      if (ratedCard) {
+        card = ratedCard;
+        cardId = ratedCard.cardId ?? ratedCard.id;
+        rating = getArenaCardRating(this.ratings, cardId, this.hero?.className);
+      }
+    }
     const name = card?.name ?? (cardId ? this.cardNameByCardId.get(normalizeCardId(cardId)) ?? choice.name : choice.name);
-    const rating = getArenaCardRating(this.ratings, cardId, this.hero?.className);
     const score = rating?.hearthArena;
     return {
       ...choice,
+      cardId,
       name,
       score,
       scoreSource: score === undefined ? undefined : getArenaScoreSourceLabel(this.ratings),
