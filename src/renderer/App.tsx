@@ -1305,7 +1305,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石助手</strong>
-          <small>v0.3.15</small>
+          <small>v0.3.16</small>
           {activeView === "home" ? <small className="sidebar-reference-version">v3.1.4</small> : null}
         </span>
       </section>

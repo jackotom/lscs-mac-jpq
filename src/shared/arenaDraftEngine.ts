@@ -622,7 +622,7 @@ export class ArenaDraftEngine {
     });
     this.lastPick = { cardId: chosen.cardId, name: chosen.name, source: "arena-team" };
     this.pendingTeamCore = undefined;
-    this.teamBonusCount = 3;
+    this.teamBonusCount = 2;
   }
 
   private restoreDraftContents(events: readonly ArenaLogEvent[]) {

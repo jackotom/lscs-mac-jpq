@@ -544,7 +544,7 @@ describe("ArenaDraftEngine", () => {
     expect(engine.getState().deck.some((card) => card.cardId === "END_007")).toBe(false);
   });
 
-  it("counts only the final legendary preview as a four-card team before normal picks", () => {
+  it("counts only the final legendary preview as a three-card team before normal picks", () => {
     const engine = new ArenaDraftEngine({ cardDatabase: teamDraftCardDb, preferArenaLogPicks: true });
     engine.applyArenaLine("D 12:00:00.000 SetDraftMode - DRAFTING");
     expect(engine.applyScreenChoices(["传说预览甲", "传说预览乙", "传说预览丙"])).toBe(true);
@@ -557,7 +557,7 @@ describe("ArenaDraftEngine", () => {
     expect(engine.getState().currentChoices).toHaveLength(3);
 
     engine.applyArenaLine("D 12:00:04.000 Client chooses: 普通选牌 (TEST_001)");
-    expect(engine.getState().draftCount).toBe(5);
+    expect(engine.getState().draftCount).toBe(4);
     expect(engine.getState().deck).toEqual(expect.arrayContaining([
       expect.objectContaining({ cardId: "JAIL_851", count: 1 }),
       expect.objectContaining({ cardId: "TEST_001", count: 1 })
@@ -567,9 +567,14 @@ describe("ArenaDraftEngine", () => {
     for (let slot = 0; slot < 25; slot += 1) {
       engine.applyArenaLine(`D 12:01:${String(slot).padStart(2, "0")}.000 Client chooses: 普通选牌 (TEST_001)`);
     }
-    expect(engine.getState()).toMatchObject({ status: "complete", draftCount: 30 });
+    expect(engine.getState()).toMatchObject({ status: "drafting", draftCount: 29 });
     expect(engine.getState().deck.reduce((total, card) => total + card.count, 0)).toBe(27);
     expect(engine.getState().unresolvedCount).toBe(3);
+
+    engine.applyArenaLine("D 12:02:00.000 Client chooses: 普通选牌 (TEST_001)");
+    expect(engine.getState()).toMatchObject({ status: "complete", draftCount: 30 });
+    expect(engine.getState().deck.reduce((total, card) => total + card.count, 0)).toBe(28);
+    expect(engine.getState().unresolvedCount).toBe(2);
   });
 
   it("scores the live choices and builds the arena deck from selected cards", () => {
