@@ -1,4 +1,8 @@
 import { isHearthstoneFrontmost } from "./frontmostApp.js";
+import {
+  configureOverlayWorkspaceWindow,
+  getOverlayWindowPlatformOptions
+} from "./overlayWindowWorkspace.js";
 
 export interface DisplayBounds {
   readonly x: number;
@@ -15,6 +19,7 @@ export interface IconBounds {
 }
 
 export interface BoardAttackOverlayWindowOptions extends DisplayBounds {
+  readonly type?: "panel";
   readonly show: false;
   readonly frame: false;
   readonly transparent: true;
@@ -34,7 +39,10 @@ export interface BoardAttackOverlayWindowOptions extends DisplayBounds {
 }
 
 export interface BoardAttackOverlayWindowLike {
-  setVisibleOnAllWorkspaces(visible: boolean, options: { visibleOnFullScreen: boolean }): void;
+  setVisibleOnAllWorkspaces(visible: boolean, options: {
+    visibleOnFullScreen: boolean;
+    skipTransformProcessType: boolean;
+  }): void;
   setAlwaysOnTop(alwaysOnTop: boolean, level: "screen-saver"): void;
   setIgnoreMouseEvents(ignore: boolean, options: { forward: boolean }): void;
 }
@@ -58,6 +66,7 @@ export function getBoardAttackOverlayWindowOptions(
 ): BoardAttackOverlayWindowOptions {
   return {
     ...bounds,
+    ...getOverlayWindowPlatformOptions(),
     show: false,
     frame: false,
     transparent: true,
@@ -78,7 +87,7 @@ export function getBoardAttackOverlayWindowOptions(
 }
 
 export function configureBoardAttackOverlayWindow(window: BoardAttackOverlayWindowLike): void {
-  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  configureOverlayWorkspaceWindow(window, true);
   window.setAlwaysOnTop(true, "screen-saver");
   window.setIgnoreMouseEvents(true, { forward: true });
 }

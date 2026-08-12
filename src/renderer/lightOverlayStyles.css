@@ -1,0 +1,492 @@
+/* Light appearance is shared by every detachable tracker window. */
+
+html[data-tracker-theme="light"] body:has(.overlay-shell),
+html[data-tracker-theme="light"] body:has(.opponent-overlay-shell),
+html[data-tracker-theme="light"] body:has(.ladder-deck-shell),
+html[data-tracker-theme="light"] body:has(.arena-hero-ranking),
+html[data-tracker-theme="light"] body:has(.card-preview-window-shell) {
+  color-scheme: light;
+  background: transparent;
+}
+
+html[data-tracker-theme="light"] .overlay-shell {
+  --overlay-bg: rgba(255, 255, 255, .98);
+  --overlay-panel: #ffffff;
+  --overlay-panel-strong: #f7f9fc;
+  --overlay-row: #ffffff;
+  --overlay-row-strong: #edf5ff;
+  --overlay-line: #d6dee9;
+  --overlay-line-soft: #e5eaf1;
+  --overlay-text: #253044;
+  --overlay-muted: #68768a;
+  --overlay-faint: #8a97a8;
+  --overlay-amber: #b86c08;
+  --overlay-blue: #2879e8;
+  --overlay-green: #239a59;
+  --overlay-red: #cc4b57;
+  --overlay-shadow: rgba(43, 60, 82, .15);
+  background: #ffffff;
+  border-color: #d6dee9;
+  box-shadow: 0 12px 34px rgba(43, 60, 82, .15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-normal),
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-arena),
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-arena-stats) {
+  color: #253044;
+  background: #ffffff;
+}
+
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-arena-stats) {
+  --arena-stats-bg: #ffffff;
+  --arena-stats-panel: #f7f9fc;
+  --arena-stats-line: #dbe3ed;
+  --arena-stats-green: #239a59;
+  --arena-stats-red: #cc4b57;
+  --arena-stats-yellow: #b86c08;
+  border-color: #d6dee9;
+  box-shadow: 0 12px 34px rgba(43, 60, 82, .15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-arena-stats) > .overlay-header,
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-normal) > .overlay-header {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+}
+
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-arena-stats) > .overlay-header > strong,
+html[data-tracker-theme="light"] .overlay-shell:has(.overlay-normal) > .overlay-header > strong,
+html[data-tracker-theme="light"] .overlay-section-title h2,
+html[data-tracker-theme="light"] .overlay-deck-name,
+html[data-tracker-theme="light"] .overlay-summary-count strong {
+  color: #253044;
+}
+
+html[data-tracker-theme="light"] .overlay-shell :is(
+  .overlay-header,
+  .overlay-summary-count,
+  .overlay-section,
+  .overlay-opponent-panel,
+  .overlay-deck-summary,
+  .overlay-card-group,
+  .overlay-card-row,
+  .overlay-event,
+  .overlay-stat,
+  .overlay-arena-stage,
+  .overlay-arena-last-pick,
+  .overlay-arena-stats,
+  .overlay-arena-stats-row,
+  .overlay-public-counter,
+  .overlay-repair-prompt,
+  .overlay-empty
+) {
+  border-color: #e1e7ef;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .overlay-shell :is(
+  .card-tracking-layout,
+  .card-tracking-main,
+  .card-tracking-footer,
+  .overlay-normal,
+  .overlay-main,
+  .overlay-card-groups,
+  .overlay-card-group-toggle,
+  .overlay-section-title,
+  .overlay-compact-card-list > li,
+  .overlay-count,
+  .overlay-status
+) {
+  border-color: #e1e7ef;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .overlay-arena-stats,
+html[data-tracker-theme="light"] .overlay-arena-stats-header,
+html[data-tracker-theme="light"] .overlay-arena-stats-list,
+html[data-tracker-theme="light"] .overlay-arena-stats-list > li,
+html[data-tracker-theme="light"] .overlay-arena-stats-list > li:nth-child(even) {
+  border-color: #e1e7ef;
+  color: #526176;
+  background: #ffffff;
+}
+
+html[data-tracker-theme="light"] .overlay-arena-stats-header,
+html[data-tracker-theme="light"] .overlay-arena-stage {
+  border-color: #dbe3ed;
+  color: #526176;
+  background: #f7f9fc;
+}
+
+html[data-tracker-theme="light"] .opponent-overlay-shell {
+  --opponent-overlay-bg: rgba(255, 255, 255, .98);
+  --opponent-overlay-panel: #ffffff;
+  --opponent-overlay-row: #ffffff;
+  --opponent-overlay-line: #d6dee9;
+  --opponent-overlay-line-soft: #e5eaf1;
+  --opponent-overlay-text: #253044;
+  --opponent-overlay-muted: #68768a;
+  --opponent-overlay-faint: #8a97a8;
+  --opponent-overlay-live: #239a59;
+  --opponent-overlay-count: #b86c08;
+  --opponent-overlay-danger: #cc4b57;
+  background: #ffffff;
+  border-color: #d6dee9;
+  box-shadow: 0 12px 34px rgba(43, 60, 82, .15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-tracker-theme="light"] .opponent-overlay-shell :is(
+  .overlay-header,
+  .card-tracking-layout,
+  .card-tracking-main,
+  .card-tracking-footer,
+  .opponent-overlay-header,
+  .opponent-overlay-summary,
+  .opponent-overlay-section,
+  .opponent-overlay-card-groups,
+  .opponent-overlay-card,
+  .opponent-board-attack button,
+  .opponent-secret-section,
+  .opponent-secret-slot,
+  .opponent-overlay-empty,
+  .opponent-overlay-repair
+) {
+  border-color: #e1e7ef;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .opponent-overlay-shell.opponent-overlay-collapsed,
+html[data-tracker-theme="light"] .opponent-overlay-collapsed .opponent-overlay-shell,
+html[data-tracker-theme="light"] .opponent-overlay-shell .opponent-overlay-section-title,
+html[data-tracker-theme="light"] .opponent-overlay-shell .opponent-tracking-summary,
+html[data-tracker-theme="light"] .opponent-overlay-shell .opponent-overlay-list li:nth-child(even) {
+  border-color: #e1e7ef;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .secret-candidate-possible {
+  color: #253044;
+  background: #fff8ed;
+}
+
+html[data-tracker-theme="light"] .ladder-deck-shell {
+  --ladder-deck-bg: rgba(255, 255, 255, .98);
+  --ladder-deck-panel: #ffffff;
+  --ladder-deck-panel-strong: #f7f9fc;
+  --ladder-deck-row: #ffffff;
+  --ladder-deck-line: #d6dee9;
+  --ladder-deck-line-soft: #e5eaf1;
+  --ladder-deck-text: #253044;
+  --ladder-deck-muted: #68768a;
+  --ladder-deck-blue: #2879e8;
+  --ladder-deck-green: #239a59;
+  --ladder-deck-amber: #b86c08;
+  --ladder-deck-red: #cc4b57;
+  background: #ffffff;
+  border-color: #d6dee9;
+  box-shadow: 0 12px 34px rgba(43, 60, 82, .15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-tracker-theme="light"] .ladder-deck-shell :is(
+  .ladder-deck-header,
+  .ladder-deck-summary,
+  .ladder-deck-metric,
+  .ladder-deck-card-section,
+  .ladder-deck-card-row,
+  .ladder-deck-footer,
+  .ladder-deck-empty,
+  .ladder-deck-loading,
+  .ladder-deck-error
+) {
+  border-color: #e1e7ef;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .arena-hero-ranking {
+  color: #253044;
+  background: #ffffff;
+  border-color: #d6dee9;
+  box-shadow: 0 12px 34px rgba(43, 60, 82, .15);
+}
+
+html[data-tracker-theme="light"] .arena-hero-ranking__header,
+html[data-tracker-theme="light"] .arena-hero-ranking__list li {
+  border-color: #e5eaf1;
+  background: #ffffff;
+}
+
+html[data-tracker-theme="light"] .arena-hero-ranking__header p,
+html[data-tracker-theme="light"] .arena-hero-ranking__hero small,
+html[data-tracker-theme="light"] .arena-hero-ranking__sample {
+  color: #738095;
+}
+
+html[data-tracker-theme="light"] .arena-hero-ranking__rank {
+  color: #526176;
+  background: #edf2f7;
+}
+
+html[data-tracker-theme="light"] .arena-hero-ranking__rate {
+  color: #239a59;
+}
+
+html[data-tracker-theme="light"] .arena-choice-overlay-card,
+html[data-tracker-theme="light"] .arena-choice-overlay-pending,
+html[data-tracker-theme="light"] .card-preview-window-shell,
+html[data-tracker-theme="light"] .card-hover-preview,
+html[data-tracker-theme="light"] .card-game-context,
+html[data-tracker-theme="light"] .card-outcome-section,
+html[data-tracker-theme="light"] .card-related-card {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(43, 60, 82, .14);
+}
+
+html[data-tracker-theme="light"] .arena-choice-overlay-shell {
+  background: transparent;
+}
+
+html[data-tracker-theme="light"] .arena-choice-overlay-metric {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 8px 20px rgba(43, 60, 82, .12);
+}
+
+html[data-tracker-theme="light"] .arena-choice-overlay-metric.is-positive {
+  color: #187a46;
+  background: rgba(236, 253, 245, .94);
+}
+
+html[data-tracker-theme="light"] .arena-choice-overlay-metric.is-negative {
+  color: #b13f4a;
+  background: rgba(254, 242, 242, .94);
+}
+
+/* Card previews can be portalled outside the desktop frame. Keep every nested
+   surface on the light palette instead of inheriting the legacy dark card UI. */
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell),
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-detail-body-hover,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-image,
+  .card-related-card,
+  .card-related-art,
+  .card-spell-history-empty,
+  .card-pool-load-more,
+  .card-preview-hint
+) {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-detail-body-hover,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-related-card,
+  .card-related-art,
+  .card-spell-history-empty,
+  .card-pool-load-more,
+  .card-preview-hint
+) {
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading strong,
+  .card-related-card strong
+) {
+  color: #253044;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading span,
+  .card-detail-meta,
+  .card-related-list > span,
+  .card-related-card small,
+  .card-preview-hint,
+  .card-pool-section > summary
+) {
+  color: #526176;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-text,
+  .card-related-card p
+) {
+  color: #334155;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-stats,
+  .played-spells-progress,
+  .card-outcome-children > span
+) {
+  color: #8a5500;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .played-spells-cost-group > strong {
+  color: #176fd7;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-outcome-children {
+  border-left-color: #d9e2ee;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:hover,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:focus-visible {
+  border-color: #a9c8ed;
+  color: #176fd7;
+  background: #f5f9ff;
+}
+
+/* The inline preview lives beside, not inside, .desktop-frame. These stronger
+   selectors beat the desktop replica's dark preview rules. */
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell),
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell) :is(.card-detail-body, .card-detail-body-hover),
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-image,
+  .card-related-list,
+  .card-related-cards,
+  .card-related-card,
+  .card-related-art,
+  .card-spell-history-empty,
+  .card-pool-load-more,
+  .card-preview-hint
+) {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading strong,
+  .card-related-card strong
+) {
+  color: #253044;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading span,
+  .card-detail-meta,
+  .card-related-list > span,
+  .card-related-card small,
+  .card-preview-hint,
+  .card-pool-section > summary
+) {
+  color: #526176;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-text,
+  .card-related-card p
+) {
+  color: #334155;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview .card-related-card {
+  background: #f7f9fc;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .card-hover-preview .card-related-art {
+  background: #eef2f7;
+}
+
+/* Light-theme cascade firewall: App.tsx injects legacy card styles after the
+   linked stylesheets, so these explicit final values must remain authoritative. */
+html[data-tracker-theme="light"] .card-hover-preview,
+html[data-tracker-theme="light"] .card-preview-window-shell,
+html[data-tracker-theme="light"] .card-hover-preview .card-detail-body-hover,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-detail-body-hover,
+html[data-tracker-theme="light"] .card-hover-preview .card-detail-image,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-detail-image,
+html[data-tracker-theme="light"] .card-hover-preview .card-related-list,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-list,
+html[data-tracker-theme="light"] .card-hover-preview .card-related-cards,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-cards,
+html[data-tracker-theme="light"] .card-hover-preview .card-related-card,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-card,
+html[data-tracker-theme="light"] .card-hover-preview .card-related-art,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-art,
+html[data-tracker-theme="light"] .card-hover-preview .card-spell-history-empty,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-spell-history-empty,
+html[data-tracker-theme="light"] .card-hover-preview .card-pool-load-more,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-pool-load-more,
+html[data-tracker-theme="light"] .card-hover-preview .card-preview-hint,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-preview-hint {
+  border-color: #dbe3ed !important;
+  color: #253044 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html[data-tracker-theme="light"] .card-hover-preview .card-related-card,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-card {
+  background: #f7f9fc !important;
+}
+
+html[data-tracker-theme="light"] .card-hover-preview .card-related-art,
+html[data-tracker-theme="light"] .card-preview-window-shell .card-related-art {
+  background: #eef2f7 !important;
+}
+
+html[data-tracker-theme="light"] .card-hover-preview :is(.card-detail-heading strong, .card-related-card strong),
+html[data-tracker-theme="light"] .card-preview-window-shell :is(.card-detail-heading strong, .card-related-card strong) {
+  color: #253044 !important;
+}
+
+html[data-tracker-theme="light"] .card-hover-preview :is(.card-detail-heading span, .card-detail-meta, .card-related-list > span, .card-related-card small, .card-preview-hint, .card-pool-section > summary),
+html[data-tracker-theme="light"] .card-preview-window-shell :is(.card-detail-heading span, .card-detail-meta, .card-related-list > span, .card-related-card small, .card-preview-hint, .card-pool-section > summary) {
+  color: #526176 !important;
+}
+
+html[data-tracker-theme="light"] .card-hover-preview :is(.card-detail-text, .card-related-card p),
+html[data-tracker-theme="light"] .card-preview-window-shell :is(.card-detail-text, .card-related-card p) {
+  color: #334155 !important;
+}
+
+html[data-tracker-theme="light"] :is(
+  .overlay-deck-list,
+  .overlay-event-list,
+  .overlay-opponent-list,
+  .opponent-overlay-list,
+  .ladder-deck-card-list,
+  .arena-hero-ranking__list
+) {
+  scrollbar-color: #c7d2e0 transparent;
+  scrollbar-width: thin;
+}
+
+html[data-tracker-theme="light"] :is(
+  .overlay-deck-list,
+  .overlay-event-list,
+  .overlay-opponent-list,
+  .opponent-overlay-list,
+  .ladder-deck-card-list,
+  .arena-hero-ranking__list
+)::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #c7d2e0;
+  background-clip: padding-box;
+}

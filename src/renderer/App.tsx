@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, History, House, Layers3, Settings, Swords, Upload } from "lucide-react";
+import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Puzzle, SlidersHorizontal, Swords, Upload, X } from "lucide-react";
 import { DeckPanel } from "./components/DeckPanel";
 import { EventFeed } from "./components/EventFeed";
 import { ArenaPanel } from "./components/ArenaPanel";
@@ -24,6 +24,7 @@ import { shouldApplyInitialTrackerState } from "./stateInitialization";
 import { createSynchronousActionLock, selectVisibleNotice, shouldRequestCardLibrary } from "./frontendStability";
 import { preserveArenaChoiceStatistics } from "./arenaChoiceStability";
 import { parseMatchHistoryResult, parsePublicTrackerState, parseTrackerSettings } from "./runtimeValidation";
+import { resolveTrackerTheme } from "./trackerTheme";
 import { toMatchPulseViewFromState } from "./matchPulse";
 import {
   LEGACY_USED_COUNT_KEY,
@@ -41,6 +42,7 @@ import {
 } from "../shared/types";
 /* card lifecycle migration: legacy payload keys remain only to construct shared-state compatibility objects. */
 import type { CardDetails } from "../shared/cardDatabase";
+import { HOME_NEWS_SOURCE_LABEL, OFFICIAL_HOME_NEWS_URL, type HomeNewsResult } from "../shared/homeNews";
 import type { LadderDeckRecommendation, LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation";
 import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats";
 import type {
@@ -190,6 +192,47 @@ const qaOpponentOverlayState: PublicTrackerState = {
   lastUpdated: "2026-07-12T12:00:00.000Z"
 };
 
+const qaHomeState: PublicTrackerState = {
+  ...qaOpponentOverlayState,
+  trackerMode: "ladder",
+  constructedScreenMode: "standard",
+  deckName: "冰霜法",
+  deck: [
+    { name: "传送门卫士", cardId: "QA_001", count: 2, remaining: 2, drawn: 0, played: 0 },
+    { name: "冰冷案例", cardId: "QA_002", count: 2, remaining: 1, drawn: 1, played: 0 },
+    { name: "初始之火", cardId: "QA_003", count: 2, remaining: 2, drawn: 0, played: 0 }
+  ],
+  summary: { totalCards: 30, remainingCards: 28, drawnCards: 2, [LEGACY_USED_COUNT_KEY]: 2 },
+  events: [
+    { id: "qa-home-draw", at: "2026-08-11T12:03:00.000Z", kind: "draw", player: "friendly", cardName: "冰冷案例" }
+  ]
+};
+
+const qaHomeHistory: MatchHistoryResult = {
+  status: "ok",
+  matches: [
+    { id: "qa-home-1", result: "win", mode: "standard", deckName: "冰霜法", endedAt: "2026-08-11T12:20:00.000Z" },
+    { id: "qa-home-2", result: "win", mode: "standard", deckName: "冰霜法", endedAt: "2026-08-11T11:40:00.000Z" },
+    { id: "qa-home-3", result: "loss", mode: "wild", deckName: "奥秘法", endedAt: "2026-08-10T18:12:00.000Z" },
+    { id: "qa-home-4", result: "win", mode: "arena", deckName: "竞技场", endedAt: "2026-08-10T16:25:00.000Z" },
+    { id: "qa-home-5", result: "loss", mode: "standard", deckName: "冰霜法", endedAt: "2026-08-09T21:08:00.000Z" }
+  ],
+  summary: { total: 5, wins: 3, losses: 2, ties: 0, winRate: 0.6 }
+};
+
+const qaHomeNews: HomeNewsResult = {
+  status: "fresh",
+  source: HOME_NEWS_SOURCE_LABEL,
+  sourceUrl: OFFICIAL_HOME_NEWS_URL,
+  fetchedAt: "2026-08-11T12:00:00.000Z",
+  items: [
+    { id: "qa-news-1", title: "36.2 版本更新说明", summary: "查看最新平衡调整与游戏内容。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/m6/M6QUL71462F61785194758004.jpg", publishedAt: "2026-08-11T08:00:00.000Z" },
+    { id: "qa-news-2", title: "酒馆战棋全新赛季现已开启", summary: "新英雄、新饰品与赛季奖励登场。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/53/53KJ9ZUCJ5MS1784585330957.jpg", publishedAt: "2026-08-10T08:00:00.000Z" },
+    { id: "qa-news-3", title: "本周乱斗与活动日历", summary: "掌握本周游戏活动和奖励安排。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/ig/IGRE2U8UJW8L1784323863703.jpg", publishedAt: "2026-08-09T08:00:00.000Z" },
+    { id: "qa-news-4", title: "竞技场轮换与卡池说明", summary: "了解当前竞技场环境变化。", url: OFFICIAL_HOME_NEWS_URL, publishedAt: "2026-08-08T08:00:00.000Z" }
+  ]
+};
+
 const qaCardPreviewDetails: CardDetails = {
   dbfId: 315,
   name: "火球术",
@@ -233,18 +276,30 @@ const emptyDeckSummary: DeckSummary = {
 
 type AppView = MainView;
 
-const sidebarItems = [
-  { view: "home", label: "首页", ariaLabel: "首页", icon: House },
-  { view: "tracker", label: "实时对局", ariaLabel: "实时对局", icon: Swords },
-  { view: "card-library", label: "卡牌资料", ariaLabel: "打开卡牌数据库", icon: BookOpen },
-  { view: "deck-tools", label: "卡组工具", ariaLabel: "卡组工具", icon: Upload },
-  { view: "match-history", label: "对局记录", ariaLabel: "对局历史", icon: History },
-  { view: "settings", label: "设置", ariaLabel: "软件设置", icon: Settings }
-] as const;
+type WorkbenchNavId = "tracker" | "card-library" | "deck-tools" | "match-history" | "overlay-settings" | "plugin-settings" | "data-backup" | "about";
+
+const workbenchItems = [
+  { id: "tracker", view: "tracker", label: "实时对局", ariaLabel: "实时对局", icon: Swords },
+  { id: "card-library", view: "card-library", label: "卡牌资料", ariaLabel: "打开卡牌资料", icon: BookOpen },
+  { id: "deck-tools", view: "deck-tools", label: "卡组工具", ariaLabel: "卡组工具", icon: Upload },
+  { id: "match-history", view: "match-history", label: "对局记录", ariaLabel: "对局记录", icon: History },
+  { id: "overlay-settings", view: "settings", sectionId: "settings-overlay-title", label: "悬浮窗设置", ariaLabel: "悬浮窗设置", icon: SlidersHorizontal },
+  { id: "plugin-settings", view: "settings", sectionId: "settings-other-title", label: "插件设置", ariaLabel: "插件与其他设置", icon: Puzzle },
+  { id: "data-backup", view: "settings", sectionId: "settings-privacy-title", label: "数据与备份", ariaLabel: "数据、备份与隐私", icon: Database },
+  { id: "about", view: "settings", sectionId: "settings-about-title", label: "关于我们", ariaLabel: "关于我们", icon: CircleHelp }
+] as const satisfies ReadonlyArray<{
+  id: WorkbenchNavId;
+  view: Exclude<AppView, "home">;
+  sectionId?: string;
+  label: string;
+  ariaLabel: string;
+  icon: typeof Swords;
+}>;
 
 function App() {
   const api = window.hearthstoneTracker;
   const overlaySearchParams = new URLSearchParams(window.location.search);
+  const isQaHomeDemo = overlaySearchParams.get("qa-home-demo") === "1";
   const isCardPreview = overlaySearchParams.get("card-preview") === "1";
 
   if (overlaySearchParams.get("ladder-deck-overlay") === "1") {
@@ -267,7 +322,7 @@ function App() {
   const isQaOpponentOverlay = isOpponentOverlay && overlaySearchParams.get("qa-opponent-demo") === "1";
   const isQaBoardAttackOverlay = isBoardAttackOverlay && overlaySearchParams.get("qa-opponent-demo") === "1";
   const isQaFriendlyOverlay = isOverlay && overlaySearchParams.get("qa-opponent-demo") === "1";
-  const [state, setState] = useState<PublicTrackerState>(demoState);
+  const [state, setState] = useState<PublicTrackerState>(isQaHomeDemo ? qaHomeState : demoState);
   const [hasAcceptedTrackerState, setHasAcceptedTrackerState] = useState(false);
   const [candidates, setCandidates] = useState<LogCandidate[]>([]);
   const [selectedLogPath, setSelectedLogPath] = useState<string | undefined>();
@@ -283,6 +338,7 @@ function App() {
   const [isScanningCollection, setIsScanningCollection] = useState(false);
   const [importingCollectionDeckId, setImportingCollectionDeckId] = useState<string | undefined>();
   const [activeView, setActiveView] = useState<AppView>("home");
+  const [activeWorkbenchItem, setActiveWorkbenchItem] = useState<WorkbenchNavId>("tracker");
   const [cardLibraryQuery, setCardLibraryQuery] = useState<CardLibraryQuery>(initialCardLibraryQuery);
   const [debouncedCardSearch, setDebouncedCardSearch] = useState(initialCardLibraryQuery.query);
   const [cardLibraryResult, setCardLibraryResult] = useState<CardLibraryResult | undefined>();
@@ -291,7 +347,12 @@ function App() {
   const [matchHistoryResult, setMatchHistoryResult] = useState<MatchHistoryResult | undefined>();
   const [matchHistoryError, setMatchHistoryError] = useState<string | undefined>();
   const [isMatchHistoryLoading, setIsMatchHistoryLoading] = useState(false);
+  const [homeNews, setHomeNews] = useState<HomeNewsResult>();
+  const [homeNewsError, setHomeNewsError] = useState<string>();
+  const [isHomeNewsLoading, setIsHomeNewsLoading] = useState(false);
   const [homeLadderRecommendation, setHomeLadderRecommendation] = useState<LadderDeckRecommendationResult>();
+  const [homeArenaHeroRanking, setHomeArenaHeroRanking] = useState<ArenaHeroWinRateRankingResult>();
+  const [isHomeArenaHeroRankingLoading, setIsHomeArenaHeroRankingLoading] = useState(false);
   const [trackerSettings, setTrackerSettings] = useState<TrackerSettings>();
   const [settingsError, setSettingsError] = useState<string>();
   const [settingsNotice, setSettingsNotice] = useState<string>();
@@ -411,9 +472,7 @@ function App() {
     const appearance = trackerSettings.appearance;
     const media = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: light)") : undefined;
     const applyTheme = () => {
-      root.dataset.trackerTheme = appearance.theme === "system"
-        ? media?.matches ? "light" : "dark"
-        : appearance.theme;
+      root.dataset.trackerTheme = resolveTrackerTheme(trackerSettings, window.location.search, media?.matches === true);
     };
     applyTheme();
     media?.addEventListener?.("change", applyTheme);
@@ -423,6 +482,25 @@ function App() {
     root.style.setProperty("--tracker-accent", appearance.accentColor);
     return () => media?.removeEventListener?.("change", applyTheme);
   }, [trackerSettings]);
+
+  useEffect(() => {
+    if (activeView !== "settings") return;
+    const item = workbenchItems.find((candidate) => candidate.id === activeWorkbenchItem);
+    if (!item || !("sectionId" in item) || !item.sectionId) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      const section = document.getElementById(item.sectionId)?.closest<HTMLElement>(".settings-form-section");
+      const scrollContainer = section?.closest<HTMLElement>(".settings-section-content");
+      if (!section || !scrollContainer) return;
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const sectionRect = section.getBoundingClientRect();
+      scrollContainer.scrollTo({
+        top: Math.max(0, scrollContainer.scrollTop + sectionRect.top - containerRect.top - 12),
+        behavior: "auto"
+      });
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [activeView, activeWorkbenchItem]);
 
   useEffect(() => {
     if (!isOpponentOverlay || !api) {
@@ -589,6 +667,66 @@ function App() {
     };
   }, [activeView, api, state.constructedScreenMode]);
 
+  useEffect(() => {
+    if (activeView !== "home") return;
+    if (!api?.getHomeNews) {
+      setHomeNews(undefined);
+      setHomeNewsError(undefined);
+      return;
+    }
+
+    let disposed = false;
+    setIsHomeNewsLoading(true);
+    setHomeNewsError(undefined);
+    void api.getHomeNews()
+      .then((result) => {
+        if (!disposed) setHomeNews(result);
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setHomeNews(undefined);
+          setHomeNewsError(toUserErrorMessage(error, "读取炉石官网资讯失败。"));
+        }
+      })
+      .finally(() => {
+        if (!disposed) setIsHomeNewsLoading(false);
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [activeView, api]);
+
+  useEffect(() => {
+    if (activeView !== "home") return;
+    if (!api?.getArenaHeroWinRateRanking) {
+      setHomeArenaHeroRanking({ status: "unavailable", message: "桌面版将显示联网竞技场排行。" });
+      return;
+    }
+
+    let disposed = false;
+    setIsHomeArenaHeroRankingLoading(true);
+    void api.getArenaHeroWinRateRanking()
+      .then((result) => {
+        if (!disposed) setHomeArenaHeroRanking(result);
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setHomeArenaHeroRanking({
+            status: "error",
+            message: toUserErrorMessage(error, "竞技场排行读取失败，请稍后重试。")
+          });
+        }
+      })
+      .finally(() => {
+        if (!disposed) setIsHomeArenaHeroRankingLoading(false);
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [activeView, api]);
+
   const trackerStatus = useMemo(
     () => toTrackerStatus(state, candidates, selectedLogPath, isInitializing),
     [candidates, isInitializing, selectedLogPath, state]
@@ -743,7 +881,8 @@ function App() {
     }
   }
 
-  async function loadTrackerSettings() {
+  async function loadTrackerSettings(workbenchItem: WorkbenchNavId = "overlay-settings") {
+    setActiveWorkbenchItem(workbenchItem);
     setActiveView("settings");
     setSettingsError(undefined);
     setSettingsNotice(undefined);
@@ -871,12 +1010,40 @@ function App() {
     await api.copyLadderDeckCode(deckCode);
   }
 
-  function navigateTo(view: AppView) {
-    if (view === "settings") {
-      void loadTrackerSettings();
+  async function openHomeNewsItem(itemId: string) {
+    if (!api?.openHomeNewsItem) {
+      setHomeNewsError("请在桌面版中打开资讯详情。");
       return;
     }
+    try {
+      await api.openHomeNewsItem(itemId);
+    } catch (error) {
+      setHomeNewsError(toUserErrorMessage(error, "打开资讯失败，请稍后重试。"));
+    }
+  }
+
+  function navigateTo(view: AppView) {
+    if (view === "home") {
+      setActiveView("home");
+      return;
+    }
+    if (view === "settings") {
+      void loadTrackerSettings("plugin-settings");
+      return;
+    }
+    setActiveWorkbenchItem(view);
     setActiveView(view);
+  }
+
+  function navigateToWorkbench(itemId: WorkbenchNavId) {
+    const item = workbenchItems.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    setActiveWorkbenchItem(item.id);
+    if (item.view === "settings") {
+      void loadTrackerSettings(item.id);
+      return;
+    }
+    setActiveView(item.view);
   }
 
   function updateCardLibraryQuery(update: Partial<CardLibraryQuery>) {
@@ -1060,13 +1227,23 @@ function App() {
   return (
     <>
       <style>{rendererStyles}</style>
-      <div className="desktop-frame">
-        <DesktopSidebar
-          activeView={activeView}
-          status={trackerStatus}
-          onNavigate={navigateTo}
-        />
+      <div className={`desktop-frame ${activeView === "home" ? "is-home-frame" : "is-workbench-frame"}`}>
+        {activeView === "home" ? null : (
+          <DesktopSidebar
+            activeItem={activeWorkbenchItem}
+            status={trackerStatus}
+            onNavigate={navigateToWorkbench}
+          />
+        )}
         <main className={`app-shell view-${activeView}`}>
+          {activeView === "home" ? null : (
+            <header className="top-bar workbench-titlebar" aria-label="工作台标题栏">
+              <span aria-hidden="true" />
+              <button type="button" className="home-window-control workbench-close" aria-label="关闭工作台，返回首页" onClick={() => navigateTo("home")}>
+                <X aria-hidden="true" size={19} />
+              </button>
+            </header>
+          )}
           {activeView === "home" || activeView === "settings" || activeView === "deck-tools" ? null : <TopBar
             status={trackerStatus}
             isTracking={state.status === "watching" && !logIssue}
@@ -1077,7 +1254,7 @@ function App() {
             onToggleOverlay={toggleOverlay}
             onToggleOpponentOverlay={toggleOpponentOverlay}
             onMinimize={minimizeMain}
-            onImportDeck={() => setActiveView("deck-tools")}
+            onImportDeck={() => navigateTo("deck-tools")}
           />}
 
         {activeView === "home" || activeView === "settings" || activeView === "deck-tools" ? null : isInitializing ? (
@@ -1146,16 +1323,22 @@ function App() {
           <MatchHistoryPanel result={matchHistoryResult} loading={isMatchHistoryLoading} error={matchHistoryError} />
         ) : activeView === "home" ? (
           <HomeDashboard
-            state={state}
-            matchHistory={matchHistoryResult}
-            matchHistoryLoading={isMatchHistoryLoading}
-            matchHistoryError={matchHistoryError}
-            ladderRecommendation={homeLadderRecommendation}
+            state={isQaHomeDemo ? qaHomeState : state}
+            matchHistory={isQaHomeDemo ? qaHomeHistory : matchHistoryResult}
+            matchHistoryLoading={isQaHomeDemo ? false : isMatchHistoryLoading}
+            matchHistoryError={isQaHomeDemo ? undefined : matchHistoryError}
+            homeNews={isQaHomeDemo ? qaHomeNews : homeNews}
+            homeNewsLoading={isQaHomeDemo ? false : isHomeNewsLoading}
+            homeNewsError={isQaHomeDemo ? undefined : homeNewsError}
+            ladderRecommendation={isQaHomeDemo ? { status: "ready", recommendation: qaLadderRecommendation, stale: false } : homeLadderRecommendation}
+            arenaHeroRanking={isQaHomeDemo ? qaArenaHeroRanking : homeArenaHeroRanking}
+            arenaHeroRankingLoading={isQaHomeDemo ? false : isHomeArenaHeroRankingLoading}
             onCopyLadderDeckCode={api?.copyLadderDeckCode ? copyHomeLadderDeckCode : undefined}
+            onOpenNewsItem={api?.openHomeNewsItem ? openHomeNewsItem : undefined}
             onOpenTracker={() => navigateTo("tracker")}
             onOpenDeckTools={() => navigateTo("deck-tools")}
             onOpenMatchHistory={() => navigateTo("match-history")}
-            onOpenSettings={() => navigateTo("settings")}
+            onOpenSettings={() => navigateTo("tracker")}
             onMinimize={() => { void minimizeMain(); }}
           />
         ) : (
@@ -1291,33 +1474,32 @@ function DeckToolsPage({
 }
 
 function DesktopSidebar({
-  activeView,
+  activeItem,
   status,
   onNavigate
 }: {
-  activeView: AppView;
+  activeItem: WorkbenchNavId;
   status: TrackerStatus;
-  onNavigate: (view: AppView) => void;
+  onNavigate: (item: WorkbenchNavId) => void;
 }) {
   return (
-    <aside className="app-sidebar" aria-label="主导航">
-      <section className="sidebar-brand" aria-label="炉石助手品牌">
+    <aside className="app-sidebar workbench-sidebar" aria-label="二级工作台导航">
+      <section className="sidebar-brand" aria-label="炉石记牌器品牌">
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
-          <strong>炉石助手</strong>
-          <small>v0.3.16</small>
-          {activeView === "home" ? <small className="sidebar-reference-version">v3.1.4</small> : null}
+          <strong>炉石记牌器</strong>
+          <small>v0.4.0</small>
         </span>
       </section>
-      <nav className="sidebar-nav" aria-label="工作区">
-        {sidebarItems.map(({ view, label, ariaLabel, icon: Icon }) => (
+      <nav className="sidebar-nav" aria-label="工作台功能">
+        {workbenchItems.map(({ id, label, ariaLabel, icon: Icon }) => (
           <button
-            key={view}
+            key={id}
             type="button"
-            className={`sidebar-item${activeView === view ? " is-active" : ""}`}
-            aria-current={activeView === view ? "page" : undefined}
+            className={`sidebar-item${activeItem === id ? " is-active" : ""}`}
+            aria-current={activeItem === id ? "page" : undefined}
             aria-label={ariaLabel}
-            onClick={() => onNavigate(view)}
+            onClick={() => onNavigate(id)}
           >
             <Icon aria-hidden="true" size={18} />
             <span>{label}</span>
@@ -1328,15 +1510,9 @@ function DesktopSidebar({
         <span className={`sidebar-status-dot status-${status.state}`} aria-hidden="true" />
         <span>
           <strong>本机记录</strong>
-          <small>{activeView === "home" ? "进行中" : `${trackerStatusLabels[status.state]} · 数据不上传`}</small>
+          <small>{trackerStatusLabels[status.state]} · 数据不上传</small>
         </span>
       </footer>
-      {activeView === "home" ? (
-        <div className="sidebar-sync-status" aria-label="数据同步状态">
-          <span aria-hidden="true">◉</span>
-          <div><strong>数据已同步</strong><small>15:03:02</small></div>
-        </div>
-      ) : null}
     </aside>
   );
 }
@@ -3218,6 +3394,195 @@ button:disabled {
   .modal-actions {
     margin-top: 10px;
   }
+}
+
+/* Final light-theme guard. This block intentionally lives after every legacy
+   renderer rule so the white workbench cannot inherit dark card or arena UI. */
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell),
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-body,
+  .card-detail-body-hover,
+  .card-detail-empty,
+  .card-detail-image,
+  .card-related-list,
+  .card-related-card,
+  .card-related-art,
+  .card-spell-history-empty,
+  .card-game-context,
+  .card-outcome-section,
+  .card-pool-load-more,
+  .card-preview-hint
+) {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading strong,
+  .card-related-card strong
+) {
+  color: #253044;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-heading span,
+  .card-detail-meta,
+  .card-related-list > span,
+  .card-related-card small,
+  .card-preview-hint,
+  .card-pool-section > summary
+) {
+  color: #526176;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-text,
+  .card-related-card p
+) {
+  color: #334155;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) :is(
+  .card-detail-stats,
+  .played-spells-progress,
+  .card-outcome-children > span
+) {
+  color: #795500;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .played-spells-cost-group > strong,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:hover,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:focus-visible {
+  color: #176fd7;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:hover,
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-pool-load-more:focus-visible {
+  border-color: #a9c8ed;
+  background: #f5f9ff;
+}
+
+html[data-tracker-theme="light"] :is(.card-hover-preview, .card-preview-window-shell) .card-outcome-children {
+  border-left-color: #d9e2ee;
+}
+
+html[data-tracker-theme="light"] :is(
+  .arena-progress strong,
+  .arena-deck li span,
+  .arena-last-pick > span:first-of-type
+) {
+  color: #253044;
+}
+
+html[data-tracker-theme="light"] :is(
+  .arena-progress span,
+  .arena-progress small,
+  .arena-waiting
+) {
+  color: #526176;
+}
+
+html[data-tracker-theme="light"] .arena-deck li > strong {
+  color: #176fd7;
+}
+
+html[data-tracker-theme="light"] :is(.arena-score, .arena-score strong, .arena-score small) {
+  color: #176fd7;
+}
+
+html[data-tracker-theme="light"] .arena-score {
+  border-color: #bfd4ed;
+  background: #edf5ff;
+}
+
+html[data-tracker-theme="light"] .arena-score-s {
+  border-color: #e4cd8a;
+  color: #795500;
+  background: #fff9e8;
+}
+
+html[data-tracker-theme="light"] .arena-score-a {
+  border-color: #b9ddc8;
+  color: #187a46;
+  background: #eefbf3;
+}
+
+html[data-tracker-theme="light"] .arena-score-c {
+  border-color: #d5dde7;
+  color: #42516a;
+  background: #f5f7fa;
+}
+
+html[data-tracker-theme="light"] .arena-score-d {
+  border-color: #e8c7a7;
+  color: #934600;
+  background: #fff6ed;
+}
+
+html[data-tracker-theme="light"] :is(.arena-score-f, .arena-score-unknown) {
+  border-color: #e6bec3;
+  color: #a3313d;
+  background: #fff4f5;
+}
+
+html[data-tracker-theme="light"] .arena-recommendation {
+  color: #795500 !important;
+}
+
+html[data-tracker-theme="light"] :is(
+  .card-library-stale-warning,
+  .card-library-art,
+  .card-library-art.is-empty,
+  .card-library-selected,
+  .card-library-pagination button
+) {
+  border-color: #dbe3ed;
+  color: #253044;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+html[data-tracker-theme="light"] .card-library-stale-warning {
+  border-color: #ead8a8;
+  color: #795500;
+  background: #fffdf7;
+}
+
+html[data-tracker-theme="light"] :is(
+  .card-library-results-bar span:first-child,
+  .card-library-state strong,
+  .card-library-card-copy strong,
+  .card-library-selected-heading strong,
+  .card-library-selected .card-detail-heading strong
+) {
+  color: #253044;
+}
+
+html[data-tracker-theme="light"] :is(
+  .card-library-state span,
+  .card-library-card-copy small,
+  .card-library-selected .card-detail-meta
+) {
+  color: #526176;
+}
+
+html[data-tracker-theme="light"] .card-library-selected .card-detail-text {
+  color: #334155;
+}
+
+html[data-tracker-theme="light"] .card-library-state.is-error :is(svg, strong) {
+  color: #a3313d;
+}
+
+html[data-tracker-theme="light"] :is(
+  .card-library-pagination button:hover:not(:disabled),
+  .card-library-pagination button:focus-visible
+) {
+  border-color: #a9c8ed;
+  color: #176fd7;
+  background: #f5f9ff;
 }
 `;
 

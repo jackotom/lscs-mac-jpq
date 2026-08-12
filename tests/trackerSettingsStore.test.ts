@@ -24,6 +24,8 @@ const expectedDefaults = {
   },
   overlay: {
     enabled: true,
+    showOnlyInGame: true,
+    theme: "light",
     arenaHeroWinRateRanking: true,
     showFriendlyAttack: false,
     showOpponentAttack: false,
@@ -158,6 +160,32 @@ describe("TrackerSettingsStore", () => {
     await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual(expectedDefaults);
   });
 
+  it("adds the game-only overlay switch to settings saved by the previous version", async () => {
+    const userDataDirectory = await createUserDataDirectory();
+    const filePath = path.join(userDataDirectory, "tracker-settings.json");
+    const { showOnlyInGame: _missing, ...oldOverlay } = expectedDefaults.overlay;
+    await writeFile(filePath, JSON.stringify({ ...expectedDefaults, overlay: oldOverlay }), "utf8");
+
+    await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual(expectedDefaults);
+    await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toEqual(expectedDefaults);
+  });
+
+  it("adds the overlay appearance to settings saved by the previous version", async () => {
+    const userDataDirectory = await createUserDataDirectory();
+    const filePath = path.join(userDataDirectory, "tracker-settings.json");
+    const { theme: _missing, ...oldOverlay } = expectedDefaults.overlay;
+    const legacy = {
+      ...expectedDefaults,
+      overlay: oldOverlay,
+      appearance: { ...expectedDefaults.appearance, theme: "light" as const }
+    };
+    await writeFile(filePath, JSON.stringify(legacy), "utf8");
+
+    const migrated = { ...legacy, overlay: expectedDefaults.overlay };
+    await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual(migrated);
+    await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toEqual(migrated);
+  });
+
   it("adds the focus-on-open switch to settings saved by the previous version", async () => {
     const userDataDirectory = await createUserDataDirectory();
     const filePath = path.join(userDataDirectory, "tracker-settings.json");
@@ -227,6 +255,7 @@ describe("TrackerSettingsStore", () => {
     ["focus on open", { ...expectedDefaults, general: { ...expectedDefaults.general, focusOnOpen: "yes" } }],
     ["overlay offset", { ...expectedDefaults, overlay: { ...expectedDefaults.overlay, offsetX: 201 } }],
     ["overlay opacity", { ...expectedDefaults, overlay: { ...expectedDefaults.overlay, opacity: 29 } }],
+    ["overlay theme", { ...expectedDefaults, overlay: { ...expectedDefaults.overlay, theme: "system" } }],
     ["accent color", { ...expectedDefaults, appearance: { ...expectedDefaults.appearance, accentColor: "#ffffff" } }],
     ["zoom", { ...expectedDefaults, appearance: { ...expectedDefaults.appearance, zoom: 121 } }],
     ["retention", { ...expectedDefaults, other: { ...expectedDefaults.other, matchRetentionDays: 60 } }],

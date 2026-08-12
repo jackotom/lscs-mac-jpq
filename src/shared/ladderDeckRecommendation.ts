@@ -13,7 +13,16 @@ export type LadderDeckRecommendationErrorCode =
   | "installation-not-found" | "version-unreadable" | "region-unverified" | "source-unconfigured"
   | "network-failed" | "feed-invalid" | "patch-unavailable";
 export type LadderDeckRecommendationResult =
-  | { readonly status: "ready"; readonly recommendation: LadderDeckRecommendation; readonly stale: boolean; readonly gameVersion?: string; readonly message?: string }
+  | {
+      readonly status: "ready";
+      readonly recommendation: LadderDeckRecommendation;
+      readonly stale: boolean;
+      readonly source?: LadderDeckRecommendation["source"];
+      readonly fetchedAt?: string;
+      readonly sample?: number;
+      readonly gameVersion?: string;
+      readonly message?: string;
+    }
   | { readonly status: "unavailable"; readonly errorCode?: LadderDeckRecommendationErrorCode; readonly message: string; readonly gameVersion?: string };
 
 interface ParseOptions { readonly now?: () => number; readonly maxFutureSkewMs?: number; readonly maxDataAgeMs?: number }

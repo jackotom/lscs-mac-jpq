@@ -19,6 +19,8 @@ const settings: TrackerSettings = {
   },
   overlay: {
     enabled: true,
+    showOnlyInGame: true,
+    theme: "light",
     arenaHeroWinRateRanking: false,
     showFriendlyAttack: true,
     showOpponentAttack: true,
@@ -113,6 +115,30 @@ describe("software settings", () => {
     expect(onChange).toHaveBeenLastCalledWith({
       ...settings,
       overlay: { ...settings.overlay, arenaHeroWinRateRanking: true }
+    });
+  });
+
+  it("controls whether overlays only appear during a game", () => {
+    const onChange = vi.fn();
+    renderPanel({ onChange });
+
+    fireEvent.click(screen.getByRole("switch", { name: /仅在游戏内显示/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...settings,
+      overlay: { ...settings.overlay, showOnlyInGame: false }
+    });
+  });
+
+  it("changes the overlay appearance independently from the main window theme", () => {
+    const onChange = vi.fn();
+    renderPanel({ onChange });
+
+    expect(screen.getByRole("button", { name: "浅色悬浮窗外观设置" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "深色悬浮窗外观设置" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "深色悬浮窗外观设置" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...settings,
+      overlay: { ...settings.overlay, theme: "dark" }
     });
   });
 

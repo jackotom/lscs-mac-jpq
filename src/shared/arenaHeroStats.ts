@@ -12,6 +12,8 @@ export type ArenaHeroWinRateRankingResult =
       readonly entries: readonly ArenaHeroWinRateRankingEntry[];
       readonly source: string;
       readonly updatedAt: string;
+      readonly fetchedAt?: string;
+      readonly sample?: number;
       readonly warning?: string;
     }
   | {

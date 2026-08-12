@@ -158,6 +158,8 @@ describe("card lifecycle Electron QA verification", () => {
       expect(main).toContain(key);
     }
     expect(main).toContain('process.env.QA_PIN_CARD_PREVIEW === "1"');
+    expect(main).toContain('[aria-label="打开二级工作台"]');
+    expect(main).toContain('[aria-label="打开卡牌资料"], [aria-label="打开卡牌数据库"]');
     expect(main).toContain("setCardPreviewPinned(true)");
     expect(main).toContain("new KeyboardEvent");
     expect(main).toContain('code: "KeyQ"');
@@ -170,7 +172,7 @@ describe("card lifecycle Electron QA verification", () => {
     expect(main).toContain('webContents.on("console-message"');
     expect(main).toContain("getQaConsoleErrorCount(cardPreviewWindow)");
     expect(main.indexOf("installQaConsoleErrorListener(window)"))
-      .toBeLessThan(main.indexOf("await loadRendererPage(window)"));
+      .toBeLessThan(main.indexOf("await loadRendererPage(window,"));
     expect(main.indexOf("installQaConsoleErrorListener(cardPreviewWindow)"))
       .toBeLessThan(main.indexOf('await loadRendererPage(cardPreviewWindow, { "card-preview": "1" })'));
     expect(overlayStyles).toMatch(

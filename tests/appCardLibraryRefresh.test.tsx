@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import type { CardLibraryResult } from "../src/shared/types";
 import { createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const trackerState = createPublicTrackerState({
   status: "missing-log",
@@ -57,7 +58,8 @@ describe("card library refresh", () => {
     } as unknown as typeof window.hearthstoneTracker;
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "打开卡牌数据库" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "打开卡牌资料" }));
     expect(await screen.findByRole("button", { name: "查看 火球术 详情" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "职业筛选" }), { target: { value: "法师" } });

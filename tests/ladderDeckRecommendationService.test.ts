@@ -20,18 +20,23 @@ const detected = vi.fn(async () => ({
   status: "detected" as const, fullVersion: "36.0.246003", patch: "36.0", region: "CN" as const,
   appPath: "/Applications/Hearthstone/Hearthstone.app", source: "default-path" as const
 }));
-const hsguruHtml = `
-  <a href="/decks?format=2&amp;period=patch_36.0.3&amp;rank=diamond_to_legend">36.0.3</a>
-  <div id="deck_stats-40721799" class="column is-narrow">
-    <div class="decklist-info warrior">
-      <a href="https://www.hsguru.com/deck/40721799">龙战</a>
-      <span>${deck().deckCode}</span>
-    </div>
-    <div class="card-name"><span># 2x (1) </span>Carrier Whelp</div>
-    <span class="tag column"><span><span>60.0</span></span></span>
-    <div class="column tag">Games: 3245</div>
-  </div>
-`;
+const firestoneFeed = (mode: "standard" | "wild" = "standard") => ({
+  lastUpdated: "2026-07-12T00:00:00.000Z",
+  rankBracket: "legend",
+  timePeriod: "past-7",
+  format: mode,
+  dataPoints: 5000,
+  deckStats: [{
+    archetypeId: 40721799,
+    archetypeName: "dragon-warrior",
+    playerClass: "warrior",
+    format: mode,
+    totalGames: 3245,
+    totalWins: 1947,
+    winrate: 0.6,
+    decklist: deck(mode).deckCode
+  }]
+});
 
 describe("LadderDeckRecommendationService", () => {
   it("fetches validated data and writes a reusable cache", async () => {
@@ -43,18 +48,21 @@ describe("LadderDeckRecommendationService", () => {
     expect(JSON.parse(await readFile(cachePath, "utf8"))).toMatchObject({ entries: [{ recommendations: [{ id: "standard-1" }] }] });
   });
 
-  it("uses the public HSGuru international ranking when no Chinese-server feed is configured", async () => {
+  it("uses the public Firestone owner feed when no Chinese-server feed is configured", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ladder-decks-")); dirs.push(root);
-    const fetcher = vi.fn(async () => new Response(hsguruHtml, { status: 200 }));
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(firestoneFeed()), { status: 200 }));
     const result = await new LadderDeckRecommendationService({
       cachePath: path.join(root, "cache.json"), fetcher, installationDetector: detected, now: testNow
     }).get("standard");
     expect(result).toMatchObject({
       status: "ready",
       stale: false,
-      recommendation: { id: "hsguru-40721799", region: "GLOBAL", source: { name: expect.stringContaining("国际服") } }
+      source: { name: expect.stringContaining("Firestone") },
+      fetchedAt: "2026-07-12T12:00:00.000Z",
+      sample: 3245,
+      recommendation: { name: "龙战士", region: "GLOBAL", games: 3245, winRate: 60 }
     });
-    expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("format=2"), expect.anything());
+    expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("/standard/legend/past-7/"), expect.anything());
   });
 
   it("uses an expired cache with an explicit stale marker when refresh fails", async () => {

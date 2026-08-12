@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PublicTrackerState } from "../src/shared/types";
 import { createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const ratedState = createPublicTrackerState({
   status: "watching",
@@ -93,7 +94,7 @@ describe("arena choice renderer state stability", () => {
     const { default: App } = await import("../src/renderer/App.js");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
 
     const candidate = await screen.findByLabelText("候选一");
     const candidateRow = candidate.closest("li");

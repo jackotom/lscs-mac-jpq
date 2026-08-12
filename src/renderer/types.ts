@@ -18,6 +18,7 @@ import type { ArenaCardRating, ArenaScoreQuality } from "../shared/arenaRatings"
 import type { CSSProperties } from "react";
 import type { LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation";
 import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats";
+import type { HomeNewsResult } from "../shared/homeNews";
 
 export type { CardLibraryQuery, CardLibraryResult };
 
@@ -45,6 +46,9 @@ export interface HearthstoneTrackerApi {
   onCardPreviewUpdate?: (callback: (details: CardDetails) => void) => () => void;
   onCardPreviewPinnedChange?: (callback: (pinned: boolean) => void) => () => void;
   getMatchHistory?: () => Promise<import("../shared/types").MatchHistoryResult>;
+  getHomeNews?: () => Promise<HomeNewsResult>;
+  getArenaHeroWinRateRanking?: () => Promise<ArenaHeroWinRateRankingResult>;
+  openHomeNewsItem?: (itemId: string) => Promise<void>;
   getTrackerSettings?: () => Promise<TrackerSettings>;
   setTrackerSettings?: (settings: TrackerSettings) => Promise<TrackerSettings>;
   restoreDefaultSettings?: () => Promise<TrackerSettings>;

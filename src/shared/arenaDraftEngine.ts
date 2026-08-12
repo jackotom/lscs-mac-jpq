@@ -214,7 +214,7 @@ export class ArenaDraftEngine {
 
     const maxDistance = fuzzyName.length <= 5
       ? 1
-      : Math.min(5, Math.max(3, Math.ceil(fuzzyName.length / 3)));
+      : Math.min(5, Math.max(3, Math.floor(fuzzyName.length / 2)));
     let best: { card: CardInfo; distance: number } | undefined;
     let bestDistanceMatches = 0;
     for (const [cardName] of this.cardInfoByName) {
@@ -705,10 +705,11 @@ export class ArenaDraftEngine {
     let cardId = choice.cardId;
     let card = (cardId ? this.cardInfoByCardId.get(normalizeCardId(cardId)) : undefined) ?? this.findCardInfoByName(choice.name);
     let rating = getArenaCardRating(this.ratings, cardId, this.hero?.className);
-    if (!rating) {
-      const ratedCard = this.cardInfoByName.get(normalizeCardName(choice.name))?.find((candidate) =>
+    if (rating === undefined) {
+      const ratedCards = this.cardInfoByName.get(normalizeCardName(choice.name))?.filter((candidate) =>
         getArenaCardRating(this.ratings, candidate.cardId ?? candidate.id, this.hero?.className) !== undefined
       );
+      const ratedCard = ratedCards?.length === 1 ? ratedCards[0] : undefined;
       if (ratedCard) {
         card = ratedCard;
         cardId = ratedCard.cardId ?? ratedCard.id;

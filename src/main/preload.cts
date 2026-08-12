@@ -14,6 +14,7 @@ import type {
 import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats.js";
 import type { CardDetails } from "../shared/cardDatabase.js";
 import type { LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation.js";
+import type { HomeNewsResult } from "../shared/homeNews.js";
 
 type PreloadCapability = "main" | "tracker-overlay" | "opponent-overlay" | "state-display" | "card-preview" | "ladder-deck" | "arena-hero-ranking";
 
@@ -60,8 +61,17 @@ const friendlyOverlayLifecycleApi = {
   closeFriendlyOverlay: () => ipcRenderer.invoke("tracker:close-friendly-overlay") as Promise<void>
 };
 
-const settingsApi = {
+const settingsReaderApi = {
   getTrackerSettings: () => ipcRenderer.invoke("tracker:get-settings") as Promise<TrackerSettings>,
+  onTrackerSettingsUpdate: (callback: (settings: TrackerSettings) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, settings: TrackerSettings) => callback(settings);
+    ipcRenderer.on("tracker:settings:update", listener);
+    return () => ipcRenderer.removeListener("tracker:settings:update", listener);
+  }
+};
+
+const settingsApi = {
+  ...settingsReaderApi,
   setTrackerSettings: (settings: TrackerSettings) =>
     ipcRenderer.invoke("tracker:replace-settings", settings) as Promise<TrackerSettings>,
   restoreDefaultSettings: () => ipcRenderer.invoke("tracker:restore-default-settings") as Promise<TrackerSettings>,
@@ -90,12 +100,12 @@ const mainApi = {
     ipcRenderer.on("tracker:open-settings", listener);
     return () => ipcRenderer.removeListener("tracker:open-settings", listener);
   },
-  onTrackerSettingsUpdate: (callback: (settings: TrackerSettings) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, settings: TrackerSettings) => callback(settings);
-    ipcRenderer.on("tracker:settings:update", listener);
-    return () => ipcRenderer.removeListener("tracker:settings:update", listener);
-  },
   getMatchHistory: () => ipcRenderer.invoke("tracker:get-match-history") as Promise<MatchHistoryResult>,
+  getHomeNews: () => ipcRenderer.invoke("tracker:get-home-news") as Promise<HomeNewsResult>,
+  getArenaHeroWinRateRanking: () =>
+    ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking") as Promise<ArenaHeroWinRateRankingResult>,
+  openHomeNewsItem: (itemId: string) =>
+    ipcRenderer.invoke("tracker:open-home-news-item", itemId) as Promise<void>,
   discoverLogs: () => ipcRenderer.invoke("tracker:discover-logs") as Promise<LogCandidate[]>,
   selectLogPath: () => ipcRenderer.invoke("tracker:select-log-path") as Promise<string | undefined>,
   start: (options?: { logPath?: string; deckText?: string }) =>
@@ -146,12 +156,13 @@ const mainApi = {
 
 const capability = getPreloadCapability(window.location.search);
 const api = capability === "state-display"
-  ? stateDisplayApi
+  ? { ...stateDisplayApi, ...settingsReaderApi }
   : capability === "arena-hero-ranking"
-    ? arenaHeroRankingApi
+    ? { ...arenaHeroRankingApi, ...settingsReaderApi }
   : capability === "tracker-overlay"
     ? {
         ...stateDisplayApi,
+        ...settingsReaderApi,
         ...cardPreviewSourceApi,
         openSettings: mainApi.openSettings,
         ...friendlyOverlayLifecycleApi
@@ -159,6 +170,7 @@ const api = capability === "state-display"
     : capability === "opponent-overlay"
       ? {
           ...stateDisplayApi,
+          ...settingsReaderApi,
           ...cardPreviewSourceApi,
           ...opponentSecretPredictionApi,
           openSettings: mainApi.openSettings,
@@ -168,11 +180,13 @@ const api = capability === "state-display"
         }
       : capability === "card-preview"
         ? {
+            ...settingsReaderApi,
             onCardPreviewUpdate: mainApi.onCardPreviewUpdate,
             onCardPreviewPinnedChange: mainApi.onCardPreviewPinnedChange
           }
         : capability === "ladder-deck"
           ? {
+              ...settingsReaderApi,
               getLadderDeckRecommendation: mainApi.getLadderDeckRecommendation,
               copyLadderDeckCode: mainApi.copyLadderDeckCode,
               closeLadderDeckOverlay: mainApi.closeLadderDeckOverlay,

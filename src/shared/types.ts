@@ -84,6 +84,8 @@ export interface TrackerGeneralSettings {
 
 export interface TrackerOverlaySettings {
   readonly enabled: boolean;
+  readonly showOnlyInGame: boolean;
+  readonly theme: "light" | "dark";
   readonly arenaHeroWinRateRanking: boolean;
   readonly showFriendlyAttack: boolean;
   readonly showOpponentAttack: boolean;

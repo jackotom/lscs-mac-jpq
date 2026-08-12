@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import type { PublicTrackerState } from "../src/shared/types";
 import { createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const emptySummary = {
   totalCards: 0,
@@ -46,7 +47,7 @@ describe("log repair guidance", () => {
     }));
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
 
     expect(await screen.findByRole("button", { name: "暂停" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "开始" })).not.toBeInTheDocument();
@@ -63,7 +64,7 @@ describe("log repair guidance", () => {
     }));
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
 
     const guidance = "先点“修复日志”，完全退出并重新打开炉石，然后进入一局。";
     expect(await screen.findAllByText(guidance)).toHaveLength(1);

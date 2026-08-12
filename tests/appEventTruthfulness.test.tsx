@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import type { PublicTrackerState } from "../src/shared/types";
 import { createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const state = createPublicTrackerState({
   status: "watching",
@@ -36,7 +37,7 @@ describe("truthful main-window event presentation", () => {
     render(<App />);
     await waitFor(() => expect(window.hearthstoneTracker?.getState).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
 
     const feed = screen.getByRole("main", { name: "实时事件流" });
     expect(within(feed).getByText("第7回合")).toBeInTheDocument();
@@ -49,7 +50,7 @@ describe("truthful main-window event presentation", () => {
     render(<App />);
     await waitFor(() => expect(window.hearthstoneTracker?.getState).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
     const toolbar = screen.getByRole("banner", { name: "记牌器工具栏" });
     expect(toolbar).toHaveTextContent("事件 3");
     expect(toolbar).not.toHaveTextContent("3 行");
@@ -70,7 +71,7 @@ describe("truthful main-window event presentation", () => {
     render(<App />);
     await waitFor(() => expect(window.hearthstoneTracker?.getState).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
 
     expect(screen.getByRole("complementary", { name: "对手概览" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "竞技场选牌评分" })).not.toBeInTheDocument();

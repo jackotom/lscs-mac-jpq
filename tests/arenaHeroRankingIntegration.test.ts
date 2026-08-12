@@ -6,13 +6,13 @@ const root = path.resolve(import.meta.dirname, "..");
 const source = (relativePath: string) => readFileSync(path.join(root, relativePath), "utf8");
 
 describe("Arena hero win-rate ranking integration", () => {
-  it("uses an isolated preload capability and trusted IPC contract", () => {
+  it("keeps overlay control isolated while exposing read-only home ranking data", () => {
     const preload = source("src/main/preload.cts");
     const main = source("src/main/main.ts");
     expect(preload).toContain('params.get("arena-hero-ranking-overlay") === "1"');
-    expect(preload).not.toContain('ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking")');
+    expect(preload).toContain('ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking")');
     expect(preload).toContain('ipcRenderer.invoke("tracker:close-arena-hero-win-rate-ranking")');
-    expect(main).not.toContain('secureHandle("tracker:get-arena-hero-win-rate-ranking"');
+    expect(main).toContain('secureHandle("tracker:get-arena-hero-win-rate-ranking"');
     expect(main).toContain('secureHandle("tracker:close-arena-hero-win-rate-ranking"');
     expect(main).toContain("event.sender !== arenaHeroRankingWindow?.webContents");
   });
@@ -33,11 +33,12 @@ describe("Arena hero win-rate ranking integration", () => {
   it("keeps the ranking window alive while the user moves or resizes it", () => {
     const main = source("src/main/main.ts");
 
-    expect(main).toContain('import { getFrontmostAppName, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js"');
+    expect(main).toContain("isHearthstoneFrontmost");
     expect(main).toContain("arenaHeroRankingInteractionActiveUntil");
     expect(main).toContain("markArenaHeroRankingInteraction");
     expect(main).toContain("isArenaHeroRankingInteractionActive()");
-    expect(main).toContain("isHearthstoneOrTrackerFrontmost(frontmostAppName)");
+    expect(main).toContain("isOverlayFrontmostAllowed(");
+    expect(main).toContain("overlaySettingsPreviewWindows.arenaHeroRanking");
     expect(main).toContain("arenaHeroRankingWindow.isFocused()");
     expect(main).toMatch(/createdWindow\.on\("focus",\s*markArenaHeroRankingInteraction\)/);
     expect(main).toMatch(/createdWindow\.on\("will-move",\s*markArenaHeroRankingInteraction\)/);

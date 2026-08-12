@@ -8,6 +8,7 @@ export interface AutomaticOverlayHost {
   readonly isOverlayVisible: () => boolean;
   readonly isOverlayFocused: () => boolean;
   readonly isOverlayInteractionActive?: () => boolean;
+  readonly isFrontmostAppAllowed?: (appName: string | undefined) => boolean;
   readonly createOverlayWindow: () => Promise<void>;
   readonly showOverlayWindow: () => void;
   readonly hideOverlayWindow: () => void | Promise<void>;
@@ -88,7 +89,7 @@ export class AutomaticOverlayController {
       nextContextKey &&
       !matchesSuppressedContext(this.suppressedContextKey, nextContextKey) &&
       (
-        isHearthstoneOrTrackerFrontmost(frontmostAppName) ||
+        (this.host.isFrontmostAppAllowed ?? isHearthstoneOrTrackerFrontmost)(frontmostAppName) ||
         this.host.isOverlayFocused() ||
         this.host.isOverlayInteractionActive?.()
       )

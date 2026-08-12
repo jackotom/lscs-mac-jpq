@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import { DEFAULT_TRACKER_SETTINGS } from "../src/main/trackerSettingsStore";
 import type { TrackerSettings } from "../src/shared/types";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const trackerState = {
   status: "watching" as const,
@@ -55,6 +56,11 @@ function installApi(options: { failRead?: boolean; failSave?: boolean; blockSave
   };
 }
 
+async function openSettingsPage(): Promise<void> {
+  await openWorkbench();
+  fireEvent.click(await screen.findByRole("button", { name: "插件与其他设置" }));
+}
+
 describe("settings API round trip", () => {
   it("uses the trusted overlay API when the gear is clicked", async () => {
     window.history.replaceState({}, "", "/?overlay=1");
@@ -75,7 +81,7 @@ describe("settings API round trip", () => {
     render(<App />);
     await waitFor(() => expect(window.hearthstoneTracker?.getState).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole("button", { name: "软件设置" }));
+    await openSettingsPage();
     expect(await screen.findByRole("heading", { name: "设置", level: 1 })).toHaveFocus();
     const friendlySwitch = await screen.findByRole("switch", { name: /我方卡牌记牌器/ });
     expect(friendlySwitch).toHaveAttribute("aria-checked", "true");
@@ -86,8 +92,8 @@ describe("settings API round trip", () => {
     expect(api.getPersisted().arena.friendlyDeckTracker).toBe(false);
     expect(window.hearthstoneTracker?.setTrackerSettings).toHaveBeenCalledWith(api.getPersisted());
 
-    fireEvent.click(screen.getByRole("button", { name: "首页" }));
-    fireEvent.click(screen.getByRole("button", { name: "软件设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭工作台，返回首页" }));
+    await openSettingsPage();
     expect(await screen.findByRole("switch", { name: /我方卡牌记牌器/ })).toHaveAttribute("aria-checked", "false");
     expect(window.hearthstoneTracker?.getTrackerSettings).toHaveBeenCalledTimes(3);
   });
@@ -95,13 +101,13 @@ describe("settings API round trip", () => {
   it("reports read and save failures without pretending the switch changed", async () => {
     installApi({ failRead: true });
     const first = render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "软件设置" }));
+    await openSettingsPage();
     expect(await screen.findByRole("alert")).toHaveTextContent("无法读取已保存设置");
     first.unmount();
 
     installApi({ failSave: true });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "软件设置" }));
+    await openSettingsPage();
     const friendlySwitch = await screen.findByRole("switch", { name: /我方卡牌记牌器/ });
     fireEvent.click(friendlySwitch);
     expect(await screen.findByRole("alert")).toHaveTextContent("设置保存失败");
@@ -111,7 +117,7 @@ describe("settings API round trip", () => {
   it("keeps sliders interactive and persists the latest of 40 rapid changes", async () => {
     const api = installApi({ blockSaves: true });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "软件设置" }));
+    await openSettingsPage();
     const zoom = await screen.findByRole("slider", { name: "界面缩放" });
 
     for (let value = 81; value <= 120; value += 1) {
@@ -135,7 +141,7 @@ describe("settings API round trip", () => {
   it("wires the three maintenance actions and reports successful completion", async () => {
     installApi();
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "软件设置" }));
+    await openSettingsPage();
     expect(await screen.findByRole("heading", { name: "其他设置" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "打开日志目录" }));

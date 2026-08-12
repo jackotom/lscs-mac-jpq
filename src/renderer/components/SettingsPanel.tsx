@@ -34,6 +34,11 @@ const themeChoices: ReadonlyArray<SelectOption<TrackerSettings["appearance"]["th
   { value: "system", label: "跟随系统" }
 ];
 
+const overlayThemeChoices: ReadonlyArray<SelectOption<TrackerSettings["overlay"]["theme"]>> = [
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" }
+];
+
 const accentChoices: ReadonlyArray<SelectOption<TrackerSettings["appearance"]["accentColor"]>> = [
   { value: "#3b82f6", label: "蓝色" },
   { value: "#8b5cf6", label: "紫色" },
@@ -296,6 +301,21 @@ export function SettingsPanel({
         <>
           <div className="settings-control-group">
             <ToggleControl label="悬浮窗总开关" checked={settings.overlay.enabled} disabled={controlsDisabled} onChange={(value) => updateOverlay({ enabled: value })} />
+            <ToggleControl
+              label="仅在游戏内显示"
+              description="打开记牌器不会显示；进入炉石后自动显示，离开游戏后自动隐藏。"
+              checked={settings.overlay.showOnlyInGame}
+              disabled={controlsDisabled}
+              onChange={(value) => updateOverlay({ showOnlyInGame: value })}
+            />
+            <ChoiceButtons
+              label="悬浮窗外观设置"
+              value={settings.overlay.theme}
+              choices={overlayThemeChoices}
+              className="settings-overlay-theme-choices"
+              disabled={controlsDisabled}
+              onChange={(value) => updateOverlay({ theme: value })}
+            />
           </div>
 
           <div className="settings-control-group">

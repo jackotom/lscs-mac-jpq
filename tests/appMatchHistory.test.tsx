@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import type { PublicTrackerState } from "../src/shared/types";
 import { createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const trackerState = createPublicTrackerState({
   status: "missing-log",
@@ -64,7 +65,7 @@ describe("match history route", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("article", { name: "对局记录" })).toHaveTextContent("胜率35.3%");
+    await waitFor(() => expect(screen.getByText("总胜率").closest("article")).toHaveTextContent("35.3%"));
   });
 
   it("loads real history for the home dashboard and refreshes it on the history route", async () => {
@@ -76,17 +77,19 @@ describe("match history route", () => {
     expect(await screen.findByText("元素法")).toBeInTheDocument();
     expect(getMatchHistory).toHaveBeenCalledTimes(2);
 
-    fireEvent.click(await screen.findByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
 
     expect(await screen.findByText("元素法")).toBeInTheDocument();
     await waitFor(() => expect(getMatchHistory).toHaveBeenCalledTimes(3));
-    expect(screen.getByRole("button", { name: "打开卡牌数据库" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "首页" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开卡牌资料" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭工作台，返回首页" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "打开卡牌数据库" }));
-    fireEvent.click(await screen.findByRole("button", { name: "首页" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开卡牌资料" }));
+    fireEvent.click(await screen.findByRole("button", { name: "关闭工作台，返回首页" }));
     await waitFor(() => expect(getMatchHistory).toHaveBeenCalledTimes(4));
-    fireEvent.click(screen.getByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(screen.getByRole("button", { name: "对局记录" }));
     expect(await screen.findByText("元素法")).toBeInTheDocument();
     await waitFor(() => expect(getMatchHistory).toHaveBeenCalledTimes(5));
   });
@@ -126,7 +129,7 @@ describe("match history route", () => {
     installTrackerApi(getMatchHistory);
 
     render(<App />);
-    expect(await screen.findByText("正在读取最近完成的对局…")).toBeInTheDocument();
+    expect(await screen.findByText("正在读取最近对局…")).toBeInTheDocument();
     await waitFor(() => expect(getMatchHistory).toHaveBeenCalledTimes(2));
 
     await act(async () => {
@@ -138,13 +141,15 @@ describe("match history route", () => {
 
   it("clearly explains unavailable and rejected history reads", async () => {
     const preview = render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
     expect(await screen.findByText("当前版本无法读取真实对局历史，请在桌面版更新后重试。")).toBeInTheDocument();
     preview.unmount();
 
     installTrackerApi(vi.fn(async () => Promise.reject(new Error("连接断开"))));
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("连接断开");
   });
 
@@ -152,7 +157,8 @@ describe("match history route", () => {
     installTrackerApi(vi.fn(async () => ({ status: "error", error: "历史文件损坏" })));
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("历史文件损坏");
   });
@@ -167,7 +173,8 @@ describe("match history route", () => {
     installTrackerApi(vi.fn(async () => response));
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "对局历史" }));
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("对局历史数据无效，已拒绝更新界面。");
   });

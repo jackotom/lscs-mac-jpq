@@ -45,14 +45,14 @@ describe("tracker settings IPC", () => {
     expect(main).toContain('label: "打开设置"');
     expect(main).toContain('label: "退出"');
     expect(main).toContain("window.setOpacity");
-    expect(main).toContain("visibleOnFullScreen: !trackerSettings.overlay.hideInFullscreen");
+    expect(main).toContain("configureOverlayWorkspaceWindow(window, !trackerSettings.overlay.hideInFullscreen)");
     expect(main).toContain("getAnchoredOverlayWindowBounds");
     expect(main).toContain("applyConfiguredOverlayPositions");
     expect(main.match(/applyConfiguredOverlayPositions\(\);/g)).toHaveLength(1);
     expect(main).toContain('isDeckTrackerEnabled("opponentDeckTracker") && trackerSettings.overlay.secretPrediction');
     expect(main).toContain("trackerSettings.overlay.showFriendlyAttack || trackerSettings.overlay.showOpponentAttack");
     expect(main).toContain('mainWindow.webContents.send("tracker:settings:update", trackerSettings)');
-    expect(main).toContain('trackerSettings.general.gameDetection === "automatic" && isDeckTrackerEnabled(setting)');
+    expect(main).toContain("return isDeckTrackerEnabled(setting)");
     expect(main).toContain('if (!isDeckTrackerEnabled("opponentDeckTracker")) return;');
     expect(main).toContain("trackerSettings.general.minimizeToMenuBar");
     expect(main).toContain("trackerSettings.general.startMinimized");
@@ -66,6 +66,10 @@ describe("tracker settings IPC", () => {
     expect(main).toMatch(
       /presentMainWindow\(\s*mainWindow,\s*trackerSettings\.general\.focusOnOpen/
     );
+    expect(main).toContain(
+      "const launchAtLoginChanged = candidate.general.launchAtLogin !== previous.general.launchAtLogin"
+    );
+    expect(main).toContain("if (launchAtLoginChanged) {");
     expect(main.indexOf("applyLaunchAtLoginSetting(app, candidate.general.launchAtLogin)"))
       .toBeLessThan(main.indexOf("trackerSettingsStore.replace(value)"));
   });

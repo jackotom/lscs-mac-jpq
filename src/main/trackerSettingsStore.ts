@@ -25,6 +25,8 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettings = {
   },
   overlay: {
     enabled: true,
+    showOnlyInGame: true,
+    theme: "light",
     arenaHeroWinRateRanking: true,
     showFriendlyAttack: false,
     showOpponentAttack: false,
@@ -197,9 +199,7 @@ function migratePreviousTrackerSettings(value: unknown): TrackerSettings | undef
   }
 
   const migratedGeneral = migratePreviousGeneralSettings(value.general);
-  const migratedOverlay = isPreviousOverlaySettings(value.overlay)
-    ? { ...value.overlay, arenaHeroWinRateRanking: true }
-    : undefined;
+  const migratedOverlay = migratePreviousOverlaySettings(value.overlay, value.appearance);
   if (!migratedGeneral && !migratedOverlay) return undefined;
 
   const settings = parseTrackerSettings({
@@ -295,26 +295,37 @@ function isTransitionalAlwaysOnTopGeneralSettings(
     isOneOf(value.windowMatching, ["smart", "title", "process"]);
 }
 
-function isPreviousOverlaySettings(value: unknown): value is Omit<TrackerOverlaySettings, "arenaHeroWinRateRanking"> {
-  return hasExactKeys(value, [
-    "enabled", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
-    "offsetX", "offsetY", "opacity", "hideInFullscreen"
-  ]) &&
-    [value.enabled, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
-      .every((item) => typeof item === "boolean") &&
-    isOneOf(value.position, ["left", "right"]) &&
-    isNumberInRange(value.offsetX, -200, 200) &&
-    isNumberInRange(value.offsetY, -200, 200) &&
-    isNumberInRange(value.opacity, 30, 100);
+function migratePreviousOverlaySettings(
+  value: unknown,
+  appearance: unknown
+): TrackerOverlaySettings | undefined {
+  if (!isRecord(value) || (
+    "theme" in value &&
+    "showOnlyInGame" in value &&
+    "arenaHeroWinRateRanking" in value
+  )) return undefined;
+
+  const candidate = {
+    theme: migratedOverlayTheme(appearance),
+    showOnlyInGame: true,
+    arenaHeroWinRateRanking: true,
+    ...value
+  };
+  return isOverlaySettings(candidate) ? candidate : undefined;
+}
+
+function migratedOverlayTheme(value: unknown): TrackerOverlaySettings["theme"] {
+  return isAppearanceSettings(value) && value.theme === "dark" ? "dark" : "light";
 }
 
 function isOverlaySettings(value: unknown): value is TrackerOverlaySettings {
   return hasExactKeys(value, [
-    "enabled", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen"
   ]) &&
-    [value.enabled, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
+    isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&
     isNumberInRange(value.offsetX, -200, 200) &&
     isNumberInRange(value.offsetY, -200, 200) &&

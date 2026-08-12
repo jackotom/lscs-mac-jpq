@@ -1562,13 +1562,25 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-choice-row > s
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-theme-choices,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-overlay-theme-choices,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-font-choices {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-overlay-theme-choices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-choice-row:has(.settings-overlay-theme-choices) {
+  grid-template-columns: minmax(160px, 1fr) minmax(260px, 420px);
+  align-items: center;
+  min-height: 58px;
+}
+
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-theme-choices button,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-overlay-theme-choices button,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-font-choices button {
   min-height: 34px;
   border: 1px solid #31415f;
@@ -1579,6 +1591,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-font-choices b
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-theme-choices button.is-selected,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-overlay-theme-choices button.is-selected,
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-font-choices button.is-selected {
   border-color: #458ff4;
   color: #eef6ff;
@@ -1893,7 +1906,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-about-mark {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-mode-tabs button,
-html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button, .settings-font-choices button),
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button, .settings-overlay-theme-choices button, .settings-font-choices button),
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-select-row select {
   border-color: #2c3b59;
   color: #9daac0;
@@ -1901,7 +1914,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-select-row sel
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-mode-tabs button.is-selected,
-html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button.is-selected, .settings-font-choices button.is-selected) {
+html body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-theme-choices button.is-selected, .settings-overlay-theme-choices button.is-selected, .settings-font-choices button.is-selected) {
   border-color: #3c78cf;
   color: #eef6ff;
   background: linear-gradient(180deg, #21498c, #162f5f);
@@ -2807,7 +2820,7 @@ html[data-tracker-theme="light"] body:has(.desktop-frame):not(:has(.overlay-shel
   border-color: #b88c48;
 }
 
-html[data-tracker-theme="light"] body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-select-row select, .settings-theme-choices button, .settings-font-choices button) {
+html[data-tracker-theme="light"] body:has(.desktop-frame):not(:has(.overlay-shell)) :is(.settings-select-row select, .settings-theme-choices button, .settings-overlay-theme-choices button, .settings-font-choices button) {
   color: #49341a;
   background: #fffaf0;
   border-color: #bd9150;
@@ -2815,6 +2828,10 @@ html[data-tracker-theme="light"] body:has(.desktop-frame):not(:has(.overlay-shel
 }
 
 @media (max-width: 760px) {
+  html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-choice-row:has(.settings-overlay-theme-choices) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame {
     grid-template-columns: 64px minmax(0, 1fr);
   }

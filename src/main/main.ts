@@ -15,7 +15,7 @@ import { CollectionDeckService } from "./collectionDeckService.js";
 import { CardDataService } from "./cardDataService.js";
 import { shouldShowArenaChoiceOverlay } from "./arenaChoiceOverlayVisibility.js";
 import { AutomaticOverlayController } from "./automaticOverlayController.js";
-import { getFrontmostAppName, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
+import { getFrontmostAppName, isHearthstoneFrontmost, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
 import { resolveFrontmostAppHelperPath } from "./frontmostApp.js";
 import { CardPreviewVisibilityGate } from "./cardPreviewVisibility.js";
 import {
@@ -39,6 +39,11 @@ import {
   normalizeOverlayWindowBounds
 } from "./overlayWindowBounds.js";
 import { OpponentSecretOverlayVisibility } from "./opponentSecretOverlayVisibility.js";
+import {
+  didOverlayPreviewControlsChange,
+  OverlaySettingsPreviewSession,
+  shouldAllowOverlayDuringSettingsPreview
+} from "./overlaySettingsPreviewSession.js";
 import { presentOpponentSecretOverlay } from "./opponentSecretOverlayPresenter.js";
 import {
   configureBoardAttackOverlayWindow,
@@ -66,8 +71,13 @@ import { DEFAULT_TRACKER_SETTINGS, parseTrackerSettings, TrackerSettingsStore } 
 import { createCardLibraryErrorResult, listCardLibrary } from "../shared/cardDatabase.js";
 import { DiagnosticLogger } from "./diagnosticLogger.js";
 import { ArenaHeroStatsService } from "./arenaHeroStatsService.js";
+import { HomeNewsService } from "./homeNewsService.js";
 import { WindowBoundsPersistence } from "./windowBoundsPersistence.js";
 import { applyLaunchAtLoginSetting } from "./launchAtLogin.js";
+import {
+  configureOverlayWorkspaceWindow,
+  getOverlayWindowPlatformOptions
+} from "./overlayWindowWorkspace.js";
 import {
   formatStartupHealthFailures,
   runStartupHealthCheck
@@ -118,6 +128,7 @@ const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer);
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
 let trackerSettings: TrackerSettings = DEFAULT_TRACKER_SETTINGS;
 const cardLibraryData = new CardDataService();
+const homeNews = new HomeNewsService();
 let cardLibraryMetadata: { source?: string; version?: string } = {};
 let mainWindow: BrowserWindow | undefined;
 let overlayWindow: BrowserWindow | undefined;
@@ -212,6 +223,14 @@ const cardPreviewAutoHideMs = 10000;
 const mainWindowActivateGraceMs = 1_500;
 const cardPreviewVisibilityIntervalMs = 150;
 const arenaHeroRankingInteractionGraceMs = 1_200;
+const overlaySettingsPreviewGraceMs = 2_000;
+const overlaySettingsPreviewSession = new OverlaySettingsPreviewSession(overlaySettingsPreviewGraceMs);
+let overlaySettingsPreviewWindows = {
+  friendly: false,
+  opponent: false,
+  ladder: false,
+  arenaHeroRanking: false
+};
 const cardPreviewVisibilityGate = new CardPreviewVisibilityGate();
 const cardPreviewPinAccelerator = "Alt+Q";
 const opponentSecretOverlayVisibility = new OpponentSecretOverlayVisibility();
@@ -223,6 +242,10 @@ const ladderDeckOverlayController = new LadderDeckOverlayController({
   isVisible: () => Boolean(ladderDeckOverlayWindow && !ladderDeckOverlayWindow.isDestroyed() && ladderDeckOverlayWindow.isVisible()),
   isAnyOverlayFocused: () => isAnyInteractiveOverlayFocused(),
   isAnyOverlayInteractionActive: () => isAnyOverlayInteractionActive(),
+  isFrontmostAppAllowed: (appName) => isOverlayFrontmostAllowed(
+    appName,
+    overlaySettingsPreviewWindows.ladder
+  ),
   createWindow: async () => { await createLadderDeckOverlayWindow({ showWhenReady: false }); },
   updateMode: updateLadderDeckOverlayMode,
   showInactive: () => {
@@ -296,6 +319,10 @@ const automaticOverlayController = new AutomaticOverlayController({
   isOverlayVisible: () => Boolean(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()),
   isOverlayFocused: () => isAnyInteractiveOverlayFocused(),
   isOverlayInteractionActive: () => isAnyOverlayInteractionActive(),
+  isFrontmostAppAllowed: (appName) => isOverlayFrontmostAllowed(
+    appName,
+    overlaySettingsPreviewWindows.friendly
+  ),
   createOverlayWindow: async () => {
     await createOverlayWindow({ showWhenReady: false });
   },
@@ -310,7 +337,9 @@ const automaticOverlayController = new AutomaticOverlayController({
       overlayWindow.hide();
     }
   },
-  isEnabled: () => isAutomaticTrackerEnabled("friendlyDeckTracker"),
+  isEnabled: () => shouldManageTrackerOverlay(
+    "friendlyDeckTracker"
+  ),
   shouldHideWhenDisabled: () =>
     trackerSettings.general.gameDetection === "automatic" || !isDeckTrackerEnabled("friendlyDeckTracker")
 });
@@ -322,6 +351,10 @@ const automaticOpponentOverlayController = new AutomaticOverlayController({
   isOverlayVisible: () => Boolean(opponentOverlayWindow && !opponentOverlayWindow.isDestroyed() && opponentOverlayWindow.isVisible()),
   isOverlayFocused: () => isAnyInteractiveOverlayFocused(),
   isOverlayInteractionActive: () => isAnyOverlayInteractionActive(),
+  isFrontmostAppAllowed: (appName) => isOverlayFrontmostAllowed(
+    appName,
+    overlaySettingsPreviewWindows.opponent
+  ),
   createOverlayWindow: async () => { await createOpponentOverlayWindow({ showWhenReady: false }); },
   showOverlayWindow: () => opponentOverlayWindowController.showInactive(),
   hideOverlayWindow: async () => {
@@ -330,7 +363,9 @@ const automaticOpponentOverlayController = new AutomaticOverlayController({
       opponentOverlayWindow.hide();
     }
   },
-  isEnabled: () => isAutomaticTrackerEnabled("opponentDeckTracker"),
+  isEnabled: () => shouldManageTrackerOverlay(
+    "opponentDeckTracker"
+  ),
   shouldHideWhenDisabled: () =>
     trackerSettings.general.gameDetection === "automatic" || !isDeckTrackerEnabled("opponentDeckTracker")
 });
@@ -341,8 +376,21 @@ function isDeckTrackerEnabled(
   return trackerSettings.overlay.enabled && trackerSettings.ladder[setting];
 }
 
-function isAutomaticTrackerEnabled(setting: "friendlyDeckTracker" | "opponentDeckTracker") {
-  return trackerSettings.general.gameDetection === "automatic" && isDeckTrackerEnabled(setting);
+function shouldManageTrackerOverlay(
+  setting: "friendlyDeckTracker" | "opponentDeckTracker"
+) {
+  return isDeckTrackerEnabled(setting);
+}
+
+function isOverlayFrontmostAllowed(appName: string | undefined, previewWindowWasVisible = false) {
+  return shouldAllowOverlayDuringSettingsPreview({
+    showOnlyInGame: trackerSettings.overlay.showOnlyInGame,
+    hearthstoneFrontmost: isHearthstoneFrontmost(appName),
+    trackerFrontmost: isHearthstoneOrTrackerFrontmost(appName),
+    previewActive: overlaySettingsPreviewSession.isActive(),
+    previewWindowWasVisible,
+    mainWindowFocused: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused())
+  });
 }
 
 function isAnyInteractiveOverlayFocused() {
@@ -388,14 +436,15 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
   const showWhenReady = options.showWhenReady ??
     shouldShowMainWindowOnLaunch(process.env, trackerSettings.general.startMinimized);
   const focusWhenReady = options.focusWhenReady ?? trackerSettings.general.focusOnOpen;
+  const qaHomeDemo = process.env.QA_HOME_DEMO === "1";
   const window = new BrowserWindow({
-    width: 1180,
-    height: 760,
+    width: readQaWindowDimension(process.env.QA_MAIN_WIDTH, 1180, 640, 2400),
+    height: readQaWindowDimension(process.env.QA_MAIN_HEIGHT, 760, 620, 1800),
     minWidth: 640,
     minHeight: 620,
     show: false,
     title: "炉石 Mac 记牌器",
-    backgroundColor: "#101419",
+    backgroundColor: "#ffffff",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
     webPreferences: createSecureWebPreferences(path.join(__dirname, "preload.cjs"))
@@ -411,8 +460,9 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
     }
   });
 
-  await loadRendererPage(window);
-  window.webContents.setZoomFactor(trackerSettings.appearance.zoom / 100);
+  await loadRendererPage(window, qaHomeDemo ? { "qa-home-demo": "1" } : undefined);
+  const qaZoom = readQaWindowDimension(process.env.QA_ZOOM_PERCENT, trackerSettings.appearance.zoom, 50, 200);
+  window.webContents.setZoomFactor(qaZoom / 100);
 
   if (showWhenReady) {
     presentMainWindow(window, focusWhenReady, () => app.focus({ steal: true }));
@@ -431,6 +481,12 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
   ) {
     await captureQaScreenshotIfRequested(window);
   }
+}
+
+function readQaWindowDimension(value: string | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 if (hasSingleInstanceLock) {
@@ -494,6 +550,18 @@ if (hasSingleInstanceLock) {
       return;
     }
     trackerSettings = healthCheck.settings;
+    if (process.env.QA_TRACKER_THEME === "light" || process.env.QA_TRACKER_THEME === "dark") {
+      trackerSettings = {
+        ...trackerSettings,
+        appearance: { ...trackerSettings.appearance, theme: process.env.QA_TRACKER_THEME }
+      };
+    }
+    if (process.env.QA_OVERLAY_THEME === "light" || process.env.QA_OVERLAY_THEME === "dark") {
+      trackerSettings = {
+        ...trackerSettings,
+        overlay: { ...trackerSettings.overlay, theme: process.env.QA_OVERLAY_THEME }
+      };
+    }
     if (healthCheck.repairs.length > 0) {
       diagnosticLogger.info("启动自动检修已修复问题", healthCheck.repairs);
     }
@@ -548,7 +616,7 @@ if (hasSingleInstanceLock) {
       await captureQaScreenshotIfRequested(heroWindow);
     } else if (process.env.QA_EXIT_AFTER_SCREENSHOT !== "1") {
       if (trackerSettings.overlay.enabled) startArenaChoiceOverlayMonitor();
-      if (trackerSettings.general.gameDetection === "automatic") {
+      if (trackerSettings.overlay.enabled) {
         automaticOverlayController.start();
         automaticOpponentOverlayController.start();
       }
@@ -638,6 +706,17 @@ function registerIpc() {
   registerOpponentOverlayIpc(trustedIpcMain, opponentOverlayWindowController);
   const secureHandle = trustedIpcMain.handle.bind(trustedIpcMain);
   secureHandle("tracker:discover-logs", () => discoverLogCandidates());
+  secureHandle("tracker:get-home-news", () => homeNews.load());
+  secureHandle("tracker:get-arena-hero-win-rate-ranking", () => arenaHeroStats.load());
+  secureHandle("tracker:open-home-news-item", async (_event, itemId: unknown) => {
+    if (typeof itemId !== "string" || !/^[a-zA-Z0-9_-]{1,120}$/.test(itemId)) {
+      throw new Error("资讯标识无效");
+    }
+    const result = await homeNews.load();
+    const item = result.items.find((candidate) => candidate.id === itemId);
+    if (!item) throw new Error("资讯不存在或已更新");
+    await shell.openExternal(item.url);
+  });
   secureHandle("tracker:get-state", () => tracker.getState());
   secureHandle("tracker:get-settings", () => trackerSettings);
   secureHandle("tracker:close-arena-hero-win-rate-ranking", (event) => {
@@ -649,14 +728,33 @@ function registerIpc() {
     const candidate = parseTrackerSettings(value);
     if (!candidate) throw new Error("设置数据无效");
     const previous = trackerSettings;
-    applyLaunchAtLoginSetting(app, candidate.general.launchAtLogin);
+    const launchAtLoginChanged = candidate.general.launchAtLogin !== previous.general.launchAtLogin;
+    if (didOverlayPreviewControlsChange(previous.overlay, candidate.overlay)) {
+      const continuingPreview = overlaySettingsPreviewSession.isActive();
+      overlaySettingsPreviewWindows = {
+        friendly: (continuingPreview && overlaySettingsPreviewWindows.friendly) ||
+          Boolean(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()),
+        opponent: (continuingPreview && overlaySettingsPreviewWindows.opponent) ||
+          Boolean(opponentOverlayWindow && !opponentOverlayWindow.isDestroyed() && opponentOverlayWindow.isVisible()),
+        ladder: (continuingPreview && overlaySettingsPreviewWindows.ladder) ||
+          Boolean(ladderDeckOverlayWindow && !ladderDeckOverlayWindow.isDestroyed() && ladderDeckOverlayWindow.isVisible()),
+        arenaHeroRanking: (continuingPreview && overlaySettingsPreviewWindows.arenaHeroRanking) ||
+          Boolean(arenaHeroRankingWindow && !arenaHeroRankingWindow.isDestroyed() && arenaHeroRankingWindow.isVisible())
+      };
+      overlaySettingsPreviewSession.extend();
+    }
+    if (launchAtLoginChanged) {
+      applyLaunchAtLoginSetting(app, candidate.general.launchAtLogin);
+    }
     try {
       trackerSettings = await trackerSettingsStore.replace(value);
     } catch (error) {
-      try {
-        applyLaunchAtLoginSetting(app, previous.general.launchAtLogin);
-      } catch (rollbackError) {
-        reportDiagnosticError("恢复开机启动设置失败", rollbackError);
+      if (launchAtLoginChanged) {
+        try {
+          applyLaunchAtLoginSetting(app, previous.general.launchAtLogin);
+        } catch (rollbackError) {
+          reportDiagnosticError("恢复开机启动设置失败", rollbackError);
+        }
       }
       throw error;
     }
@@ -665,14 +763,19 @@ function registerIpc() {
   });
   secureHandle("tracker:restore-default-settings", async () => {
     const previous = trackerSettings;
-    applyLaunchAtLoginSetting(app, DEFAULT_TRACKER_SETTINGS.general.launchAtLogin);
+    const launchAtLoginChanged = DEFAULT_TRACKER_SETTINGS.general.launchAtLogin !== previous.general.launchAtLogin;
+    if (launchAtLoginChanged) {
+      applyLaunchAtLoginSetting(app, DEFAULT_TRACKER_SETTINGS.general.launchAtLogin);
+    }
     try {
       trackerSettings = await trackerSettingsStore.replace(DEFAULT_TRACKER_SETTINGS);
     } catch (error) {
-      try {
-        applyLaunchAtLoginSetting(app, previous.general.launchAtLogin);
-      } catch (rollbackError) {
-        reportDiagnosticError("恢复开机启动设置失败", rollbackError);
+      if (launchAtLoginChanged) {
+        try {
+          applyLaunchAtLoginSetting(app, previous.general.launchAtLogin);
+        } catch (rollbackError) {
+          reportDiagnosticError("恢复开机启动设置失败", rollbackError);
+        }
       }
       throw error;
     }
@@ -775,6 +878,10 @@ function registerIpc() {
   secureHandle("tracker:inspect-log-config", () => inspectLogConfig());
   secureHandle("tracker:toggle-overlay", async () => {
     if (!isDeckTrackerEnabled("friendlyDeckTracker")) return false;
+    if (trackerSettings.overlay.showOnlyInGame && !isHearthstoneFrontmost(await getFrontmostAppName())) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) await releaseOverlayWindow(overlayWindow);
+      return false;
+    }
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       if (!overlayWindow.isVisible()) {
         automaticOverlayController.clearSuppression();
@@ -792,6 +899,10 @@ function registerIpc() {
   });
   secureHandle("tracker:toggle-opponent-overlay", async () => {
     if (!isDeckTrackerEnabled("opponentDeckTracker")) return false;
+    if (trackerSettings.overlay.showOnlyInGame && !isHearthstoneFrontmost(await getFrontmostAppName())) {
+      await releaseOpponentOverlayWindow();
+      return false;
+    }
     if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
       if (opponentOverlayWindowState?.isCollapsed()) {
         await expandOpponentOverlayWindow(true);
@@ -860,6 +971,9 @@ async function applyTrackerSettingsEffects(
     mainWindow.webContents.setZoomFactor(trackerSettings.appearance.zoom / 100);
     mainWindow.webContents.send("tracker:settings:update", trackerSettings);
   }
+  for (const window of overlayWindows()) {
+    window.webContents.send("tracker:settings:update", trackerSettings);
+  }
 
   syncStatusTray();
   applyOverlayWindowAppearance();
@@ -927,7 +1041,7 @@ async function applyTrackerSettingsEffects(
     );
   }
 
-  if (trackerSettings.general.gameDetection === "automatic") {
+  if (trackerSettings.overlay.enabled) {
     automaticOverlayController.start();
     automaticOpponentOverlayController.start();
     await Promise.all([
@@ -967,9 +1081,7 @@ function releaseTransientWindow(window: BrowserWindow | undefined): void {
 function applyOverlayWindowAppearance(): void {
   for (const window of overlayWindows()) {
     window.setOpacity(trackerSettings.overlay.opacity / 100);
-    window.setVisibleOnAllWorkspaces(true, {
-      visibleOnFullScreen: !trackerSettings.overlay.hideInFullscreen
-    });
+    configureOverlayWorkspaceWindow(window, !trackerSettings.overlay.hideInFullscreen);
   }
 }
 
@@ -1075,6 +1187,7 @@ async function createOverlayWindowInstance(): Promise<BrowserWindow> {
   if (overlayWindow && !overlayWindow.isDestroyed()) return overlayWindow;
 
   const createdWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     ...savedBounds,
     minWidth: Math.min(100, savedBounds.width),
     minHeight: Math.min(200, savedBounds.height),
@@ -1091,7 +1204,6 @@ async function createOverlayWindowInstance(): Promise<BrowserWindow> {
   overlayWindow = createdWindow;
   installQaConsoleErrorListener(createdWindow);
   configureSecureNavigation(createdWindow);
-  createdWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   createdWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   tracker.attachWindow(createdWindow);
@@ -1177,6 +1289,7 @@ async function createLadderDeckOverlayWindow(options: { showWhenReady?: boolean;
   if (!bounds) throw new Error("当前屏幕空间不足，无法显示天梯推荐");
 
   ladderDeckOverlayWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     ...bounds,
     minWidth: 190,
     minHeight: 400,
@@ -1192,7 +1305,6 @@ async function createLadderDeckOverlayWindow(options: { showWhenReady?: boolean;
   });
   installQaConsoleErrorListener(ladderDeckOverlayWindow);
   configureSecureNavigation(ladderDeckOverlayWindow);
-  ladderDeckOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   ladderDeckOverlayWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   const createdWindow = ladderDeckOverlayWindow;
@@ -1276,6 +1388,7 @@ async function createOpponentOverlayWindowInstance(qaDemo: boolean): Promise<Bro
   opponentOverlayWindowState = new OpponentOverlayWindowState(expandedBounds);
 
   const createdWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     ...expandedBounds,
     minWidth: 52,
     minHeight: 38,
@@ -1293,7 +1406,6 @@ async function createOpponentOverlayWindowInstance(qaDemo: boolean): Promise<Bro
   installQaConsoleErrorListener(createdWindow);
   configureSecureNavigation(createdWindow);
   createdWindow.setMinimumSize(100, 150);
-  createdWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   createdWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   tracker.attachWindow(createdWindow);
@@ -1421,6 +1533,12 @@ function stopOpponentSecretOverlayMonitor() {
 async function showOpponentOverlayInactive(generation: number) {
   if (generation !== opponentSecretOverlayGeneration) return;
   if (!isDeckTrackerEnabled("opponentDeckTracker")) return;
+  const frontmostAppName = await getFrontmostAppName();
+  if (
+    !isOverlayFrontmostAllowed(frontmostAppName, overlaySettingsPreviewWindows.opponent) &&
+    !isAnyInteractiveOverlayFocused() &&
+    !isAnyOverlayInteractionActive()
+  ) return;
   const ensureWindow = async (options: { readonly showWhenReady: false }) =>
     await createOpponentOverlayWindow({
       ...options,
@@ -1477,6 +1595,10 @@ async function refreshBoardAttackOverlayWindow() {
   }
   boardAttackOverlayRefreshInFlight = true;
   try {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+      releaseTransientWindow(boardAttackOverlayWindow);
+      return;
+    }
     const frontmostAppName = await getFrontmostAppName();
     if (!shouldShowBoardAttackOverlay(Boolean(tracker.getState().gameActive), frontmostAppName)) {
       releaseTransientWindow(boardAttackOverlayWindow);
@@ -1560,6 +1682,7 @@ async function createArenaChoiceOverlayWindow(options: { qaDemo?: boolean } = {}
 
   const bounds = getArenaChoiceOverlayBounds();
   arenaChoiceOverlayWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     ...bounds,
     title: "炉石竞技场数据条",
     frame: false,
@@ -1575,7 +1698,6 @@ async function createArenaChoiceOverlayWindow(options: { qaDemo?: boolean } = {}
   });
   installQaConsoleErrorListener(arenaChoiceOverlayWindow);
   configureSecureNavigation(arenaChoiceOverlayWindow);
-  arenaChoiceOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   arenaChoiceOverlayWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   arenaChoiceOverlayWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -1604,6 +1726,7 @@ async function createCardPreviewWindow() {
   }
 
   cardPreviewWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     width: cardPreviewWidth,
     height: cardPreviewHeight,
     title: "炉石卡牌说明",
@@ -1620,7 +1743,6 @@ async function createCardPreviewWindow() {
   });
   installQaConsoleErrorListener(cardPreviewWindow);
   configureSecureNavigation(cardPreviewWindow);
-  cardPreviewWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   cardPreviewWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   cardPreviewWindow.setIgnoreMouseEvents(false);
@@ -1915,6 +2037,10 @@ async function refreshArenaChoiceOverlayWindow() {
   const generation = arenaChoiceOverlayGeneration;
   arenaChoiceOverlayRefreshInFlight = true;
   try {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+      releaseTransientWindow(arenaChoiceOverlayWindow);
+      return;
+    }
     const frontmostAppName = await getFrontmostAppName();
     if (
       generation !== arenaChoiceOverlayGeneration ||
@@ -2006,7 +2132,10 @@ async function refreshArenaHeroRankingWindow() {
       Boolean(arena && arena.status !== "inactive") &&
       !arenaHeroRankingSuppressed &&
       (
-        isHearthstoneOrTrackerFrontmost(frontmostAppName) ||
+        isOverlayFrontmostAllowed(
+          frontmostAppName,
+          overlaySettingsPreviewWindows.arenaHeroRanking
+        ) ||
         rankingWindowFocused ||
         isArenaHeroRankingInteractionActive()
       );
@@ -2046,6 +2175,7 @@ async function createArenaHeroRankingWindow(options: { qaDemo?: boolean } = {}) 
   const bounds = await loadArenaHeroRankingWindowBounds();
   const { width, height } = bounds;
   arenaHeroRankingWindow = new BrowserWindow({
+    ...getOverlayWindowPlatformOptions(),
     ...bounds,
     minWidth: Math.min(100, width),
     minHeight: Math.min(200, height),
@@ -2061,7 +2191,6 @@ async function createArenaHeroRankingWindow(options: { qaDemo?: boolean } = {}) 
   });
   installQaConsoleErrorListener(arenaHeroRankingWindow);
   configureSecureNavigation(arenaHeroRankingWindow);
-  arenaHeroRankingWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: !trackerSettings.overlay.hideInFullscreen });
   arenaHeroRankingWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   const createdWindow = arenaHeroRankingWindow;
@@ -2227,11 +2356,31 @@ function getQaThreeWindowLayoutInspection() {
 async function captureQaScreenshotIfRequested(window: BrowserWindow) {
   const screenshotPath = process.env.QA_SCREENSHOT_PATH;
   const inspectPath = process.env.QA_INSPECT_PATH;
+  let qaSettingsInteractionChecks: Array<Record<string, unknown>> | undefined;
   if (!screenshotPath && !inspectPath) {
     return;
   }
 
   await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  const qaMainWindowState = process.env.QA_MAIN_WINDOW_STATE;
+  if (qaMainWindowState === "maximized") {
+    window.maximize();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  } else if (qaMainWindowState === "fullscreen") {
+    window.setFullScreen(true);
+    await new Promise<void>((resolve) => {
+      if (window.isFullScreen()) {
+        resolve();
+        return;
+      }
+      const timeout = setTimeout(resolve, 2_500);
+      window.once("enter-full-screen", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+  }
 
   if (shouldUseQaAccessoryActivationPolicy(process.env, process.platform)) {
     await hideQaDockAfterLaunch(app.dock);
@@ -2275,21 +2424,26 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
 
   if (process.env.QA_OPEN_CARD_LIBRARY === "1") {
     await window.webContents.executeJavaScript(`
-      document.querySelector('[aria-label="打开卡牌数据库"]')?.click();
+      document.querySelector('[aria-label="打开二级工作台"]')?.click();
+    `);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await window.webContents.executeJavaScript(`
+      document.querySelector('[aria-label="打开卡牌资料"], [aria-label="打开卡牌数据库"]')?.click();
     `);
     await new Promise((resolve) => setTimeout(resolve, 1400));
   }
 
   if (process.env.QA_OPEN_SETTINGS === "1") {
     await window.webContents.executeJavaScript(`
-      document.querySelector('[aria-label="软件设置"]')?.click();
+      document.querySelector('[aria-label="打开二级工作台"]')?.click();
     `);
     await new Promise((resolve) => setTimeout(resolve, 500));
     const settingsSection = process.env.QA_SETTINGS_SECTION;
     if (settingsSection) {
       await window.webContents.executeJavaScript(`
         Array.from(document.querySelectorAll("button"))
-          .find((button) => button.textContent?.trim() === ${JSON.stringify(settingsSection)})
+          .find((button) => button.getAttribute("aria-label") === ${JSON.stringify(settingsSection)}
+            || button.textContent?.trim() === ${JSON.stringify(settingsSection)})
           ?.click();
       `);
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -2302,6 +2456,52 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
           ?.click();
       `);
       await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    const toggleLabels = (process.env.QA_TOGGLE_SETTING_LABELS ?? "")
+      .split("|")
+      .map((label) => label.trim())
+      .filter(Boolean);
+    if (toggleLabels.length > 0) {
+      window.show();
+      window.focus();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const initialBounds = roundBounds(window.getBounds());
+      const initialMaximized = window.isMaximized();
+      const initialFullScreen = window.isFullScreen();
+      const initialWindowId = window.id;
+      qaSettingsInteractionChecks = [];
+      for (const label of toggleLabels) {
+        const clicked = await window.webContents.executeJavaScript(`
+          (() => {
+            const control = Array.from(document.querySelectorAll('[role="switch"]'))
+              .find((button) => button.getAttribute("aria-label")?.startsWith(${JSON.stringify(label)}));
+            if (!(control instanceof HTMLElement)) return false;
+            control.click();
+            return true;
+          })()
+        `) as boolean;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const bounds = roundBounds(window.getBounds());
+        qaSettingsInteractionChecks.push({
+          label,
+          clicked,
+          visible: window.isVisible(),
+          focused: window.isFocused(),
+          minimized: window.isMinimized(),
+          maximized: window.isMaximized(),
+          fullScreen: window.isFullScreen(),
+          windowId: window.id,
+          bounds,
+          boundsUnchanged: JSON.stringify(bounds) === JSON.stringify(initialBounds),
+          maximizedUnchanged: window.isMaximized() === initialMaximized,
+          fullScreenUnchanged: window.isFullScreen() === initialFullScreen,
+          windowIdentityUnchanged: window.id === initialWindowId,
+          frontmostAppName: await getFrontmostAppName(),
+          visibleOverlayTitles: overlayWindows()
+            .filter((candidate) => !candidate.isDestroyed() && candidate.isVisible())
+            .map((candidate) => candidate.getTitle())
+        });
+      }
     }
   }
 
@@ -2600,6 +2800,7 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
       inheritedNodeEnvironmentKeys: Object.keys(process.env)
         .filter((key) => /^NODE_/.test(key))
         .sort(),
+      settingsInteractionChecks: qaSettingsInteractionChecks,
       preview
     };
     const qaWindowLayout = getQaThreeWindowLayoutInspection();
@@ -2685,6 +2886,11 @@ async function inspectQaRenderer(window: BrowserWindow): Promise<Record<string, 
     return JSON.stringify({
       hasApi: Boolean(window.hearthstoneTracker),
       location: window.location.href,
+      appliedTheme: document.documentElement.dataset.trackerTheme ?? null,
+      bodyComputed: {
+        backgroundColor: getComputedStyle(document.body).backgroundColor,
+        color: getComputedStyle(document.body).color
+      },
       bodyText: document.body.innerText.slice(0, 2000),
       trackerState: await window.hearthstoneTracker?.getState?.(),
       trackerSettings: await window.hearthstoneTracker?.getTrackerSettings?.(),
@@ -2695,6 +2901,8 @@ async function inspectQaRenderer(window: BrowserWindow): Promise<Record<string, 
         .map((element) => element.getAttribute("data-group-key")),
       shellRect: rect(shell),
       shellComputed: shell ? {
+        backgroundColor: getComputedStyle(shell).backgroundColor,
+        color: getComputedStyle(shell).color,
         height: getComputedStyle(shell).height,
         minHeight: getComputedStyle(shell).minHeight,
         gridTemplateRows: getComputedStyle(shell).gridTemplateRows

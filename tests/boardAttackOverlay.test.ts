@@ -52,7 +52,7 @@ describe("board attack overlay", () => {
       webPreferences: { preload: "/tmp/preload.cjs", backgroundThrottling: true }
     });
     expect(calls).toEqual([
-      ["workspaces", true, { visibleOnFullScreen: true }],
+      ["workspaces", true, { visibleOnFullScreen: true, skipTransformProcessType: true }],
       ["alwaysOnTop", true, "screen-saver"],
       ["ignoreMouse", true, { forward: true }]
     ]);

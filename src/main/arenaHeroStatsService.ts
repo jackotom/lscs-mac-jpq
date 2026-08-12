@@ -24,7 +24,10 @@ const CLASS_NAMES: Readonly<Record<string, string>> = {
 
 interface CachedHeroStats {
   readonly source: "Firestone";
+  readonly sourceUrl: typeof SOURCE_URL;
   readonly lastUpdated: string;
+  readonly fetchedAt: string;
+  readonly sample: number;
   readonly heroes: readonly InternalHeroStat[];
 }
 
@@ -60,7 +63,8 @@ export class ArenaHeroStatsService {
     try {
       const response = await this.fetcher(SOURCE_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const fresh = parseArenaHeroStats(await response.json());
+      const parsed = parseArenaHeroStats(await response.json());
+      const fresh = { ...parsed, fetchedAt: new Date().toISOString() };
       await this.writeCache(fresh);
       return toPublicResult(fresh);
     } catch (error) {
@@ -131,7 +135,11 @@ export function parseArenaHeroStats(value: unknown): CachedHeroStats {
     .sort((left, right) => right.winRate - left.winRate || right.games - left.games || left.heroClass.localeCompare(right.heroClass))
     .map((hero, index) => ({ ...hero, rank: index + 1 }));
   if (heroes.length === 0) throw new Error("Firestone 英雄胜率数据为空");
-  return { source: "Firestone", lastUpdated: value.lastUpdated, heroes };
+  const reportedSample = finiteNonNegative(value.dataPoints);
+  const sample = reportedSample !== undefined && Number.isSafeInteger(reportedSample)
+    ? reportedSample
+    : heroes.reduce((total, hero) => total + hero.games, 0);
+  return { source: "Firestone", sourceUrl: SOURCE_URL, lastUpdated: value.lastUpdated, fetchedAt: value.lastUpdated, sample, heroes };
 }
 
 function parseCachedHeroStats(value: unknown): CachedHeroStats | undefined {
@@ -140,7 +148,14 @@ function parseCachedHeroStats(value: unknown): CachedHeroStats | undefined {
   }
   const heroes = value.heroes.filter(isArenaHeroStat);
   if (heroes.length === 0 || heroes.length !== value.heroes.length) return undefined;
-  return { source: "Firestone", lastUpdated: value.lastUpdated, heroes };
+  const cachedSample = finiteNonNegative(value.sample);
+  const sample = cachedSample !== undefined && Number.isSafeInteger(cachedSample)
+    ? cachedSample
+    : heroes.reduce((total, hero) => total + hero.games, 0);
+  const fetchedAt = typeof value.fetchedAt === "string" && Number.isFinite(Date.parse(value.fetchedAt))
+    ? value.fetchedAt
+    : value.lastUpdated;
+  return { source: "Firestone", sourceUrl: SOURCE_URL, lastUpdated: value.lastUpdated, fetchedAt, sample, heroes };
 }
 
 function isArenaHeroStat(value: unknown): value is InternalHeroStat {
@@ -156,6 +171,8 @@ function toPublicResult(value: CachedHeroStats): Extract<ArenaHeroWinRateRanking
     status: "ok",
     source: value.source,
     updatedAt: value.lastUpdated,
+    fetchedAt: value.fetchedAt,
+    sample: value.sample,
     entries: value.heroes.map(({ wins: _wins, ...entry }) => entry)
   };
 }

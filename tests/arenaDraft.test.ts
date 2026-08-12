@@ -934,6 +934,113 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ]);
   });
 
+  it("keeps the original card id unrated when delayed ratings contain multiple same-name candidates", () => {
+    const duplicateVersionCardDb = createCardDatabase([
+      { dbfId: 6201, name: "同名版本牌", cardId: "VERSION_ORIGINAL", collectible: true },
+      { dbfId: 6202, name: "同名版本牌", cardId: "VERSION_RATED_A", collectible: true },
+      { dbfId: 6203, name: "同名版本牌", cardId: "VERSION_RATED_B", collectible: true },
+      { dbfId: 6204, name: "测试辅牌甲", cardId: "VERSION_FILLER_A", collectible: true },
+      { dbfId: 6205, name: "测试辅牌乙", cardId: "VERSION_FILLER_B", collectible: true }
+    ]);
+    const delayedRatings: ArenaRatingTable = {
+      source: "test ratings",
+      version: 1,
+      fetchedAt: "2026-08-11T00:00:00.000Z",
+      ratings: {},
+      firestone: {
+        source: "Firestone",
+        version: "multiple-same-name-candidates",
+        lastUpdated: "2026-08-11T00:00:00.000Z",
+        ratings: {
+          VERSION_RATED_A: { pickRate: 30 },
+          VERSION_RATED_B: { pickRate: 70 }
+        }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: duplicateVersionCardDb });
+    engine.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
+
+    expect(engine.applyScreenChoices(["同名版本牌", "测试辅牌甲", "测试辅牌乙"])).toBe(true);
+    expect(engine.getState().currentChoices[0]?.cardId).toBe("VERSION_ORIGINAL");
+
+    engine.setRatings(delayedRatings);
+
+    expect(engine.getState().currentChoices[0]?.cardId).toBe("VERSION_ORIGINAL");
+    expect(engine.getState().currentChoices[0]?.rating).toBeUndefined();
+  });
+
+  it("replaces an unrated card id when delayed ratings contain one same-name candidate", () => {
+    const duplicateVersionCardDb = createCardDatabase([
+      { dbfId: 6301, name: "唯一版本牌", cardId: "UNIQUE_ORIGINAL", collectible: true },
+      { dbfId: 6302, name: "唯一版本牌", cardId: "UNIQUE_RATED", collectible: true },
+      { dbfId: 6303, name: "测试辅牌甲", cardId: "UNIQUE_FILLER_A", collectible: true },
+      { dbfId: 6304, name: "测试辅牌乙", cardId: "UNIQUE_FILLER_B", collectible: true }
+    ]);
+    const delayedRatings: ArenaRatingTable = {
+      source: "test ratings",
+      version: 1,
+      fetchedAt: "2026-08-11T00:00:00.000Z",
+      ratings: {},
+      firestone: {
+        source: "Firestone",
+        version: "one-same-name-candidate",
+        lastUpdated: "2026-08-11T00:00:00.000Z",
+        ratings: { UNIQUE_RATED: { pickRate: 64 } }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: duplicateVersionCardDb });
+    engine.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
+
+    expect(engine.applyScreenChoices(["唯一版本牌", "测试辅牌甲", "测试辅牌乙"])).toBe(true);
+    expect(engine.getState().currentChoices[0]?.cardId).toBe("UNIQUE_ORIGINAL");
+
+    engine.setRatings(delayedRatings);
+
+    expect(engine.getState().currentChoices[0]).toMatchObject({
+      cardId: "UNIQUE_RATED",
+      rating: { pickRate: 64 }
+    });
+  });
+
+  it("keeps the original card id when its own delayed rating becomes available", () => {
+    const duplicateVersionCardDb = createCardDatabase([
+      { dbfId: 6401, name: "正确版本牌", cardId: "CORRECT_ORIGINAL", collectible: true },
+      { dbfId: 6402, name: "正确版本牌", cardId: "CORRECT_ALTERNATE", collectible: true },
+      { dbfId: 6403, name: "测试辅牌甲", cardId: "CORRECT_FILLER_A", collectible: true },
+      { dbfId: 6404, name: "测试辅牌乙", cardId: "CORRECT_FILLER_B", collectible: true }
+    ]);
+    const delayedRatings: ArenaRatingTable = {
+      source: "test ratings",
+      version: 1,
+      fetchedAt: "2026-08-11T00:00:00.000Z",
+      ratings: {},
+      firestone: {
+        source: "Firestone",
+        version: "original-id-rated",
+        lastUpdated: "2026-08-11T00:00:00.000Z",
+        ratings: {
+          CORRECT_ORIGINAL: { pickRate: 52 },
+          CORRECT_ALTERNATE: { pickRate: 91 }
+        }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: duplicateVersionCardDb });
+    engine.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
+
+    expect(engine.applyScreenChoices(["正确版本牌", "测试辅牌甲", "测试辅牌乙"])).toBe(true);
+    expect(engine.getState().currentChoices[0]).toMatchObject({
+      cardId: "CORRECT_ORIGINAL",
+      rating: undefined
+    });
+
+    engine.setRatings(delayedRatings);
+
+    expect(engine.getState().currentChoices[0]).toMatchObject({
+      cardId: "CORRECT_ORIGINAL",
+      rating: { pickRate: 52 }
+    });
+  });
+
   it("matches the three legendary-team titles from the 12:42 OCR capture and attaches statistics", () => {
     const legendaryTeamCardDb = createCardDatabase([
       { dbfId: 6001, name: "奇利亚斯豪华版3000型", cardId: "TOY_330t12", collectible: false },
@@ -1060,6 +1167,31 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
         score: 86,
         rating: expect.objectContaining({ pickRate: 61.3, firestone: expect.objectContaining({ includedWinrate: 52.86 }) })
       })
+    ]);
+  });
+
+  it("matches a long legendary minion name with the real OCR errors from the Hunter screenshot", () => {
+    const legendaryTeamCardDb = createCardDatabase([
+      { dbfId: 97862, name: "游侠将军希尔瓦娜斯", cardId: "HERO_05z", collectible: false, cardType: "HERO" },
+      { dbfId: 119707, name: "游侠将军希尔瓦娜斯", cardId: "TIME_609", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 97363, name: "荆棘谷之心", cardId: "ETC_208", collectible: true, rarity: "LEGENDARY", cardType: "SPELL" },
+      { dbfId: 105260, name: "量产品9号", cardId: "MIS_914", collectible: true, rarity: "LEGENDARY", cardType: "MINION" }
+    ]);
+    const engine = new ArenaDraftEngine({ cardDatabase: legendaryTeamCardDb });
+    engine.applyArenaText([
+      "D 10:19:59.000 Arena.SetDraftMode - DRAFTING",
+      "D 10:20:00.000 DraftManager.OnChosen(): hero=HERO_05"
+    ].join("\n"));
+
+    expect(engine.applyScreenChoices([
+      "量产品9号",
+      "荆棘谷之心",
+      "游供将军标尔瓦刻糖"
+    ])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "MIS_914", screenSlot: 0 }),
+      expect.objectContaining({ cardId: "ETC_208", screenSlot: 1 }),
+      expect.objectContaining({ cardId: "TIME_609", name: "游侠将军希尔瓦娜斯", screenSlot: 2 })
     ]);
   });
 

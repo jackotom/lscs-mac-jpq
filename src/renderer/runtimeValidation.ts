@@ -125,11 +125,12 @@ function isGeneralSettings(value: unknown): boolean {
 
 function isOverlaySettings(value: unknown): boolean {
   return hasExactKeys(value, [
-    "enabled", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen"
   ]) &&
-    [value.enabled, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
+    isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&
     isNumberInRange(value.offsetX, -200, 200) &&
     isNumberInRange(value.offsetY, -200, 200) &&

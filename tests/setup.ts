@@ -32,3 +32,11 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
   value: testLocalStorage
 });
+
+if (typeof HTMLElement.prototype.scrollTo !== "function") {
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: () => undefined
+  });
+}

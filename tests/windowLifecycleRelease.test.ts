@@ -67,7 +67,7 @@ describe("transient overlay window lifecycle", () => {
     const start = main.indexOf("previous && previous.overlay.secretPrediction");
     const settingsSection = main.slice(
       start,
-      main.indexOf('if (trackerSettings.general.gameDetection === "automatic")', start)
+      main.indexOf("function getConfiguredCardDatabaseLoadOptions", start)
     );
     expect(settingsSection).toContain('"tracker:secret-prediction:update"');
     expect(settingsSection).not.toContain("releaseOpponentOverlayWindow");

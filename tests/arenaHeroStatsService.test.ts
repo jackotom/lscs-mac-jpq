@@ -14,6 +14,7 @@ describe("ArenaHeroStatsService", () => {
   it("aggregates hero-power rows and ranks classes by win rate", () => {
     const result = parseArenaHeroStats({
       lastUpdated: "2026-07-23T00:00:00Z",
+      dataPoints: 300,
       stats: [
         { playerClass: "mage", totalGames: 100, totalsWins: 55 },
         { playerClass: "mage", totalGames: 100, totalsWins: 45 },
@@ -25,6 +26,7 @@ describe("ArenaHeroStatsService", () => {
       expect.objectContaining({ rank: 1, heroClass: "priest", heroName: "牧师", games: 100, wins: 51, winRate: 51 }),
       expect.objectContaining({ rank: 2, heroClass: "mage", heroName: "法师", games: 200, wins: 100, winRate: 50 })
     ]);
+    expect(result.sample).toBe(300);
   });
 
   it("uses a fresh cache without network access", async () => {
@@ -33,6 +35,8 @@ describe("ArenaHeroStatsService", () => {
     await writeFile(path.join(root, "arena-hero-stats.json"), JSON.stringify({
       source: "Firestone",
       lastUpdated: "2026-07-23T00:00:00Z",
+      fetchedAt: "2026-07-23T01:00:00Z",
+      sample: 100,
       heroes: [{ rank: 1, heroClass: "mage", heroName: "法师", wins: 55, games: 100, winRate: 55 }]
     }));
     const fetcher = vi.fn();
@@ -48,6 +52,8 @@ describe("ArenaHeroStatsService", () => {
     await writeFile(cachePath, JSON.stringify({
       source: "Firestone",
       lastUpdated: "2026-07-20T00:00:00Z",
+      fetchedAt: "2026-07-20T01:00:00Z",
+      sample: 100,
       heroes: [{ rank: 1, heroClass: "mage", heroName: "法师", wins: 50, games: 100, winRate: 50 }]
     }));
     const old = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -67,7 +73,7 @@ describe("ArenaHeroStatsService", () => {
       })
     } as Response));
     const refreshed = await new ArenaHeroStatsService(root, fetcher as typeof fetch).load({ forceRefresh: true });
-    expect(refreshed).toMatchObject({ status: "ok", entries: [{ heroClass: "warrior", winRate: 52 }] });
+    expect(refreshed).toMatchObject({ status: "ok", sample: 200, entries: [{ heroClass: "warrior", winRate: 52 }] });
     expect(JSON.parse(await readFile(cachePath, "utf8"))).toMatchObject({ heroes: [{ heroClass: "warrior" }] });
   });
 });

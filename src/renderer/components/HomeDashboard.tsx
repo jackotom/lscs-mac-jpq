@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -7,20 +7,19 @@ import {
   Copy,
   Crown,
   History,
+  Image as ImageIcon,
   Layers3,
   Minus,
-  Radio,
   Settings,
   ShieldCheck,
-  Sparkles,
-  Square,
   Swords,
   Trophy,
-  X,
   type LucideIcon
 } from "lucide-react";
 import type { LadderDeckRecommendationResult } from "../../shared/ladderDeckRecommendation";
-import type { MatchHistoryResult, PublicTrackerState } from "../../shared/types";
+import type { HomeNewsResult } from "../../shared/homeNews";
+import type { ArenaHeroWinRateRankingResult } from "../../shared/arenaHeroStats";
+import type { MatchHistoryResult, MatchRecord, PublicTrackerState } from "../../shared/types";
 import { toDashboardViewModel, type DashboardEventView } from "../dashboardView";
 
 export interface HomeDashboardProps {
@@ -28,8 +27,14 @@ export interface HomeDashboardProps {
   readonly matchHistory?: MatchHistoryResult;
   readonly matchHistoryLoading?: boolean;
   readonly matchHistoryError?: string;
+  readonly homeNews?: HomeNewsResult;
+  readonly homeNewsLoading?: boolean;
+  readonly homeNewsError?: string;
   readonly ladderRecommendation?: LadderDeckRecommendationResult;
+  readonly arenaHeroRanking?: ArenaHeroWinRateRankingResult;
+  readonly arenaHeroRankingLoading?: boolean;
   readonly onCopyLadderDeckCode?: (deckCode: string) => Promise<void>;
+  readonly onOpenNewsItem?: (itemId: string) => Promise<void>;
   readonly onOpenTracker?: () => void;
   readonly onOpenDeckTools?: () => void;
   readonly onOpenMatchHistory?: () => void;
@@ -37,48 +42,26 @@ export interface HomeDashboardProps {
   readonly onMinimize?: () => void;
 }
 
-const heroImageUrl = new URL("../assets/hearthstone-hero.png", import.meta.url).href;
-const editorialImageUrl = new URL("../assets/arcane-feature-v1.png", import.meta.url).href;
+const heroImageUrl = new URL("../assets/home-emerald-hero-v1.png", import.meta.url).href;
 const resultLabels = { win: "胜利", loss: "失败", tie: "平局" } as const;
 const matchModeLabels = { standard: "标准", wild: "狂野", arena: "竞技场", unknown: "未知模式" } as const;
-
-const ladderRanking = [
-  [1, "火焰轮舞", "56.5", "火"],
-  [2, "大法术法师", "50.2", "法"],
-  [3, "虚灵贼", "88.6", "贼"],
-  [4, "打猎猎人", "85.4", "猎"],
-  [5, "战斗萨满", "47.4", "萨"],
-  [6, "发现牧师", "58.6", "牧"],
-  [7, "龙族术士", "32.5", "术"],
-  [8, "星界中速德", "92.3", "德"],
-  [9, "宇宙战", "37.8", "战"],
-  [10, "秘蓝法", "57.1", "法"],
-  [11, "恶魔猎手", "68.9", "瞎"],
-  [12, "邪恶印记牧", "96.5", "牧"],
-  [13, "工坊战士", "43.6", "战"],
-  [14, "鱼人萨", "36.7", "萨"],
-  [16, "海盗战", "66.9", "战"],
-  [17, "元素萨", "90.1", "萨"],
-  [18, "奥秘猎", "89.7", "猎"],
-  [19, "机械贼", "88.9", "贼"],
-  [20, "控制牧", "87.3", "牧"]
-] as const;
+const modeOrder = ["standard", "wild", "arena", "unknown"] as const;
 
 type CopyState = "idle" | "copying" | "copied" | "error";
-
-function formatHistoryWinRate(winRate: number | undefined): string {
-  if (winRate === undefined) return "暂无";
-  const percentage = winRate >= 0 && winRate <= 1 ? winRate * 100 : winRate;
-  return `${percentage.toFixed(1)}%`;
-}
 
 export function HomeDashboard({
   state,
   matchHistory,
   matchHistoryLoading = false,
   matchHistoryError,
+  homeNews,
+  homeNewsLoading = false,
+  homeNewsError,
   ladderRecommendation,
+  arenaHeroRanking,
+  arenaHeroRankingLoading = false,
   onCopyLadderDeckCode,
+  onOpenNewsItem,
   onOpenTracker,
   onOpenDeckTools,
   onOpenMatchHistory,
@@ -86,9 +69,19 @@ export function HomeDashboard({
   onMinimize
 }: HomeDashboardProps) {
   const dashboard = toDashboardViewModel(state, matchHistory, ladderRecommendation);
-  const recentEvents = dashboard.events.items.slice(-3).reverse();
+  const history = useMemo(
+    () => matchHistory?.status === "ok"
+      ? [...matchHistory.matches].sort((left, right) => Date.parse(right.endedAt) - Date.parse(left.endedAt))
+      : [],
+    [matchHistory]
+  );
+  const recentEvents = dashboard.events.items.slice(-4).reverse();
+  const recentMatches = history.slice(0, 5);
+  const todayMatches = history.filter((match) => isToday(match.endedAt)).length;
+  const bestWinStreak = getBestWinStreak(history);
+  const modeStats = getModeStats(history);
+  const historyState = getHistoryState(matchHistory, matchHistoryLoading, matchHistoryError);
   const ladderReady = dashboard.ladder.state === "ready" && Boolean(dashboard.ladder.recommendation);
-  const historyReady = !matchHistoryLoading && !matchHistoryError && dashboard.history.state === "ready";
   const hero = getHeroCopy(state);
   const [copyState, setCopyState] = useState<CopyState>("idle");
 
@@ -106,249 +99,383 @@ export function HomeDashboard({
     }
   }
 
-  const ladderBody = (
-    <>
-      <div className="home-ladder-heading">
-        <div className="home-deck-emblem" aria-hidden="true"><Crown size={18} /></div>
-        <div><strong>Zee Shaman</strong><small>标准 · 萨满祭司</small></div>
-      </div>
-      <dl className="home-ladder-stats">
-        <Stat label="胜率" value="62.2%" />
-        <Stat label="热度" value="1,161" />
-      </dl>
-      {copyState === "error" ? <p className="home-copy-error" role="alert">复制失败，请重试。</p> : null}
-      {ladderReady ? (
-        <button
-          type="button"
-          className="home-copy-deck"
-          disabled={!onCopyLadderDeckCode || copyState === "copying"}
-          onClick={() => void copyDeckCode()}
-          aria-label={copyState === "copied" ? "已复制卡组代码" : "复制卡组代码"}
-        >
-          {copyState === "copied" ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
-          {copyState === "copied" ? "已复制" : copyState === "copying" ? "复制中" : "复制卡组代码"}
-        </button>
-      ) : <span className="home-copy-deck home-copy-placeholder"><Copy aria-hidden="true" size={15} />复制卡组代码</span>}
-      <div className="home-ladder-source"><span>数据来源 HSGuru（钻石-传说）</span><span>更新时间 15:00</span></div>
-      {ladderReady && dashboard.ladder.recommendation ? (
-        <div className="home-semantic-data">
-          <strong>{dashboard.ladder.recommendation.name}</strong>
-          <span>胜率{dashboard.ladder.recommendation.winRate.toFixed(1)}%</span>
-          <span>统计场次{dashboard.ladder.recommendation.games.toLocaleString("zh-CN")}</span>
-        </div>
-      ) : <div className="home-semantic-data">{dashboard.ladder.message ?? "当前没有可用的可信数据。"}</div>}
-    </>
-  );
-
   return (
     <section
-      className={`home-dashboard home-dashboard-grid home-newsroom${ladderReady ? "" : " is-ladder-unavailable"}`}
+      className="home-dashboard home-reference-dashboard"
       data-tracker-status={state.status}
       data-ladder-state={dashboard.ladder.state}
       aria-label="首页"
     >
-      <div className="home-window-bar" aria-label="窗口状态">
-        <span className="home-online"><i aria-hidden="true" />在线</span>
-        <button type="button" aria-label="顶部设置" onClick={onOpenSettings}><Settings aria-hidden="true" size={16} /></button>
-        <button type="button" aria-label="最小化窗口" onClick={onMinimize}><Minus aria-hidden="true" size={17} /></button>
-        <span aria-hidden="true"><Square size={14} /></span>
-        <span aria-hidden="true"><X size={17} /></span>
-      </div>
-
-      <header className="home-newsroom-hero">
-        <img className="home-newsroom-hero-image" src={heroImageUrl} alt="" />
-        <div className="home-newsroom-hero-shade" aria-hidden="true" />
-        <div className="home-newsroom-hero-copy">
-          <span className="home-newsroom-kicker"><Radio aria-hidden="true" size={14} />实时监控中</span>
-          <span className="home-semantic-data">{getStatusLabel(state)}</span>
-          <h1 aria-label={hero.title}>对局正在记录</h1>
-          <p>牌库剩余 30 张，已抽 0 张。</p>
-          <div className="home-newsroom-hero-actions">
-            <button type="button" className="home-primary-action" onClick={onOpenTracker}>
-              进入实时对局<ArrowRight aria-hidden="true" size={17} />
-            </button>
-            <span className="home-local-badge"><ShieldCheck aria-hidden="true" size={14} />数据仅保存在本机</span>
-          </div>
+      <header className="home-product-header">
+        <div className="home-product-brand">
+          <span className="home-product-mark" aria-hidden="true"><Crown size={24} /></span>
+          <span>
+            <strong>炉石记牌器</strong>
+            <small className={`status-${state.status}`}><i aria-hidden="true" />{getServiceLabel(state)}</small>
+          </span>
         </div>
-        <aside className="home-newsroom-status-card" aria-label="当前记录状态">
-          <div className="home-status-card-heading">
-            <span className="home-record-glyph" aria-hidden="true">♦</span>
-            <div><small>实时记录</small><strong>对局进行中</strong></div>
-          </div>
-          <dl className="home-status-card-facts">
-            <Fact label="当前模式" value="竞技场" />
-            <Fact label="当前套牌" value="竞技场牌库" />
-            <Fact label="牌库剩余" value="30 张" />
-            <Fact label="本局已抽" value="0 张" />
-          </dl>
-        </aside>
+        <div className="home-product-actions">
+          {onMinimize ? (
+            <button type="button" aria-label="最小化窗口" onClick={onMinimize}><Minus aria-hidden="true" size={18} /></button>
+          ) : null}
+          <button type="button" aria-label="打开二级工作台" onClick={onOpenSettings}>
+            <Settings aria-hidden="true" size={20} />
+          </button>
+        </div>
       </header>
 
-      <section className="home-featured-story" aria-labelledby="featured-story-title">
-        <div className="home-section-heading"><h2 id="featured-story-title">本地精选</h2><Sparkles aria-hidden="true" size={18} /></div>
-        <article className="home-featured-story-card">
-          <img src={editorialImageUrl} alt="" />
-          <div className="home-featured-story-copy">
-            <span>实战指南</span>
-            <h3>奥秘预测应该怎么看</h3>
-            <p>候选牌会随着对手行动逐步排除，优先关注仍保存高亮、且会影响当前回合操作的奥秘。</p>
-            <small>本地精选 · 3 分钟阅读</small>
-          </div>
-          <div className="home-featured-pager" aria-hidden="true"><i /><i /><i /><i /></div>
-          <div className="home-featured-arrows" aria-hidden="true"><span>‹</span><span>›</span></div>
-        </article>
-      </section>
-
-      <aside className="home-insight-column">
-        {ladderReady ? (
-          <DashboardPanel className="home-ladder-panel" title="天梯推荐" icon={Trophy} action="更多">
-            {ladderBody}
-          </DashboardPanel>
-        ) : (
-          <section className="home-dashboard-panel home-ladder-panel" aria-label="天梯推荐状态">
-            <PanelHeader title="天梯推荐" icon={Trophy} action="更多" />
-            <div className="home-dashboard-panel-body">{ladderBody}</div>
-          </section>
-        )}
-
-        {historyReady ? (
-          <DashboardPanel className="home-history-panel" title="对局记录概览" ariaLabel="对局记录" icon={History} action="更多">
-            <FixedHistory />
-            <div className="home-semantic-data">
-              <span>总对局{dashboard.history.total ?? 0}</span>
-              <span>胜率{formatHistoryWinRate(dashboard.history.winRate)}</span>
-              <span>胜利{dashboard.history.wins ?? 0}</span>
-              <span>失败{dashboard.history.losses ?? 0}</span>
+      <main className="home-reference-content">
+        <section className="home-reference-primary" aria-label="当前概览">
+          <article className="home-reference-hero">
+            <img src={heroImageUrl} alt="" />
+            <div className="home-reference-hero-shade" aria-hidden="true" />
+            <div className="home-reference-hero-copy">
+              <span>{dashboard.tracker.label}</span>
+              <h1>{hero.title}</h1>
+              <p>{hero.detail}</p>
+              <button type="button" onClick={onOpenTracker}>查看详情<ArrowRight aria-hidden="true" size={16} /></button>
             </div>
-          </DashboardPanel>
-        ) : (
-          <section className="home-dashboard-panel home-history-panel" aria-label="对局记录状态">
-            <PanelHeader title="对局记录概览" icon={History} action="更多" />
-            <div className="home-dashboard-panel-body"><FixedHistory /></div>
-          </section>
-        )}
-      </aside>
+          </article>
 
-      <section className="home-quick-section" aria-labelledby="quick-title">
-        <div className="home-section-heading"><h2 id="quick-title">快捷入口</h2></div>
-        <div className="home-quick-grid">
-          <QuickEntry label="当前套牌" title="卡组管理" subtitle="查看与编辑卡组" icon={Layers3} tone="violet" onClick={onOpenDeckTools}>
-            <DeckSemantic dashboard={dashboard} />
-          </QuickEntry>
-          <QuickEntry label="游戏动态" title="竞技模式" subtitle="标准/狂野模式" icon={Swords} tone="blue" onClick={onOpenTracker}>
-            <ActivitySemantic state={state} dashboard={dashboard} loading={matchHistoryLoading} error={matchHistoryError} recentEvents={recentEvents} ladderReady={ladderReady} />
-          </QuickEntry>
-          <QuickEntry label="竞技场概览" title="竞技场助手" subtitle="选牌评分与推荐" icon={Crown} tone="orange" onClick={onOpenTracker}>
-            <ArenaSemantic dashboard={dashboard} />
-          </QuickEntry>
-          <QuickEntry label="数据统计" title="数据统计" subtitle="对局数据分析" icon={BarChart3} tone="green" onClick={onOpenMatchHistory} />
-        </div>
-      </section>
+          <Panel className="home-current-deck" title="当前套牌" icon={Layers3}>
+            {dashboard.deck.state === "ready" ? (
+              <>
+                <div className="home-current-deck-heading">
+                  <span className="home-current-deck-emblem" aria-hidden="true"><Layers3 size={24} /></span>
+                  <div><strong>{dashboard.deck.name ?? "未命名套牌"}</strong><small>{getCurrentModeLabel(state)}</small></div>
+                </div>
+                <dl className="home-current-deck-stats">
+                  <Stat label="总计" value={dashboard.deck.totalCards} />
+                  <Stat label="剩余" value={dashboard.deck.remainingCards} />
+                  <Stat label="已抽" value={dashboard.deck.drawnCards} />
+                </dl>
+                <ul className="home-current-deck-cards" aria-label="当前套牌卡牌摘要">
+                  {dashboard.deck.cards.slice(0, 3).map((card) => <li key={card.id}><span>{card.name}</span><strong>×{card.remaining}</strong></li>)}
+                </ul>
+              </>
+            ) : <EmptyState>{dashboard.deck.message ?? "尚未识别当前套牌。"}</EmptyState>}
+            <button type="button" className="home-panel-link" onClick={onOpenDeckTools}>查看套牌详情<ArrowRight aria-hidden="true" size={14} /></button>
+          </Panel>
+        </section>
 
-      <aside className="home-ranking-rail" aria-label="天梯排行">
-        <div className="home-ranking-heading"><h2>天梯排行</h2><Sparkles aria-hidden="true" size={15} /></div>
-        <div className="home-ranking-tabs"><span className="is-active">标准模式</span><span>狂野模式</span></div>
-        <div className="home-ranking-labels"><span>排名</span><span>热门套牌</span><span>胜率</span></div>
-        <ol className="home-ranking-list">
-          {ladderRanking.map(([rank, name, winRate, mark], index) => (
-            <li key={name}>
-              <span className="home-rank-number">{rank}</span>
-              <span className={`home-rank-emblem emblem-${index % 5}`} aria-hidden="true">{mark}</span>
-              <strong>{name}</strong><em>{winRate}%</em>
-            </li>
-          ))}
-        </ol>
-        <footer><span>数据来源 HSReplay.net</span><time>更新时间 15:00</time></footer>
-      </aside>
+        <section className="home-summary-strip" aria-label="对局汇总">
+          <SummaryMetric label="今日对局" value={historyState === "ready" ? todayMatches : historyState} detail="本机记录" icon={Swords} />
+          <SummaryMetric label="总对局" value={historyState === "ready" ? dashboard.history.total ?? 0 : historyState} detail="最近保留记录" icon={Activity} />
+          <SummaryMetric label="总胜率" value={historyState === "ready" ? formatHistoryWinRate(dashboard.history.winRate) : historyState} detail="已完成对局" icon={Trophy} />
+          <SummaryMetric label="最佳连胜" value={historyState === "ready" ? bestWinStreak : historyState} detail="当前记录范围" icon={Crown} />
+          <SummaryMetric label="当前状态" value={getStatusLabel(state)} detail={getCurrentModeLabel(state)} icon={ShieldCheck} />
+        </section>
 
-      <footer className="home-system-footer">
-        <span>当前版本&nbsp; v3.1.4</span>
-        <span><ShieldCheck size={13} aria-hidden="true" />跟牌屏已隐藏</span>
-        <span>程序状态&nbsp; <b>正常</b></span>
-        <span>内存占用&nbsp; 73%</span>
-        <span>数据大小&nbsp; 128 MB</span>
-      </footer>
+        <section className="home-reference-middle" aria-label="首页信息">
+          <Panel className="home-activity-panel" title="炉石资讯" icon={Activity}>
+            {homeNewsError ? <EmptyState alert>{homeNewsError}</EmptyState> : null}
+            {homeNews?.items.length ? (
+              <NewsList news={homeNews} onOpenNewsItem={onOpenNewsItem} />
+            ) : homeNewsLoading ? (
+              <EmptyState>正在读取炉石官网资讯…</EmptyState>
+            ) : homeNewsError ? (
+              recentEvents.length ? <ActivityList events={recentEvents} /> : null
+            ) : (
+              <ActivityList events={recentEvents} message="官网资讯暂时不可用；这里显示本机实时动态。" />
+            )}
+            {!homeNews?.items.length ? (
+              <button type="button" className="home-panel-link" onClick={onOpenTracker}>进入实时对局<ArrowRight aria-hidden="true" size={14} /></button>
+            ) : null}
+          </Panel>
+
+          <Panel className="home-ladder-panel" title="天梯热门卡组" icon={Trophy}>
+            {ladderReady && dashboard.ladder.recommendation ? (
+              <div className="home-ladder-recommendation">
+                <div><strong>{dashboard.ladder.recommendation.name}</strong><small>{dashboard.ladder.recommendation.className} · {dashboard.ladder.recommendation.mode === "wild" ? "狂野" : "标准"}</small></div>
+                <dl>
+                  <Stat label="胜率" value={`${dashboard.ladder.recommendation.winRate.toFixed(1)}%`} />
+                  <Stat label="场次" value={dashboard.ladder.recommendation.games.toLocaleString("zh-CN")} />
+                </dl>
+                <DataProvenance
+                  source={dashboard.ladder.recommendation.source.name}
+                  updatedAt={dashboard.ladder.recommendation.updatedAt}
+                  sampleSize={dashboard.ladder.recommendation.games}
+                  statusLabel={ladderRecommendation?.status === "ready" && ladderRecommendation.stale ? "缓存数据" : "来源可追溯"}
+                />
+                <button type="button" onClick={() => void copyDeckCode()} disabled={!onCopyLadderDeckCode || copyState === "copying"}>
+                  {copyState === "copied" ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
+                  {copyState === "copied" ? "已复制" : copyState === "copying" ? "复制中" : "复制卡组代码"}
+                </button>
+                {copyState === "error" ? <p role="alert">复制失败，请重试。</p> : null}
+              </div>
+            ) : <EmptyState>{dashboard.ladder.message ?? "当前没有可用的可信天梯数据。"}</EmptyState>}
+          </Panel>
+
+          <Panel className="home-arena-panel" title="竞技场职业胜率排行" icon={Crown}>
+            <ArenaHeroRanking result={arenaHeroRanking} loading={arenaHeroRankingLoading} />
+            <button type="button" className="home-panel-link" onClick={onOpenTracker}>查看竞技场状态<ArrowRight aria-hidden="true" size={14} /></button>
+          </Panel>
+        </section>
+
+        <section className="home-reference-bottom" aria-label="历史数据">
+          <Panel className="home-recent-matches" title="最近对局" icon={History}>
+            <RecentMatches matches={recentMatches} loading={matchHistoryLoading} error={matchHistoryError ?? (matchHistory?.status === "error" ? matchHistory.error : undefined)} />
+            <button type="button" className="home-panel-link" onClick={onOpenMatchHistory}>查看全部对局<ArrowRight aria-hidden="true" size={14} /></button>
+          </Panel>
+
+          <Panel className="home-mode-stats" title="模式统计" icon={BarChart3}>
+            {historyState === "读取失败" ? (
+              <EmptyState alert>对局历史读取失败，模式统计暂不可用。</EmptyState>
+            ) : history.length ? (
+              <div className="home-mode-stat-list">
+                <strong>总对局 {history.length}</strong>
+                <ul>{modeStats.map((item) => <li key={item.mode}><span>{matchModeLabels[item.mode]}</span><strong>{item.count}</strong><small>{formatPercentage(item.count, history.length)}</small></li>)}</ul>
+              </div>
+            ) : <EmptyState>{matchHistoryLoading ? "正在读取对局统计…" : "完成对局后会显示真实模式统计。"}</EmptyState>}
+            <button type="button" className="home-panel-link" onClick={onOpenMatchHistory}>查看详细统计<ArrowRight aria-hidden="true" size={14} /></button>
+          </Panel>
+        </section>
+      </main>
     </section>
   );
 }
 
-function FixedHistory() {
-  return <><dl className="home-history-summary"><Stat label="总对局" value="100" /><Stat label="胜率" value="37.0%" /><Stat label="最长连胜" value="6" /><Stat label="平均回合" value="8.3" /></dl><MiniChart /></>;
-}
-
-function PanelHeader({ title, icon: Icon, action }: { title: string; icon: LucideIcon; action?: string }) {
-  return <header><Icon aria-hidden="true" size={16} /><h2>{title}</h2>{action ? <span className="home-panel-action">{action} ›</span> : null}</header>;
-}
-
-function DashboardPanel({ className, title, ariaLabel = title, icon, action, children }: { className: string; title: string; ariaLabel?: string; icon: LucideIcon; action?: string; children: React.ReactNode }) {
-  return <article className={`home-dashboard-panel ${className}`} aria-label={ariaLabel}><PanelHeader title={title} icon={icon} action={action} /><div className="home-dashboard-panel-body">{children}</div></article>;
-}
-
-function QuickEntry({ label, title, subtitle, icon: Icon, tone, onClick, children }: { label: string; title: string; subtitle: string; icon: LucideIcon; tone: string; onClick?: () => void; children?: React.ReactNode }) {
+function Panel({ className, title, icon: Icon, children }: { className: string; title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
-    <article className={`home-quick-entry is-${tone}`} aria-label={label}>
-      {children}
-      <button type="button" onClick={onClick}>
-        <Icon aria-hidden="true" size={42} />
-        <strong>{title}</strong><span>{subtitle}</span>
-      </button>
+    <article className={`home-reference-panel ${className}`} aria-label={title}>
+      <header><div><Icon aria-hidden="true" size={17} /><h2>{title}</h2></div></header>
+      <div className="home-reference-panel-body">{children}</div>
     </article>
   );
 }
 
-function ActivitySemantic({ state, dashboard, loading, error, recentEvents, ladderReady }: { state: PublicTrackerState; dashboard: ReturnType<typeof toDashboardViewModel>; loading: boolean; error?: string; recentEvents: readonly DashboardEventView[]; ladderReady: boolean }) {
-  const arenaDrafting = dashboard.arena.state === "ready" && (dashboard.arena.status === "drafting" || dashboard.arena.status === "redrafting");
+function SummaryMetric({ label, value, detail, icon: Icon }: { label: string; value: string | number; detail: string; icon: LucideIcon }) {
+  return <article className="home-summary-metric"><span aria-hidden="true"><Icon size={23} /></span><div><small>{label}</small><strong>{value}</strong><em>{detail}</em></div></article>;
+}
+
+function NewsList({ news, onOpenNewsItem }: { news: HomeNewsResult; onOpenNewsItem?: (itemId: string) => Promise<void> }) {
   return (
-    <div className="home-semantic-data">
-      <span>当前状态</span><strong>{arenaDrafting ? `竞技场${dashboard.arena.statusLabel}` : dashboard.activity.currentLabel}</strong>
-      {state.gameActive && arenaDrafting ? <span>{dashboard.activity.currentLabel}</span> : null}
-      <span>{state.gameActive ? `牌库剩余 ${dashboard.deck.remainingCards} 张，已抽 ${dashboard.deck.drawnCards} 张` : arenaDrafting ? `已确认 ${dashboard.arena.confirmedCount ?? 0} 张 · 待识别 ${dashboard.arena.unresolvedCount ?? 0} 张` : "尚无进行中的对局"}</span>
-      {!ladderReady ? <p>天梯推荐：{dashboard.ladder.message ?? "当前没有可用的可信数据。"}</p> : null}
-      <RecentActivityText loading={loading} error={error} recentMatch={dashboard.activity.recentMatch} historyMessage={dashboard.activity.historyMessage} recentEvents={recentEvents} />
+    <ol className="home-activity-list home-news-list" aria-label="炉石官网资讯">
+      {news.items.slice(0, 4).map((item) => (
+        <li key={item.id}>
+          <button type="button" disabled={!onOpenNewsItem} onClick={() => { void onOpenNewsItem?.(item.id); }}>
+            <NewsThumbnail imageUrl={item.imageUrl} title={item.title} />
+            <span className="home-news-copy">
+              <time dateTime={item.publishedAt}>{news.status === "fallback" ? "离线资讯" : formatNewsDate(item.publishedAt)}</time>
+              <strong>{item.title}</strong>
+              <small>{item.summary}</small>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function NewsThumbnail({ imageUrl, title }: { imageUrl?: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+
+  if (!imageUrl || failed) {
+    return (
+      <span className="home-news-thumbnail is-placeholder" role="img" aria-label={`${title}资讯图片占位`}>
+        <ImageIcon aria-hidden="true" size={17} />
+      </span>
+    );
+  }
+
+  return (
+    <span className="home-news-thumbnail">
+      <img src={imageUrl} alt={`${title} 新闻图片`} loading="lazy" onError={() => setFailed(true)} />
+    </span>
+  );
+}
+
+function ArenaHeroRanking({ result, loading }: { result?: ArenaHeroWinRateRankingResult; loading: boolean }) {
+  if (loading) return <EmptyState>正在读取竞技场排行…</EmptyState>;
+  if (!result) return <EmptyState>竞技场排行尚未加载。</EmptyState>;
+  if (result.status !== "ok") return <EmptyState alert={result.status === "error"}>{result.message}</EmptyState>;
+  if (!result.entries.length) return <EmptyState>当前没有可用的竞技场排行数据。</EmptyState>;
+  const sampleSize = result.sample ?? result.entries.reduce((total, entry) => total + entry.games, 0);
+  return (
+    <div className="home-arena-ranking-content">
+      <ol className="home-arena-ranking" aria-label="竞技场职业胜率排行">
+        {result.entries.slice(0, 5).map((entry) => (
+          <li key={entry.heroClass}>
+            <span>{entry.rank}</span><strong>{entry.heroName}</strong><small>{entry.games.toLocaleString("zh-CN")} 场</small><em>{entry.winRate.toFixed(1)}%</em>
+          </li>
+        ))}
+      </ol>
+      <DataProvenance
+        source={result.source}
+        updatedAt={result.updatedAt}
+        sampleSize={sampleSize}
+        statusLabel="公开统计"
+        warning={result.warning}
+      />
     </div>
   );
 }
 
-function DeckSemantic({ dashboard }: { dashboard: ReturnType<typeof toDashboardViewModel> }) {
-  if (dashboard.deck.state !== "ready") return <div className="home-semantic-data">{dashboard.deck.message}</div>;
-  return <div className="home-semantic-data"><strong>{dashboard.deck.name ?? "未命名套牌"}</strong><span>牌库剩余{dashboard.deck.remainingCards}</span>{dashboard.deck.cards.slice(0, 4).map((card) => <span key={card.id}>{card.name}×{card.remaining}</span>)}</div>;
-}
-
-function ArenaSemantic({ dashboard }: { dashboard: ReturnType<typeof toDashboardViewModel> }) {
-  if (dashboard.arena.state !== "ready") return <div className="home-semantic-data">{dashboard.arena.message}</div>;
-  return <div className="home-semantic-data"><span>当前状态{dashboard.arena.statusLabel}</span><span>英雄{dashboard.arena.hero ?? "尚未识别英雄"}</span><span>选牌进度已确认 {dashboard.arena.confirmedCount ?? 0} 张</span><span>待识别{dashboard.arena.unresolvedCount ?? 0} 张</span><span>评分来源{dashboard.arena.scoreSource ?? "暂无评分来源"}</span></div>;
-}
-
-function RecentActivityText({ loading, error, recentMatch, historyMessage, recentEvents }: { loading: boolean; error?: string; recentMatch?: ReturnType<typeof toDashboardViewModel>["activity"]["recentMatch"]; historyMessage?: string; recentEvents: readonly DashboardEventView[] }) {
-  if (loading) return <p role="status">正在读取最近完成的对局…</p>;
-  if (error) return <p role="alert">{error}</p>;
-  if (recentMatch) return <p><span>{resultLabels[recentMatch.result]}</span><strong>{recentMatch.deckName ?? "未识别套牌"}</strong><span>{matchModeLabels[recentMatch.mode]}</span></p>;
-  if (recentEvents.length) return <div><strong>最近事件</strong>{recentEvents.map((event) => <span key={event.id}>{formatEvent(event)}</span>)}</div>;
-  return <p>{historyMessage ?? "还没有可展示的对局动态。"}</p>;
-}
-
-function MiniChart() {
+function DataProvenance({
+  source,
+  updatedAt,
+  sampleSize,
+  statusLabel,
+  warning
+}: {
+  source: string;
+  updatedAt: string;
+  sampleSize: number;
+  statusLabel: string;
+  warning?: string;
+}) {
   return (
-    <svg className="home-mini-chart" viewBox="0 0 320 112" preserveAspectRatio="none" aria-label="最近对局胜率走势">
-      <defs><linearGradient id="home-chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#315eea" stopOpacity=".36" /><stop offset="1" stopColor="#315eea" stopOpacity="0" /></linearGradient></defs>
-      <path className="chart-grid" d="M0 23H320M0 56H320M0 89H320" />
-      <path className="chart-fill" d="M0 92 L22 76 L42 26 L65 48 L87 43 L108 70 L132 51 L153 97 L174 69 L196 48 L218 79 L241 55 L264 83 L287 60 L320 68 L320 112 L0 112 Z" />
-      <path className="chart-line" d="M0 92 L22 76 L42 26 L65 48 L87 43 L108 70 L132 51 L153 97 L174 69 L196 48 L218 79 L241 55 L264 83 L287 60 L320 68" />
-      <g className="chart-points">{[[0,92],[22,76],[42,26],[65,48],[87,43],[108,70],[132,51],[153,97],[174,69],[196,48],[218,79],[241,55],[264,83],[287,60],[320,68]].map(([cx,cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.2" />)}</g>
-      <g className="chart-axis"><text x="0" y="13">100%</text><text x="0" y="58">50%</text><text x="0" y="108">0%</text></g>
-    </svg>
+    <aside className="home-data-provenance" aria-label="数据说明">
+      <div>
+        <span title={source}>来源：{source}</span>
+        <time dateTime={updatedAt}>更新：{formatDataUpdateTime(updatedAt)}</time>
+      </div>
+      <strong>{statusLabel} · 样本 {sampleSize.toLocaleString("zh-CN")} 场</strong>
+      {warning ? <small role="note">{warning}</small> : null}
+    </aside>
   );
+}
+
+function ActivityList({ events, message }: { events: readonly DashboardEventView[]; message?: string }) {
+  if (!events.length) return <EmptyState>{message ?? "本局还没有可展示的事件。"}</EmptyState>;
+  return <ol className="home-activity-list">{events.map((event) => <li key={event.id}><time dateTime={event.at}>{formatEventTime(event.at)}</time><span>{formatEvent(event)}</span></li>)}</ol>;
+}
+
+function RecentMatches({ matches, loading, error }: { matches: readonly MatchRecord[]; loading: boolean; error?: string }) {
+  if (loading) return <EmptyState>正在读取最近对局…</EmptyState>;
+  if (error) return <EmptyState alert>{error}</EmptyState>;
+  if (!matches.length) return <EmptyState>还没有已完成的对局记录。</EmptyState>;
+  return (
+    <ol className="home-recent-match-list">
+      {matches.map((match) => (
+        <li key={match.id}>
+          <time dateTime={match.endedAt}>{formatMatchTime(match.endedAt)}</time>
+          <span>{matchModeLabels[match.mode]}</span>
+          <strong title={match.deckName ?? "未识别套牌"}>{match.deckName ?? "未识别套牌"}</strong>
+          <em className={`match-result-${match.result}`}>{resultLabels[match.result]}</em>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function EmptyState({ alert = false, children }: { alert?: boolean; children: React.ReactNode }) {
+  return <p className="home-empty-state" role={alert ? "alert" : "status"}>{children}</p>;
 }
 
 function Fact({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
 function Stat({ label, value }: { label: string; value: string | number }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
 
+function getModeStats(matches: readonly MatchRecord[]) {
+  return modeOrder.map((mode) => ({ mode, count: matches.filter((match) => match.mode === mode).length }));
+}
+
+function getBestWinStreak(matches: readonly MatchRecord[]): number {
+  const chronological = [...matches].sort((left, right) => Date.parse(left.endedAt) - Date.parse(right.endedAt));
+  let current = 0;
+  let best = 0;
+  for (const match of chronological) {
+    current = match.result === "win" ? current + 1 : 0;
+    best = Math.max(best, current);
+  }
+  return best;
+}
+
+function isToday(value: string): boolean {
+  const date = new Date(value);
+  const today = new Date();
+  return !Number.isNaN(date.getTime())
+    && date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate();
+}
+
+function formatHistoryWinRate(winRate: number | undefined): string {
+  if (winRate === undefined) return "暂无";
+  const percentage = winRate >= 0 && winRate <= 1 ? winRate * 100 : winRate;
+  return `${percentage.toFixed(1)}%`;
+}
+
+function getHistoryState(
+  result: MatchHistoryResult | undefined,
+  loading: boolean,
+  error: string | undefined
+): "读取中" | "读取失败" | "暂无" | "ready" {
+  if (loading) return "读取中";
+  if (error || result?.status === "error") return "读取失败";
+  if (!result) return "暂无";
+  return "ready";
+}
+
+function formatPercentage(value: number, total: number): string {
+  return total > 0 ? `${((value / total) * 100).toFixed(1)}%` : "0%";
+}
+
+function formatMatchTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatEventTime(value: string): string {
+  const timeOnly = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/.exec(value);
+  if (timeOnly) {
+    const hour = Number(timeOnly[1]);
+    const minute = Number(timeOnly[2]);
+    const second = timeOnly[3] === undefined ? 0 : Number(timeOnly[3]);
+    if (hour <= 23 && minute <= 59 && second <= 59) {
+      return `${String(hour).padStart(2, "0")}:${timeOnly[2]}`;
+    }
+    return "时间未知";
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间未知" : date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatNewsDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "官网" : date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+}
+
+function formatDataUpdateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "时间未知"
+    : date.toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+}
+
+function getServiceLabel(state: PublicTrackerState): string {
+  if (state.status === "watching") return "服务正常";
+  if (state.status === "error") return "服务异常";
+  if (state.status === "missing-log") return "等待日志";
+  if (state.status === "paused") return "服务已暂停";
+  return "服务待启动";
+}
+
 function getStatusLabel(state: PublicTrackerState): string {
-  if (state.status === "watching") return state.gameActive ? "对局进行中" : "日志正常";
+  if (state.status === "watching") return state.gameActive ? "监听中" : "待开局";
   if (state.status === "paused") return "已暂停";
-  if (state.status === "missing-log") return "日志未就绪";
-  if (state.status === "error") return "读取异常";
-  return "等待开始";
+  if (state.status === "missing-log") return "待修复";
+  if (state.status === "error") return "异常";
+  return "待启动";
+}
+
+function getCurrentModeLabel(state: PublicTrackerState): string {
+  if (state.arena && state.arena.status !== "inactive") return "竞技场";
+  if (state.constructedScreenMode === "wild") return "狂野模式";
+  if (state.constructedScreenMode === "standard") return "标准模式";
+  if (state.trackerMode === "arena") return "竞技场";
+  if (state.trackerMode === "ladder") return "天梯模式";
+  return "模式待识别";
 }
 
 function getHeroCopy(state: PublicTrackerState): { title: string; detail: string } {
@@ -361,10 +488,10 @@ function getHeroCopy(state: PublicTrackerState): { title: string; detail: string
 }
 
 function formatEvent(event: DashboardEventView): string {
-  if (event.kind === "draw") return event.cardName ? `抽到${event.cardName}` : "抽到一张牌";
-  if (event.kind === "friendly-play") return event.cardName ? `我方打出${event.cardName}` : "我方打出一张牌";
-  if (event.kind === "opponent-play") return event.cardName ? `对手打出${event.cardName}` : "对手打出一张牌";
-  if (event.kind === "arena-pick") return event.cardName ? `竞技场选择${event.cardName}` : "竞技场完成一次选择";
+  if (event.kind === "draw") return event.cardName ? `抽到 ${event.cardName}` : "抽到一张牌";
+  if (event.kind === "friendly-play") return event.cardName ? `我方打出 ${event.cardName}` : "我方打出一张牌";
+  if (event.kind === "opponent-play") return event.cardName ? `对手打出 ${event.cardName}` : "对手打出一张牌";
+  if (event.kind === "arena-pick") return event.cardName ? `竞技场选择 ${event.cardName}` : "竞技场完成一次选择";
   if (event.kind === "game-start") return "对局开始";
   if (event.kind === "game-end") return "对局结束";
   return event.cardName ?? "对局状态已更新";

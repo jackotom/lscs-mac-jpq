@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyCardTracking, createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 afterEach(() => {
   window.history.replaceState({}, "", "/");
@@ -216,7 +217,7 @@ describe("tracker overlay preload boundary", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
     expect(await screen.findAllByText("真实竞技场牌")).not.toHaveLength(0);
     expect(screen.queryByText("未解析竞技场牌")).not.toBeInTheDocument();
   });
@@ -243,7 +244,7 @@ describe("tracker overlay preload boundary", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+    await openWorkbench();
     expect(await screen.findByText("未知塞入牌 ×2")).toBeInTheDocument();
   });
 });

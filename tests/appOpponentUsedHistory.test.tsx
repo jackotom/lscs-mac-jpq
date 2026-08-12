@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import { createEmptyCardTracking, createPublicTrackerState } from "./fixtures/publicTrackerState";
+import { openWorkbench } from "./helpers/openWorkbench";
 
 const cardTracking = createEmptyCardTracking("app-opponent-history");
 (cardTracking.opponent as unknown as Record<string, unknown>).used = {
@@ -72,7 +73,7 @@ async function openTracker() {
   installApi();
   render(<App />);
   await waitFor(() => expect(window.hearthstoneTracker?.getState).toHaveBeenCalled());
-  fireEvent.click(await screen.findByRole("button", { name: "实时对局" }));
+  await openWorkbench();
   return screen.getByLabelText("对手已出牌");
 }
 

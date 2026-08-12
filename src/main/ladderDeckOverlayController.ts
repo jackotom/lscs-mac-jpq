@@ -9,6 +9,7 @@ export interface LadderDeckOverlayHost {
   readonly isVisible: () => boolean;
   readonly isAnyOverlayFocused?: () => boolean;
   readonly isAnyOverlayInteractionActive?: () => boolean;
+  readonly isFrontmostAppAllowed?: (appName: string | undefined) => boolean;
   readonly createWindow: () => Promise<void>;
   readonly updateMode: (mode: LadderMode) => Promise<void>;
   readonly showInactive: () => void;
@@ -97,7 +98,7 @@ export class LadderDeckOverlayController {
 
   private canRemainVisible(frontmostAppName: string | undefined) {
     return Boolean(
-      isHearthstoneOrTrackerFrontmost(frontmostAppName) ||
+      (this.host.isFrontmostAppAllowed ?? isHearthstoneOrTrackerFrontmost)(frontmostAppName) ||
       this.host.isAnyOverlayFocused?.() ||
       this.host.isAnyOverlayInteractionActive?.()
     );

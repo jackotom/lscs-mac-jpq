@@ -20,6 +20,17 @@ outputs/
 *.key
 *.p12
 *.mobileprovision
+*.pfx
+*.jks
+*.keystore
+.npmrc
+credentials.json
+cookies.json
+session.data
+id_rsa
+id_ed25519
+.cache/
+cache/
 
 # Legacy generated files kept outside the current build directories
 /logDiscovery.js

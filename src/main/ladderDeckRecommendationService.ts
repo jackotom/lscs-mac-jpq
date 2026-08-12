@@ -2,19 +2,21 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { detectHearthstoneInstallation, type HearthstoneInstallationResult } from "./hearthstoneInstallation.js";
-import { parseHsguruDecks } from "./hsguruDeckSource.js";
+import { parseFirestoneConstructedDecks } from "./firestoneConstructedDeckSource.js";
 import { parseLadderDeckRecommendations, selectTopLadderDeck, type LadderDeckRecommendation, type LadderDeckRecommendationResult, type LadderMode } from "../shared/ladderDeckRecommendation.js";
 
 const DEFAULT_MIN_GAMES = 800;
 const DEFAULT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_STALE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_HSGURU_BASE_URL = "https://www.hsguru.com/decks";
+const DEFAULT_FIRESTONE_BASE_URL = "https://static.zerotoheroes.com/api/constructed/stats/decks";
 
 interface ServiceOptions {
   readonly sourceUrl?: string; readonly cachePath?: string; readonly fetcher?: typeof fetch; readonly minGames?: number;
   readonly cacheMaxAgeMs?: number; readonly staleMaxAgeMs?: number; readonly timeoutMs?: number; readonly now?: () => number;
   readonly installationDetector?: () => Promise<HearthstoneInstallationResult>;
+  readonly firestoneBaseUrl?: string | null;
+  /** @deprecated Kept only so older callers can explicitly disable the former fallback. */
   readonly hsguruBaseUrl?: string | null;
 }
 interface CachePayload {
@@ -24,13 +26,15 @@ interface CachePayload {
 interface CacheFile { readonly schemaVersion: 1; readonly entries: readonly CachePayload[] }
 
 export class LadderDeckRecommendationService {
-  private readonly sourceUrl: string | undefined; private readonly hsguruBaseUrl: string | undefined; private readonly cachePath: string; private readonly fetcher: typeof fetch;
+  private readonly sourceUrl: string | undefined; private readonly firestoneBaseUrl: string | undefined; private readonly cachePath: string; private readonly fetcher: typeof fetch;
   private readonly minGames: number; private readonly cacheMaxAgeMs: number; private readonly staleMaxAgeMs: number;
   private readonly timeoutMs: number; private readonly now: () => number; private readonly installationDetector: () => Promise<HearthstoneInstallationResult>;
   private writeChain: Promise<void> = Promise.resolve();
   constructor(options: ServiceOptions = {}) {
     this.sourceUrl = options.sourceUrl ?? process.env.HEARTHSTONE_CN_LADDER_DECK_SOURCE_URL;
-    this.hsguruBaseUrl = options.hsguruBaseUrl === null ? undefined : options.hsguruBaseUrl ?? DEFAULT_HSGURU_BASE_URL;
+    this.firestoneBaseUrl = options.firestoneBaseUrl === null || options.hsguruBaseUrl === null
+      ? undefined
+      : options.firestoneBaseUrl ?? DEFAULT_FIRESTONE_BASE_URL;
     this.cachePath = options.cachePath ?? path.join(os.homedir(), "Library", "Application Support", "hearthstone-mac-tracker", "ladder-decks.json");
     this.fetcher = options.fetcher ?? fetch; this.minGames = options.minGames ?? DEFAULT_MIN_GAMES;
     this.cacheMaxAgeMs = options.cacheMaxAgeMs ?? DEFAULT_CACHE_MAX_AGE_MS; this.staleMaxAgeMs = options.staleMaxAgeMs ?? DEFAULT_STALE_MAX_AGE_MS;
@@ -44,22 +48,23 @@ export class LadderDeckRecommendationService {
     const cached = await this.readCache(installation.patch, mode);
     if (cached && this.age(cached) <= this.cacheMaxAgeMs) {
       const recommendation = this.select(cached.recommendations, installation.patch, mode);
-      if (recommendation) return { status: "ready", recommendation, stale: false, gameVersion: installation.fullVersion };
+      if (recommendation) return readyResult(recommendation, false, installation.fullVersion, cached.fetchedAt);
     }
-    if (!this.sourceUrl && !this.hsguruBaseUrl) {
+    if (!this.sourceUrl && !this.firestoneBaseUrl) {
       const stale = cached && this.age(cached) <= this.staleMaxAgeMs && this.select(cached.recommendations, installation.patch, mode);
-      if (stale) return { status: "ready", recommendation: stale, stale: true, gameVersion: installation.fullVersion, message: "暂无可用的实时来源，显示本地缓存" };
+      if (stale) return readyResult(stale, true, installation.fullVersion, cached!.fetchedAt, "暂无可用的实时来源，显示本地缓存");
       return { status: "unavailable", errorCode: "source-unconfigured", gameVersion: installation.fullVersion, message: "暂无已配置的天梯排行来源" };
     }
     try {
       const recommendations = await this.fetchRecommendations(installation.patch, mode);
       const recommendation = this.select(recommendations, installation.patch, mode);
       if (!recommendation) return { status: "unavailable", errorCode: "patch-unavailable", gameVersion: installation.fullVersion, message: `${mode === "standard" ? "标准" : "狂野"}数据中没有当前版本且达到最低场次的卡组` };
-      await this.writeCache({ schemaVersion: 1, patch: installation.patch, mode, fetchedAt: new Date(this.now()).toISOString(), recommendations });
-      return { status: "ready", recommendation, stale: false, gameVersion: installation.fullVersion };
+      const fetchedAt = new Date(this.now()).toISOString();
+      await this.writeCache({ schemaVersion: 1, patch: installation.patch, mode, fetchedAt, recommendations });
+      return readyResult(recommendation, false, installation.fullVersion, fetchedAt);
     } catch (error) {
       const recommendation = cached && this.age(cached) <= this.staleMaxAgeMs && this.select(cached.recommendations, installation.patch, mode);
-      if (recommendation) return { status: "ready", recommendation, stale: true, gameVersion: installation.fullVersion, message: `天梯数据更新失败，显示本地缓存：${formatError(error)}` };
+      if (recommendation) return readyResult(recommendation, true, installation.fullVersion, cached!.fetchedAt, `天梯数据更新失败，显示本地缓存：${formatError(error)}`);
       return { status: "unavailable", errorCode: error instanceof FeedError ? "feed-invalid" : "network-failed", gameVersion: installation.fullVersion, message: `卡组排行读取失败：${formatError(error)}` };
     }
   }
@@ -69,17 +74,16 @@ export class LadderDeckRecommendationService {
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       if (!this.sourceUrl) {
-        const sourceUrl = this.hsguruUrl(mode);
+        const sourceUrl = this.firestoneUrl(mode);
         const response = await this.fetcher(sourceUrl, {
           signal: controller.signal,
-          headers: { accept: "text/html,application/xhtml+xml", "user-agent": "Mozilla/5.0 HearthstoneMacTracker/0.1" }
+          headers: { accept: "application/json", "user-agent": "HearthstoneMacTracker/0.3" }
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         try {
-          return parseHsguruDecks(await response.text(), {
+          return parseFirestoneConstructedDecks(await response.json(), {
             mode,
             expectedPatch,
-            updatedAt: new Date(this.now()).toISOString(),
             sourceUrl
           });
         } catch (error) { throw new FeedError(formatError(error)); }
@@ -91,14 +95,8 @@ export class LadderDeckRecommendationService {
       try { return parseLadderDeckRecommendations(payload, { now: this.now }); } catch (error) { throw new FeedError(formatError(error)); }
     } finally { clearTimeout(timeout); }
   }
-  private hsguruUrl(mode: LadderMode): string {
-    const url = new URL(this.hsguruBaseUrl!);
-    url.searchParams.set("format", mode === "standard" ? "2" : "1");
-    url.searchParams.set("rank", "diamond_to_legend");
-    url.searchParams.set("period", "past_week");
-    url.searchParams.set("min_games", String(DEFAULT_MIN_GAMES));
-    url.searchParams.set("order_by", "winrate");
-    return url.toString();
+  private firestoneUrl(mode: LadderMode): string {
+    return `${this.firestoneBaseUrl}/${mode}/legend/past-7/overview-from-hourly.gz.json`;
   }
   private async readCache(patch: string, mode: LadderMode): Promise<CachePayload | undefined> {
     try {
@@ -144,3 +142,21 @@ function isCachePayload(value: unknown): value is CachePayload {
     typeof value.fetchedAt === "string" && Number.isFinite(Date.parse(value.fetchedAt)) && Array.isArray(value.recommendations);
 }
 function formatError(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+function readyResult(
+  recommendation: LadderDeckRecommendation,
+  stale: boolean,
+  gameVersion: string,
+  fetchedAt: string,
+  message?: string
+): Extract<LadderDeckRecommendationResult, { status: "ready" }> {
+  return {
+    status: "ready",
+    recommendation,
+    stale,
+    source: recommendation.source,
+    fetchedAt,
+    sample: recommendation.games,
+    gameVersion,
+    ...(message ? { message } : {})
+  };
+}

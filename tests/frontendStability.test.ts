@@ -105,6 +105,8 @@ describe("frontend stability helpers", () => {
       },
       overlay: {
         enabled: true,
+        showOnlyInGame: true,
+        theme: "light",
         arenaHeroWinRateRanking: true,
         showFriendlyAttack: true,
         showOpponentAttack: true,
