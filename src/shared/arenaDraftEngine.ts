@@ -28,6 +28,16 @@ interface CardReference {
   readonly entityId?: string;
 }
 
+interface RecognizedCardMatch {
+  readonly card: CardInfo;
+  readonly confidence: "exact" | "fuzzy";
+}
+
+interface PendingFuzzyScreenChoice {
+  readonly identity: string;
+  readonly observations: number;
+}
+
 const ARENA_SCREEN_CARD_TYPES = new Set(["随从", "法术", "武器", "地标"]);
 
 export class ArenaDraftEngine {
@@ -44,6 +54,9 @@ export class ArenaDraftEngine {
   private redraftGenerationId: string | undefined;
   private hero: ArenaHero | undefined;
   private currentChoices: ArenaCardChoice[] = [];
+  private currentChoiceSource: "log" | "ocr" | undefined;
+  private screenChoicesBySlot: Array<ArenaCardChoice | undefined> = [];
+  private pendingFuzzyScreenChoices: Array<PendingFuzzyScreenChoice | undefined> = [];
   private picks: ArenaPick[] = [];
   private confirmedDeck: DeckCard[] = [];
   private redraftContentsPicks: ArenaPick[] = [];
@@ -116,7 +129,7 @@ export class ArenaDraftEngine {
     this.pendingContentsDeckId = undefined;
     this.redraftGenerationId = undefined;
     this.hero = undefined;
-    this.currentChoices = [];
+    this.clearCurrentChoices();
     this.picks = [];
     this.confirmedDeck = [];
     this.redraftContentsPicks = [];
@@ -173,22 +186,46 @@ export class ArenaDraftEngine {
       return false;
     }
 
-    const nonEmptyNames = names.filter((name) => normalizeCardName(name));
-    if (new Set(nonEmptyNames.map(normalizeCardName)).size !== nonEmptyNames.length) {
+    if (this.currentChoiceSource === "log" && this.currentChoices.length > 0) {
       return false;
     }
 
-    const choices = names.flatMap((name, screenSlot) => {
-      const card = name ? this.findCardInfoByRecognizedName(name) : undefined;
-      return card ? [this.scoreChoice({
-        name: card.name,
+    const nonEmptyNames = names.filter((name) => normalizeCardName(name));
+    if (new Set(nonEmptyNames.map(normalizeCardName)).size !== nonEmptyNames.length) {
+      this.pendingFuzzyScreenChoices = [];
+      return false;
+    }
+
+    names.forEach((name, screenSlot) => {
+      const match = name ? this.findCardInfoByRecognizedName(name) : undefined;
+      if (!match) {
+        this.pendingFuzzyScreenChoices[screenSlot] = undefined;
+        return;
+      }
+
+      const choice = this.scoreChoice({
+        name: match.card.name,
         count: 1,
         screenSlot,
-        cardId: card.cardId ?? card.id
-      })] : [];
+        cardId: match.card.cardId ?? match.card.id
+      });
+      if (match.confidence === "exact") {
+        this.pendingFuzzyScreenChoices[screenSlot] = undefined;
+        this.screenChoicesBySlot[screenSlot] = choice;
+        return;
+      }
+
+      const identity = normalizeCardName(choice.name);
+      const pending = this.pendingFuzzyScreenChoices[screenSlot];
+      const observations = pending?.identity === identity ? pending.observations + 1 : 1;
+      this.pendingFuzzyScreenChoices[screenSlot] = { identity, observations };
+      if (observations >= 2) {
+        this.screenChoicesBySlot[screenSlot] = choice;
+      }
     });
 
-    if (choices.length < 2 || (this.currentChoices.length === 3 && choices.length < 3)) {
+    const choices = this.screenChoicesBySlot.filter((choice): choice is ArenaCardChoice => choice !== undefined);
+    if (choices.length < 2) {
       return false;
     }
 
@@ -199,17 +236,19 @@ export class ArenaDraftEngine {
     }
 
     this.currentChoices = choices;
+    this.currentChoiceSource = "ocr";
     this.touch();
     return true;
   }
 
-  private findCardInfoByRecognizedName(name: string): CardInfo | undefined {
+  private findCardInfoByRecognizedName(name: string): RecognizedCardMatch | undefined {
     const normalized = normalizeCardName(name);
     const exact = this.findArenaScreenCardInfo(this.cardInfoByName.get(normalized));
     const fuzzyName = normalizeOcrCardName(name);
     const normalizedExact = this.findArenaScreenCardInfo(this.cardInfoByOcrName.get(fuzzyName));
     if (exact || normalizedExact || fuzzyName.length < 3) {
-      return exact ?? normalizedExact;
+      const card = exact ?? normalizedExact;
+      return card ? { card, confidence: "exact" } : undefined;
     }
 
     const maxDistance = fuzzyName.length <= 5
@@ -234,7 +273,9 @@ export class ArenaDraftEngine {
       }
     }
 
-    return best && bestDistanceMatches === 1 ? best.card : undefined;
+    return best && bestDistanceMatches === 1
+      ? { card: best.card, confidence: "fuzzy" }
+      : undefined;
   }
 
   private findArenaScreenCardInfo(matches: readonly CardInfo[] | undefined): CardInfo | undefined {
@@ -317,7 +358,7 @@ export class ArenaDraftEngine {
     this.draftDeckId = deckId ?? this.draftDeckId;
     this.teamBonusCount = 0;
     this.acceptingTeamPreview = false;
-    this.currentChoices = [];
+    this.clearCurrentChoices();
     const last = this.picks.at(-1)?.chosen;
     this.lastPick = last ? { cardId: last.cardId, name: last.name, source: "exact-arena-deck" } : undefined;
     this.touch();
@@ -445,15 +486,15 @@ export class ArenaDraftEngine {
         }
         this.status = "redrafting";
         this.restorePendingDraftContents();
-        this.currentChoices = [];
+        this.clearCurrentChoices();
       } else if (event.mode === "complete") {
         this.restorePendingDraftContents();
         this.status = "complete";
-        this.currentChoices = [];
+        this.clearCurrentChoices();
       } else if (event.mode === "playing") {
         this.restorePendingDraftContents();
         this.status = "playing";
-        this.currentChoices = [];
+        this.clearCurrentChoices();
       } else {
         this.pendingDraftContents = [];
         this.pendingContentsDeckId = undefined;
@@ -461,7 +502,7 @@ export class ArenaDraftEngine {
         this.draftDeckId = undefined;
         this.redraftGenerationId = undefined;
         this.hero = undefined;
-        this.currentChoices = [];
+        this.clearCurrentChoices();
         this.picks = [];
         this.confirmedDeck = [];
         this.redraftContentsPicks = [];
@@ -533,7 +574,7 @@ export class ArenaDraftEngine {
     }
 
     if (event.type === "offered") {
-      this.currentChoices = event.offered.map((choice) => this.scoreChoice(choice));
+      this.setLogChoices(event.offered);
       this.touch();
       return;
     }
@@ -542,7 +583,7 @@ export class ArenaDraftEngine {
       return;
     }
 
-    this.currentChoices = event.offered.map((choice) => this.scoreChoice(choice));
+    this.setLogChoices(event.offered);
     if (!this.preferArenaLogPicks) {
       const chosen = event.chosen[0];
       this.recordPick(chosen, this.currentChoices, "power-log");
@@ -559,7 +600,7 @@ export class ArenaDraftEngine {
 
     if (chosen.cardId?.toUpperCase().startsWith("HERO_")) {
       this.hero = this.toHero(chosen);
-      this.currentChoices = [];
+      this.clearCurrentChoices();
       this.rebuildScores();
       this.touch();
       return;
@@ -585,14 +626,14 @@ export class ArenaDraftEngine {
     if (this.awaitingExactDeck) {
       this.pendingRedraftChoices.push(chosen);
       this.lastPick = { cardId: chosen.cardId, name: chosen.name, source };
-      this.currentChoices = [];
+      this.clearCurrentChoices();
       this.touch();
       return;
     }
 
     this.picks.push(pick);
     this.lastPick = { cardId: chosen.cardId, name: chosen.name, source };
-    this.currentChoices = [];
+    this.clearCurrentChoices();
     if (this.status === "drafting" && this.picks.length + this.teamBonusCount >= 30) {
       this.status = "complete";
     }
@@ -732,6 +773,7 @@ export class ArenaDraftEngine {
 
   private rebuildScores() {
     this.currentChoices = this.currentChoices.map((choice) => this.scoreChoice(choice));
+    this.screenChoicesBySlot = this.screenChoicesBySlot.map((choice) => choice ? this.scoreChoice(choice) : undefined);
     this.picks = this.picks.map((pick) => ({
       ...pick,
       chosen: this.scoreChoice(pick.chosen),
@@ -765,7 +807,7 @@ export class ArenaDraftEngine {
     this.pendingContentsDeckId = undefined;
     this.redraftGenerationId = undefined;
     this.hero = undefined;
-    this.currentChoices = [];
+    this.clearCurrentChoices();
     this.picks = [];
     this.confirmedDeck = [];
     this.redraftContentsPicks = [];
@@ -778,6 +820,20 @@ export class ArenaDraftEngine {
     this.acceptingTeamPreview = true;
     this.lastPick = undefined;
     this.error = undefined;
+  }
+
+  private setLogChoices(choices: readonly ArenaCardChoice[]) {
+    this.screenChoicesBySlot = [];
+    this.pendingFuzzyScreenChoices = [];
+    this.currentChoices = choices.map((choice) => this.scoreChoice(choice));
+    this.currentChoiceSource = "log";
+  }
+
+  private clearCurrentChoices() {
+    this.currentChoices = [];
+    this.currentChoiceSource = undefined;
+    this.screenChoicesBySlot = [];
+    this.pendingFuzzyScreenChoices = [];
   }
 
   private touch() {

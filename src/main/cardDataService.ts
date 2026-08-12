@@ -2,6 +2,7 @@ import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createCardDatabase, getCardInfo, listCardInfos, type CardDatabase } from "../shared/cardDatabase.js";
+import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 
 const OFFICIAL_PAGE_URL = "https://hs.blizzard.cn/cards/";
 const OFFICIAL_CARDS_URL = "https://webapi.blizzard.cn/hs-cards-api-server/api/web/cards/constructed";
@@ -14,6 +15,7 @@ const OFFICIAL_CARD_PAGE_SIZE = 200;
 const FETCH_TIMEOUT_MS = 6000;
 const OVERALL_FETCH_BUDGET_MS = 15000;
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const CACHE_SCHEMA_VERSION = 1;
 const SOURCE_NAME = "Blizzard 官方卡牌浏览器";
 
 export interface CardDatabaseLoadResult {
@@ -73,21 +75,23 @@ export class CardDataService {
     if (cached?.database) {
       this.cachedDatabase = cached.database;
       if (!options.forceRefresh && (options.preferCache || (!cached.isStale && !cached.requiresRelatedCardRefresh))) {
-        return this.toResult(cached.database, cached.version);
+        return this.toResult(cached.database, cached.version, cached.warnings);
       }
 
       return this.refreshOfficial(cached, Boolean(options.forceRefresh));
     }
 
-    return this.refreshOfficial(undefined);
+    return this.refreshOfficial(undefined, false, cached?.warnings ?? []);
   }
 
   private async refreshOfficial(
     cached: CachedCardDatabaseLoadResult | undefined,
-    forceRefresh = false
+    forceRefresh = false,
+    initialWarnings: readonly string[] = []
   ): Promise<CardDatabaseLoadResult> {
     let legacyDatabase: CardDatabase | undefined;
     const overallStartTime = Date.now();
+    const cacheWarnings = cached?.warnings ?? initialWarnings;
 
     try {
       const version = await this.fetchOfficialSourceVersion();
@@ -99,7 +103,7 @@ export class CardDataService {
         !cached.isStale &&
         !cached.requiresRelatedCardRefresh
       ) {
-        return this.toResult(cached.database, version);
+        return this.toResult(cached.database, version, cacheWarnings);
       }
 
       const officialCards = await this.fetchOfficialCards(overallStartTime);
@@ -110,20 +114,22 @@ export class CardDataService {
         throw new Error("官网卡牌库没有返回可用卡牌");
       }
       const fetchedAt = new Date().toISOString();
-      await fs.mkdir(path.dirname(this.cachePath), { recursive: true });
-      await fs.writeFile(
+      await writeValidatedJsonCache(
         this.cachePath,
-        JSON.stringify({ source: SOURCE_NAME, version, fetchedAt, cards: mergedCards }),
-        "utf8"
+        { schemaVersion: CACHE_SCHEMA_VERSION, source: SOURCE_NAME, version, fetchedAt, cards: mergedCards },
+        parseUsableCachedCards
       );
       this.cachedDatabase = database;
 
-      return this.toResult(database, version);
+      return this.toResult(database, version, cacheWarnings);
     } catch (error) {
       if (cached?.database) {
         return {
           ...this.toResult(cached.database, cached.version),
-          warnings: [`官网卡牌库更新失败，继续使用本地 v${cached.version ?? "旧缓存"}：${formatError(error)}`]
+          warnings: [
+            ...cacheWarnings,
+            `官网卡牌库更新失败，继续使用本地 v${cached.version ?? "旧缓存"}：${formatError(error)}`
+          ]
         };
       }
 
@@ -132,54 +138,41 @@ export class CardDataService {
         this.cachedDatabase = legacyDatabase;
         return {
           ...this.toResult(legacyDatabase),
-          warnings: [`官网卡牌库读取失败，继续使用旧卡牌库：${formatError(error)}`]
+          warnings: [...cacheWarnings, `官网卡牌库读取失败，继续使用旧卡牌库：${formatError(error)}`]
         };
       }
 
-      return { warnings: [`卡牌数据库读取失败：${formatError(error)}`] };
+      return { warnings: [...cacheWarnings, `卡牌数据库读取失败：${formatError(error)}`] };
     }
   }
 
   private async readCache(cacheMaxAgeMs = CACHE_MAX_AGE_MS): Promise<CachedCardDatabaseLoadResult | undefined> {
-    try {
-      const stat = await fs.stat(this.cachePath);
-      const cacheJson = JSON.parse(await fs.readFile(this.cachePath, "utf8")) as unknown;
-      const parsed = parseCachedCards(cacheJson, stat.mtimeMs);
-      if (!parsed) {
-        return undefined;
-      }
-
-      const database = createCardDatabase(parsed.cards);
-      if (Object.keys(database).length === 0) {
-        return undefined;
-      }
-
-      const fetchedAtMs = Date.parse(parsed.fetchedAt);
-      const requiresRelatedCardRefresh = hasMissingRelatedCards(database);
+    const cache = await readValidatedJsonCache(this.cachePath, parseUsableCachedCards, "卡牌数据库");
+    if (cache.value) {
+      const parsed = cache.value;
+      const fetchedAt = parsed.fetchedAt ?? new Date(cache.mtimeMs ?? Date.now()).toISOString();
+      const fetchedAtMs = Date.parse(fetchedAt);
+      const requiresRelatedCardRefresh = hasMissingRelatedCards(parsed.database);
       return {
         cards: parsed.cards,
-        database,
-        warnings: [],
+        database: parsed.database,
+        warnings: cache.warning ? [cache.warning] : [],
         source: parsed.source ?? SOURCE_NAME,
         version: parsed.version,
-        cardCount: Object.keys(database).length,
-        fetchedAt: parsed.fetchedAt,
+        cardCount: Object.keys(parsed.database).length,
+        fetchedAt,
         isStale: !Number.isFinite(fetchedAtMs) || Date.now() - fetchedAtMs > cacheMaxAgeMs,
         requiresRelatedCardRefresh
       };
-    } catch (error) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return undefined;
-      }
-
-      return {
-        cards: [],
-        warnings: [`读取本地卡牌数据库缓存失败：${formatError(error)}`],
-        fetchedAt: "",
-        isStale: true,
-        requiresRelatedCardRefresh: false
-      };
     }
+
+    return cache.warning ? {
+      cards: [],
+      warnings: [cache.warning],
+      fetchedAt: "",
+      isStale: true,
+      requiresRelatedCardRefresh: false
+    } : undefined;
   }
 
   private async readLegacyCardDatabase(): Promise<CardDatabase | undefined> {
@@ -315,10 +308,14 @@ export class CardDataService {
     }
   }
 
-  private toResult(database: CardDatabase, version?: string): CardDatabaseLoadResult {
+  private toResult(
+    database: CardDatabase,
+    version?: string,
+    warnings: readonly string[] = []
+  ): CardDatabaseLoadResult {
     return {
       database,
-      warnings: [],
+      warnings,
       source: SOURCE_NAME,
       version,
       cardCount: Object.keys(database).length
@@ -326,20 +323,22 @@ export class CardDataService {
   }
 }
 
-function parseCachedCards(value: unknown, mtimeMs: number): {
+function parseCachedCards(value: unknown): {
   readonly cards: readonly unknown[];
   readonly source?: string;
   readonly version?: string;
-  readonly fetchedAt: string;
+  readonly fetchedAt?: string;
 } | undefined {
   if (Array.isArray(value)) {
-    return {
-      cards: value,
-      fetchedAt: new Date(mtimeMs).toISOString()
-    };
+    return { cards: value };
   }
 
-  if (!isRecord(value) || !Array.isArray(value.cards) || typeof value.fetchedAt !== "string") {
+  if (
+    !isRecord(value)
+    || (value.schemaVersion !== undefined && value.schemaVersion !== CACHE_SCHEMA_VERSION)
+    || !Array.isArray(value.cards)
+    || typeof value.fetchedAt !== "string"
+  ) {
     return undefined;
   }
 
@@ -349,6 +348,15 @@ function parseCachedCards(value: unknown, mtimeMs: number): {
     version: typeof value.version === "string" ? value.version : undefined,
     fetchedAt: value.fetchedAt
   };
+}
+
+function parseUsableCachedCards(value: unknown): (ReturnType<typeof parseCachedCards> & { readonly database: CardDatabase }) | undefined {
+  const parsed = parseCachedCards(value);
+  if (!parsed) {
+    return undefined;
+  }
+  const database = createCardDatabase(parsed.cards);
+  return Object.keys(database).length > 0 ? { ...parsed, database } : undefined;
 }
 
 function mergeOfficialCards(officialCards: readonly unknown[], legacyDatabase?: CardDatabase): unknown[] {

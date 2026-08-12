@@ -18,7 +18,7 @@ import { LadderDeckRecommendationPanel } from "./components/LadderDeckRecommenda
 import { TopBar, trackerStatusLabels } from "./components/TopBar";
 import { MatchPulse } from "./components/MatchPulse";
 import type { MainView } from "./components/TopBar";
-import { toOverlayPanelViewModel } from "./overlayView";
+import { toOverlayDeckIdentity, toOverlayPanelViewModel } from "./overlayView";
 import { toDashboardOpponentView } from "./dashboardView";
 import { shouldApplyInitialTrackerState } from "./stateInitialization";
 import { createSynchronousActionLock, selectVisibleNotice, shouldRequestCardLibrary } from "./frontendStability";
@@ -732,6 +732,11 @@ function App() {
     [candidates, isInitializing, selectedLogPath, state]
   );
   const logIssue = useMemo(() => toLogIssueViewModel(state), [state]);
+  const deckIdentityView = useMemo(() => toOverlayDeckIdentity(state), [state]);
+  const deckDisplayState = useMemo(
+    () => hideUnconfirmedDeck(state),
+    [state]
+  );
   useEffect(() => {
     if (!logIssue) {
       setLogRepairNotice(undefined);
@@ -741,13 +746,13 @@ function App() {
     () => (
       logIssue
         ? []
-        : toDeckCards(state.deck, !state.arena || state.arena.status === "inactive")
+        : toDeckCards(deckDisplayState.deck, !deckDisplayState.arena || deckDisplayState.arena.status === "inactive")
     ),
-    [logIssue, state.arena, state.deck]
+    [deckDisplayState.arena, deckDisplayState.deck, logIssue]
   );
   const deckSummary = useMemo(
-    () => (logIssue ? emptyDeckSummary : toDeckSummary(state, deckImported)),
-    [deckImported, logIssue, state]
+    () => (logIssue ? emptyDeckSummary : toDeckSummary(deckDisplayState, deckImported)),
+    [deckDisplayState, deckImported, logIssue]
   );
   const events = useMemo(() => (logIssue ? [] : toGameEvents(state.events)), [logIssue, state.events]);
   const opponentOverview = useMemo(() => toOpponentOverview(state), [state]);
@@ -755,7 +760,11 @@ function App() {
     () => (logIssue ? [] : toOpponentUsedCards(state)),
     [logIssue, state]
   );
-  const autoMatchNotice = !logIssue && state.autoMatchedDeckId
+  const publishedDeckIdentityNotice = !logIssue && !state.error && state.deckIdentity &&
+    (!state.arena || state.arena.status === "inactive")
+    ? { title: deckIdentityView.name, detail: deckIdentityView.detail }
+    : undefined;
+  const autoMatchNotice = !logIssue && !state.deckIdentity && state.autoMatchedDeckId
     ? `已自动匹配收藏套牌：${state.deckName ?? "当前卡组"}。`
     : undefined;
 
@@ -1257,6 +1266,13 @@ function App() {
             onImportDeck={() => navigateTo("deck-tools")}
           />}
 
+        {activeView === "home" && publishedDeckIdentityNotice ? (
+          <div className="notice action-notice deck-identity-notice" role="status" aria-live="polite">
+            <strong>{publishedDeckIdentityNotice.title}</strong>
+            <span>{publishedDeckIdentityNotice.detail}</span>
+          </div>
+        ) : null}
+
         {activeView === "home" || activeView === "settings" || activeView === "deck-tools" ? null : isInitializing ? (
           <div className="notice action-notice" role="status" aria-live="polite">
             <strong>正在读取记牌器状态</strong>
@@ -1274,6 +1290,11 @@ function App() {
               <span>{logIssue.message}</span>
             </div>
           )
+        ) : publishedDeckIdentityNotice ? (
+          <div className="notice action-notice deck-identity-notice" role="status" aria-live="polite">
+            <strong>{publishedDeckIdentityNotice.title}</strong>
+            <span>{publishedDeckIdentityNotice.detail}</span>
+          </div>
         ) : autoMatchNotice ? (
           <div className="notice action-notice" role="status" aria-live="polite">
             <strong>自动匹配成功</strong>
@@ -1323,7 +1344,7 @@ function App() {
           <MatchHistoryPanel result={matchHistoryResult} loading={isMatchHistoryLoading} error={matchHistoryError} />
         ) : activeView === "home" ? (
           <HomeDashboard
-            state={isQaHomeDemo ? qaHomeState : state}
+            state={isQaHomeDemo ? qaHomeState : deckDisplayState}
             matchHistory={isQaHomeDemo ? qaHomeHistory : matchHistoryResult}
             matchHistoryLoading={isQaHomeDemo ? false : isMatchHistoryLoading}
             matchHistoryError={isQaHomeDemo ? undefined : matchHistoryError}
@@ -1343,7 +1364,7 @@ function App() {
           />
         ) : (
           <>
-            <DashboardOverview state={state} status={trackerStatus} />
+            <DashboardOverview state={deckDisplayState} status={trackerStatus} />
             <section className="dashboard-grid" aria-label="记牌器工作区">
               <DeckPanel cards={deckCards} summary={deckSummary} logIssue={logRepairNotice ? undefined : logIssue} />
               <EventFeed events={events} />
@@ -1488,7 +1509,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.4.0</small>
+          <small>v0.4.1</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
@@ -1519,10 +1540,13 @@ function DesktopSidebar({
 
 function DashboardOverview({ state, status }: { state: PublicTrackerState; status: TrackerStatus }) {
   const matchPulse = toMatchPulseViewFromState(state);
+  const deckCountUnknown = isUnconfirmedConstructedDeck(state);
   const items = [
     {
       label: "牌库剩余",
-      value: `${state.summary.remainingCards.toLocaleString("zh-CN")} / ${state.summary.totalCards.toLocaleString("zh-CN")}`,
+      value: deckCountUnknown
+        ? "?"
+        : `${state.summary.remainingCards.toLocaleString("zh-CN")} / ${state.summary.totalCards.toLocaleString("zh-CN")}`,
       icon: Layers3
     },
     { label: "已抽", value: state.summary.drawnCards.toLocaleString("zh-CN"), icon: Activity },
@@ -1550,6 +1574,33 @@ function DashboardOverview({ state, status }: { state: PublicTrackerState; statu
       ) : null}
     </section>
   );
+}
+
+function isUnconfirmedConstructedDeck(state: PublicTrackerState): boolean {
+  return Boolean(
+    state.deckIdentity &&
+    state.deckIdentity.status !== "confirmed" &&
+    (!state.arena || state.arena.status === "inactive")
+  );
+}
+
+function hideUnconfirmedDeck(state: PublicTrackerState): PublicTrackerState {
+  if (!isUnconfirmedConstructedDeck(state)) {
+    return state;
+  }
+  return {
+    ...state,
+    deckCode: undefined,
+    deckName: undefined,
+    autoMatchedDeckId: undefined,
+    deck: [],
+    summary: {
+      ...state.summary,
+      totalCards: 0,
+      remainingCards: 0,
+      drawnCards: 0
+    }
+  };
 }
 
 const qaLadderRecommendation: LadderDeckRecommendation = {
@@ -1725,7 +1776,6 @@ function OverlayWindow({
   loadError?: string;
 }) {
   const overlayView = toOverlayPanelViewModel(state, { maxDeckRows: 40, maxRecentRows: 3 });
-
   return (
     <OverlayPanel
       view={overlayView}
@@ -2137,6 +2187,41 @@ function compactPath(path: string): string {
 }
 
 const rendererStyles = `
+.overlay-shell:has(.overlay-normal) .overlay-deck-summary {
+  min-height: 30px;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 3px;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact > .overlay-deck-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact > svg {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-status-compact {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #a9c5d7;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body:not(:has(.overlay-shell)):not(:has(.board-attack-overlay-canvas)) {
   min-width: 860px;
   overflow: hidden;

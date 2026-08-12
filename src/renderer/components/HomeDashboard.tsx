@@ -482,6 +482,14 @@ function getHeroCopy(state: PublicTrackerState): { title: string; detail: string
   if (state.status === "missing-log") return { title: "需要完成日志设置", detail: state.error ?? "修复日志后，完全退出并重新打开炉石，再进入一局。" };
   if (state.status === "error") return { title: "日志读取遇到问题", detail: state.error ?? "检查日志路径后重试。" };
   if (state.status === "paused") return { title: "监听已暂停", detail: "恢复监听后会继续记录真实对局。" };
+  if (state.status === "watching" && state.gameActive && state.deckIdentity && state.deckIdentity.status !== "confirmed") {
+    return {
+      title: "套牌仍在确认中",
+      detail: state.deckIdentity && state.deckIdentity.candidateCount > 1
+        ? `目前有 ${state.deckIdentity.candidateCount} 套可能，牌库剩余 ?。`
+        : "继续对局后会自动确认，牌库剩余 ?。"
+    };
+  }
   if (state.status === "watching" && state.gameActive) return { title: "对局正在记录", detail: `牌库剩余 ${state.summary.remainingCards} 张，已抽 ${state.summary.drawnCards} 张。` };
   if (state.status === "watching") return { title: "已识别炉石，等待开局", detail: "进入对局后会自动开始记牌。" };
   return { title: "准备记录下一局", detail: "开始监听后，这里会显示真实对局数据。" };

@@ -24,6 +24,15 @@ import {
 } from "../shared/powerLogParser.js";
 import { selectCurrentArenaLogText } from "../shared/arenaLogParser.js";
 import { MatchHistoryStore } from "./matchHistoryStore.js";
+import {
+  bindSessionContext,
+  createSessionContext,
+  createSessionKey,
+  hasSessionKey,
+  sessionOwnsLogPath,
+  type SessionContext,
+  type SessionKey
+} from "./trackerSession.js";
 
 interface CollectionDeckScanner {
   scanAndImportDecks(options?: { logPath?: string }): Promise<CollectionDeckScanResult>;
@@ -34,6 +43,7 @@ interface ArenaScreenRecognizerLike {
 }
 
 interface PendingExactArenaDeck {
+  readonly sessionKey: SessionKey;
   readonly deck: CollectionDeck;
   readonly arenaDeckId: string;
   readonly redraftGenerationId: string;
@@ -47,13 +57,14 @@ interface LogFileFingerprint {
 }
 
 interface ExactArenaDeckObservation {
+  readonly sessionKey: SessionKey;
   readonly deck: CollectionDeck;
   readonly eventAtMs: number;
 }
 
 interface ArenaRatingsRequest {
   readonly id: number;
-  readonly generation: number;
+  readonly sessionKey: SessionKey;
   readonly className: string;
   readonly promise: Promise<void>;
 }
@@ -70,18 +81,14 @@ export class TrackerService {
   private logReadQueues = new Map<string, Promise<void>>();
   private orderedLogReadQueue: Promise<void> = Promise.resolve();
   private logReadRetryTimers = new Map<string, NodeJS.Timeout>();
-  private arenaLogPath: string | undefined;
-  private decksLogPath: string | undefined;
-  private playerLogPath: string | undefined;
   private arenaRatingsRequestSequence = 0;
   private arenaRatingsRequest: ArenaRatingsRequest | undefined;
   private arenaRatingsLoadedAt = new Map<string, number>();
   private lastArenaDeckSignature: string | undefined;
   private latestArenaDeckEventAtMs: number | undefined;
-  private activeLogPath: string | undefined;
   private waitingForFirstPowerLog = false;
   private sessionRefreshTimer: NodeJS.Timeout | undefined;
-  private sessionRefreshGeneration: number | undefined;
+  private sessionRefreshKey: SessionKey | undefined;
   private arenaScreenRecognitionTimer: NodeJS.Timeout | undefined;
   private arenaScreenRecognitionInFlight = false;
   private arenaScreenRecognitionSettled: Promise<void> = Promise.resolve();
@@ -97,7 +104,8 @@ export class TrackerService {
   private pendingArenaExitDeckKey: string | undefined;
   private pendingArenaExitConfirmations = 0;
   private lastPublishedStateSignature: string | undefined;
-  private monitoringGeneration = 0;
+  private sessionSequence = 0;
+  private sessionContext = createSessionContext(createSessionKey(0));
   private windows = new Set<BrowserWindow>();
   private activeMatchId: string | undefined;
   private activeMatchDeckName: string | undefined;
@@ -118,6 +126,22 @@ export class TrackerService {
     private readonly arenaScreenRecognizer: ArenaScreenRecognizerLike = new ArenaScreenRecognizer(),
     private readonly matchHistory = new MatchHistoryStore()
   ) {}
+
+  private get activeLogPath() {
+    return this.sessionContext.activeLogPath;
+  }
+
+  private get arenaLogPath() {
+    return this.sessionContext.arenaLogPath;
+  }
+
+  private get decksLogPath() {
+    return this.sessionContext.decksLogPath;
+  }
+
+  private get playerLogPath() {
+    return this.sessionContext.playerLogPath;
+  }
 
   attachWindow(window: BrowserWindow) {
     this.windows.add(window);
@@ -169,29 +193,28 @@ export class TrackerService {
   }
 
   async start(options: { logPath?: string; deckText?: string } = {}) {
-    const monitoringGeneration = this.beginMonitoring();
+    let sessionContext = this.beginSession();
     if (options.deckText) {
-      await this.importDeckIntoEngine(options.deckText);
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      await this.importDeckIntoEngine(options.deckText, sessionContext);
+      if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
     }
 
     const session = await resolveBestLogTarget(options.logPath);
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
     const logPath = session?.powerLogPath ?? session?.playerLogPath ?? session?.arenaLogPath ?? session?.decksLogPath ?? session?.loadingScreenLogPath;
-    if (!logPath) {
+    if (!session || !logPath) {
       await this.stopWatcherOnly();
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       this.engine.resetAfterGame();
       this.arena.reset();
-      this.activeLogPath = undefined;
-      this.decksLogPath = undefined;
-      this.arenaLogPath = undefined;
-      this.playerLogPath = undefined;
       this.engine.setStatus("missing-log", undefined, "没有找到炉石日志。请启动炉石，或手动选择 Logs 目录。");
-      this.startSessionRefresh(monitoringGeneration);
+      this.startSessionRefresh(sessionContext);
       this.pushState();
       return this.getState();
     }
@@ -200,13 +223,24 @@ export class TrackerService {
     const loadingScreenMode = !session?.powerLogPath && !usableArenaLog
       ? await readLatestLoadingScreenMode(session?.loadingScreenLogPath)
       : undefined;
+    if (!this.isCurrentSession(sessionContext)) {
+      return this.getState();
+    }
     const isWaitingForFirstPowerLog = loadingScreenMode !== "GAMEPLAY";
     if (
       !session?.powerLogPath &&
       !usableArenaLog &&
       (!session?.playerLogPath || loadingScreenMode !== undefined)
     ) {
+      sessionContext = this.bindResolvedSession(sessionContext, session, logPath, {
+        arenaLogPath: session?.arenaLogPath,
+        decksLogPath: expectedDecksLogPath(session?.sessionDir, session?.decksLogPath),
+        playerLogPath: undefined
+      });
       await this.stopWatcherOnly();
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       this.engine.resetAfterGame();
       this.arena.reset();
       this.waitingForFirstPowerLog = isWaitingForFirstPowerLog;
@@ -217,27 +251,36 @@ export class TrackerService {
           ? buildMissingPowerLogMessage(logPath)
           : buildWaitingForGameMessage()
       );
-      this.activeLogPath = logPath;
-      this.decksLogPath = expectedDecksLogPath(session?.sessionDir, session?.decksLogPath);
-      this.arenaLogPath = session?.arenaLogPath;
-      this.playerLogPath = undefined;
-      await this.loadCardDatabaseIntoEngine();
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      await this.loadCardDatabaseIntoEngine(sessionContext);
+      if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
-      await this.refreshCollectionDecks(session?.decksLogPath ?? logPath, monitoringGeneration);
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      await this.refreshCollectionDecks(session?.decksLogPath ?? logPath, sessionContext);
+      if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
-      this.startSessionRefresh(monitoringGeneration);
-      this.startArenaScreenRecognition(monitoringGeneration);
-      await this.refreshArenaScreenChoices(monitoringGeneration);
+      this.startSessionRefresh(sessionContext);
+      this.startArenaScreenRecognition(sessionContext);
+      await this.refreshArenaScreenChoices(sessionContext);
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       this.pushState();
       return this.getState();
     }
 
+    const arenaLogPath = session?.arenaLogPath ?? (session?.powerLogPath ? path.join(path.dirname(session.powerLogPath), "Arena.log") : undefined);
+    sessionContext = this.bindResolvedSession(sessionContext, session, logPath, {
+      arenaLogPath,
+      decksLogPath: expectedDecksLogPath(session?.sessionDir, session?.decksLogPath),
+      playerLogPath: session?.playerLogPath
+    });
+
     if (path.basename(logPath).toLowerCase() === "player.log") {
       await this.stopWatcherOnly();
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       this.engine.resetAfterGame();
       this.arena.reset();
       this.engine.setStatus("error", logPath, buildPowerLogRequiredMessage(logPath));
@@ -247,48 +290,47 @@ export class TrackerService {
 
     const collectionDeckSourcePath = session?.powerLogPath ?? session?.decksLogPath ?? session?.arenaLogPath ?? logPath;
     const selectedCollectionDeck = collectionDeckSourcePath
-      ? await this.refreshCollectionDecks(collectionDeckSourcePath, monitoringGeneration)
+      ? await this.refreshCollectionDecks(collectionDeckSourcePath, sessionContext)
       : undefined;
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
 
-    await this.loadCardDatabaseIntoEngine();
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    await this.loadCardDatabaseIntoEngine(sessionContext);
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
     const playerContent = session?.playerLogPath ? await fs.readFile(session.playerLogPath, "utf8").catch(() => "") : "";
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
-    this.playerLogPath = session?.playerLogPath;
-    const arenaLogPath = session?.arenaLogPath ?? (session?.powerLogPath ? path.join(path.dirname(session.powerLogPath), "Arena.log") : undefined);
-    this.arenaLogPath = arenaLogPath;
     this.lastArenaDeckSignature = undefined;
     this.arena.reset();
     this.arena.setPreferArenaLogPicks(Boolean(session?.arenaLogPath));
-    this.decksLogPath = expectedDecksLogPath(session?.sessionDir, session?.decksLogPath);
     await this.stopWatcherOnly();
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
     this.engine.setStatus("watching", logPath);
     const arenaContent = arenaLogPath ? await fs.readFile(arenaLogPath, "utf8").catch(() => "") : "";
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
     const currentArenaText = selectCurrentArenaLogText(arenaContent);
     this.arena.applyArenaText(currentArenaText);
-    await this.applyInitialExactArenaDeck(selectedCollectionDeck, arenaLogPath);
+    await this.applyInitialExactArenaDeck(selectedCollectionDeck, arenaLogPath, sessionContext);
+    if (!this.isCurrentSession(sessionContext)) {
+      return this.getState();
+    }
     // Power replay must see the Arena deck first; otherwise a cold start can
     // record the opening hand and then erase its counts when the deck is synced.
     this.syncArenaDeckToTracker();
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
-      return this.getState();
-    }
     if (arenaLogPath) {
       this.offsets.set(arenaLogPath, Buffer.byteLength(arenaContent));
       const arenaStat = await fs.stat(arenaLogPath).catch(() => undefined);
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       if (arenaStat) {
         this.latestArenaDeckEventAtMs = resolveLatestLogEventAt(
           currentArenaText,
@@ -304,11 +346,11 @@ export class TrackerService {
 
     if (session?.powerLogPath) {
       const contentBuffer = await fs.readFile(session.powerLogPath).catch(() => Buffer.alloc(0));
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
       const powerStat = await fs.stat(session.powerLogPath).catch(() => undefined);
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
       const content = contentBuffer.toString("utf8");
@@ -323,22 +365,27 @@ export class TrackerService {
       this.offsets.set(session.powerLogPath, contentBuffer.length);
       if (this.playerLogPath && parsePlayerLog(playerContent).some((event) => event.type === "game-started")) {
         const playerStat = await fs.stat(this.playerLogPath).catch(() => undefined);
+        if (!this.isCurrentSession(sessionContext)) {
+          return this.getState();
+        }
         if (playerStat && (!powerStat || playerStat.mtimeMs > powerStat.mtimeMs)) {
           this.markGameStartedWhilePowerLogStalled();
         }
       }
     }
-    this.ensureArenaRatingsForCurrentArena(monitoringGeneration);
+    this.ensureArenaRatingsForCurrentArena(sessionContext);
     if (this.playerLogPath) {
       this.offsets.set(this.playerLogPath, Buffer.byteLength(playerContent));
     }
     if (session?.decksLogPath) {
       const decksStat = await fs.stat(session.decksLogPath).catch(() => undefined);
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
       if (decksStat) {
         this.offsets.set(session.decksLogPath, decksStat.size);
       }
     }
-    this.activeLogPath = logPath;
     this.syncArenaDeckToTracker();
     if (!session?.powerLogPath && selectedCollectionDeck && this.arena.getState().status === "inactive") {
       this.previewCollectionDeck(selectedCollectionDeck, "decks-log");
@@ -364,11 +411,12 @@ export class TrackerService {
       }
     }
 
-    this.watcher = chokidar.watch(watchedTargets, {
+    const watcher = chokidar.watch(watchedTargets, {
       ignoreInitial: false,
       depth: 0,
       awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 }
     });
+    this.watcher = watcher;
 
     const watcherReady = new Promise<void>((resolve) => {
       let settled = false;
@@ -379,23 +427,23 @@ export class TrackerService {
         settled = true;
         resolve();
       };
-      this.watcher?.once("ready", settle);
-      this.watcher?.once("error", settle);
+      watcher.once("ready", settle);
+      watcher.once("error", settle);
     });
     const enqueueTrackedLog = (candidatePath: string) => {
       const resolvedPath = path.resolve(candidatePath);
       if (trackedLogPaths.has(resolvedPath)) {
-        this.enqueueLogRead(resolvedPath, monitoringGeneration);
+        this.enqueueLogRead(resolvedPath, sessionContext);
       }
     };
-    this.watcher.on("change", (changedPath) => {
+    watcher.on("change", (changedPath) => {
       enqueueTrackedLog(changedPath);
     });
-    this.watcher.on("add", (addedPath) => {
+    watcher.on("add", (addedPath) => {
       enqueueTrackedLog(addedPath);
     });
-    this.watcher.on("error", (error) => {
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    watcher.on("error", (error) => {
+      if (!this.isCurrentSession(sessionContext)) {
         return;
       }
       this.engine.setStatus("error", logPath, String(error));
@@ -404,24 +452,30 @@ export class TrackerService {
 
     await watcherReady;
     await this.waitForLogReadQueues();
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
-    await this.reconcileExpectedDecksLog(monitoringGeneration);
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    await this.reconcileExpectedDecksLog(sessionContext);
+    if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
 
-    this.startSessionRefresh(monitoringGeneration);
-    this.startArenaScreenRecognition(monitoringGeneration);
-    await this.refreshArenaScreenChoices(monitoringGeneration);
+    this.startSessionRefresh(sessionContext);
+    this.startArenaScreenRecognition(sessionContext);
+    await this.refreshArenaScreenChoices(sessionContext);
+    if (!this.isCurrentSession(sessionContext)) {
+      return this.getState();
+    }
     this.pushState();
     return this.getState();
   }
 
   async pause() {
-    this.beginMonitoring();
+    const sessionContext = this.beginSession();
     await this.stopWatcherOnly();
+    if (!this.isCurrentSession(sessionContext)) {
+      return this.getState();
+    }
     this.engine.setStatus("paused", this.getState().logPath);
     this.pushState();
     return this.getState();
@@ -440,19 +494,19 @@ export class TrackerService {
     await this.stopWatcherOnly();
     await this.waitForLogReadQueues();
 
-    const monitoringGeneration = this.monitoringGeneration;
+    const sessionContext = this.sessionContext;
     const powerLogPath = isPowerLogPath(this.activeLogPath) ? this.activeLogPath : undefined;
     if (powerLogPath) {
-      await this.readAppended(powerLogPath, monitoringGeneration);
+      await this.readAppended(powerLogPath, sessionContext);
       await this.waitForLogReadQueues();
     }
 
     await this.matchHistoryWrites;
-    this.beginMonitoring();
+    this.beginSession();
   }
 
-  private async readAppended(logPath: string, monitoringGeneration: number) {
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+  private async readAppended(logPath: string, sessionContext: SessionContext) {
+    if (!this.isCurrentSession(sessionContext) || !sessionOwnsLogPath(sessionContext, logPath)) {
       return;
     }
 
@@ -465,7 +519,7 @@ export class TrackerService {
       let replacementFingerprint: LogFileFingerprint | undefined;
       try {
         const stat = await handle.stat();
-        if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+        if (!this.isCurrentSession(sessionContext)) {
           return;
         }
         offset = this.offsets.get(logPath) ?? 0;
@@ -473,7 +527,7 @@ export class TrackerService {
           wasTruncated = true;
           offset = 0;
         } else if (
-          this.isArenaLog(logPath) &&
+          this.isArenaLog(logPath, sessionContext) &&
           await hasLogFileFingerprintChanged(handle, stat, this.logFileFingerprints.get(logPath))
         ) {
           wasTruncated = true;
@@ -487,13 +541,13 @@ export class TrackerService {
         }
 
         buffer = await readFileRange(handle, offset, length);
-        if (this.isArenaLog(logPath) && (wasTruncated || !this.logFileFingerprints.has(logPath))) {
+        if (this.isArenaLog(logPath, sessionContext) && (wasTruncated || !this.logFileFingerprints.has(logPath))) {
           replacementFingerprint = createLogFileFingerprint(buffer, stat);
         }
       } finally {
         await handle.close();
       }
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return;
       }
       if (buffer.length === 0) {
@@ -513,7 +567,7 @@ export class TrackerService {
       if (this.engine.getState().status === "error") {
         this.engine.setStatus("watching", this.activeLogPath ?? logPath);
       }
-      if (this.isArenaLog(logPath)) {
+      if (this.isArenaLog(logPath, sessionContext)) {
         this.arena.setPreferArenaLogPicks(true);
         const previousRedraftGenerationId = this.arena.getState().redraftGenerationId;
         if (wasTruncated) {
@@ -533,8 +587,8 @@ export class TrackerService {
         } else if (latestEventAtMs !== undefined) {
           this.latestArenaDeckEventAtMs = Math.max(this.latestArenaDeckEventAtMs ?? latestEventAtMs, latestEventAtMs);
         }
-        this.bindLatestExactArenaDeckToNewRedraft(previousRedraftGenerationId, text, modifiedAtMs);
-        this.applyPendingExactArenaDeck();
+        this.bindLatestExactArenaDeckToNewRedraft(previousRedraftGenerationId, text, modifiedAtMs, sessionContext);
+        this.applyPendingExactArenaDeck(sessionContext);
         if (
           this.pendingPowerGameText &&
           (this.arena.getState().status === "complete" || this.arena.getState().status === "playing")
@@ -542,20 +596,20 @@ export class TrackerService {
           this.syncArenaDeckToTracker();
           this.applyPowerText("");
         }
-      } else if (this.isDecksLog(logPath)) {
-        const selectedCollectionDeck = await this.refreshCollectionDecks(logPath, monitoringGeneration);
-        if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      } else if (this.isDecksLog(logPath, sessionContext)) {
+        const selectedCollectionDeck = await this.refreshCollectionDecks(logPath, sessionContext);
+        if (!this.isCurrentSession(sessionContext)) {
           return;
         }
         if (isArenaCollectionDeck(selectedCollectionDeck)) {
-          this.rememberLatestExactArenaDeck(selectedCollectionDeck, text, modifiedAtMs);
-          if (!this.applyExactArenaDeck(selectedCollectionDeck)) {
-            this.deferExactArenaDeck(selectedCollectionDeck);
+          this.rememberLatestExactArenaDeck(selectedCollectionDeck, text, modifiedAtMs, sessionContext);
+          if (!this.applyExactArenaDeck(selectedCollectionDeck, sessionContext)) {
+            this.deferExactArenaDeck(selectedCollectionDeck, sessionContext);
           }
         } else if (selectedCollectionDeck && this.arena.getState().status === "inactive" && !this.activeArenaGame) {
           this.previewCollectionDeck(selectedCollectionDeck, "decks-log");
         }
-      } else if (this.isPlayerLog(logPath)) {
+      } else if (this.isPlayerLog(logPath, sessionContext)) {
         const playerEvents = parsePlayerLog(text);
         if (playerEvents.some((event) => event.type === "game-started")) {
           this.markGameStartedWhilePowerLogStalled();
@@ -569,10 +623,10 @@ export class TrackerService {
         this.updateFriendlyControllerFromPowerText(text);
         this.applyPowerText(text, undefined, modifiedAtMs);
       }
-      this.ensureArenaRatingsForCurrentArena(monitoringGeneration);
+      this.ensureArenaRatingsForCurrentArena(sessionContext);
       this.syncArenaDeckToTracker();
       this.pushState();
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return;
       }
       this.offsets.set(logPath, offset + buffer.length);
@@ -581,19 +635,19 @@ export class TrackerService {
         this.logFileFingerprints.set(logPath, replacementFingerprint);
       }
       this.clearLogReadRetry(logPath);
-      void this.refreshArenaScreenChoices(monitoringGeneration);
+      void this.refreshArenaScreenChoices(sessionContext);
     } catch (error) {
-      if (!this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return;
       }
       this.engine.setStatus("error", logPath, String(error));
       this.pushState();
-      this.scheduleLogReadRetry(logPath, monitoringGeneration);
+      this.scheduleLogReadRetry(logPath, sessionContext);
     }
   }
 
-  private enqueueLogRead(logPath: string, monitoringGeneration: number) {
-    const queued = this.orderedLogReadQueue.then(() => this.readAppended(logPath, monitoringGeneration));
+  private enqueueLogRead(logPath: string, sessionContext: SessionContext) {
+    const queued = this.orderedLogReadQueue.then(() => this.readAppended(logPath, sessionContext));
     this.orderedLogReadQueue = queued.catch(() => undefined);
     this.logReadQueues.set(logPath, queued);
     void queued.finally(() => {
@@ -605,9 +659,12 @@ export class TrackerService {
 
   private async stopWatcherOnly() {
     this.clearLogReadRetries();
-    if (this.watcher) {
-      await this.watcher.close();
-      this.watcher = undefined;
+    const watcher = this.watcher;
+    if (watcher) {
+      await watcher.close();
+      if (this.watcher === watcher) {
+        this.watcher = undefined;
+      }
     }
   }
 
@@ -617,21 +674,21 @@ export class TrackerService {
     }
   }
 
-  private async reconcileExpectedDecksLog(monitoringGeneration: number) {
+  private async reconcileExpectedDecksLog(sessionContext: SessionContext) {
     const decksLogPath = this.decksLogPath;
     if (
       !decksLogPath ||
       this.offsets.has(decksLogPath) ||
-      !this.isCurrentMonitoringGeneration(monitoringGeneration)
+      !this.isCurrentSession(sessionContext)
     ) {
       return;
     }
 
     const stat = await fs.stat(decksLogPath).catch(() => undefined);
-    if (!stat?.isFile() || !this.isCurrentMonitoringGeneration(monitoringGeneration)) {
+    if (!stat?.isFile() || !this.isCurrentSession(sessionContext)) {
       return;
     }
-    this.enqueueLogRead(decksLogPath, monitoringGeneration);
+    this.enqueueLogRead(decksLogPath, sessionContext);
     await this.waitForLogReadQueues();
   }
 
@@ -646,8 +703,9 @@ export class TrackerService {
     );
   }
 
-  private beginMonitoring() {
-    this.monitoringGeneration += 1;
+  private beginSession() {
+    const sessionContext = createSessionContext(createSessionKey(++this.sessionSequence));
+    this.sessionContext = sessionContext;
     this.stopSessionRefresh();
     this.stopArenaScreenRecognition();
     this.constructedScreenMode = undefined;
@@ -660,7 +718,9 @@ export class TrackerService {
     this.activeArenaGame = false;
     this.pendingLogBytes.clear();
     this.logFileFingerprints.clear();
+    this.offsets.clear();
     this.logReadQueues.clear();
+    this.orderedLogReadQueue = Promise.resolve();
     this.clearLogReadRetries();
     this.resetPendingArenaExit();
     this.activeMatchId = undefined;
@@ -670,17 +730,31 @@ export class TrackerService {
     this.powerGameExplicitLocalPlayerIds.clear();
     this.powerGamePlayerNames.clear();
     this.powerGameStartTimestamp = undefined;
-    return this.monitoringGeneration;
+    return sessionContext;
   }
 
-  private scheduleLogReadRetry(logPath: string, monitoringGeneration: number) {
+  private bindResolvedSession(
+    sessionContext: SessionContext,
+    logs: NonNullable<Awaited<ReturnType<typeof resolveBestLogTarget>>>,
+    activeLogPath: string,
+    paths: { readonly arenaLogPath?: string; readonly decksLogPath?: string; readonly playerLogPath?: string }
+  ) {
+    if (!this.isCurrentSession(sessionContext)) {
+      return sessionContext;
+    }
+    const bound = bindSessionContext(sessionContext, logs, { activeLogPath, ...paths });
+    this.sessionContext = bound;
+    return bound;
+  }
+
+  private scheduleLogReadRetry(logPath: string, sessionContext: SessionContext) {
     if (this.disposing || this.logReadRetryTimers.has(logPath)) {
       return;
     }
     const timer = setTimeout(() => {
       this.logReadRetryTimers.delete(logPath);
-      if (this.isCurrentMonitoringGeneration(monitoringGeneration)) {
-        this.enqueueLogRead(logPath, monitoringGeneration);
+      if (this.isCurrentSession(sessionContext)) {
+        this.enqueueLogRead(logPath, sessionContext);
       }
     }, 150);
     this.logReadRetryTimers.set(logPath, timer);
@@ -701,8 +775,8 @@ export class TrackerService {
     this.logReadRetryTimers.clear();
   }
 
-  private isCurrentMonitoringGeneration(generation: number) {
-    return this.monitoringGeneration === generation;
+  private isCurrentSession(sessionContext: SessionContext) {
+    return hasSessionKey(this.sessionContext, sessionContext.key);
   }
 
   private setPendingLogBytes(logPath: string, pending: Buffer) {
@@ -713,15 +787,15 @@ export class TrackerService {
     }
   }
 
-  private startSessionRefresh(generation: number) {
-    if (this.disposing || !this.isCurrentMonitoringGeneration(generation)) {
+  private startSessionRefresh(sessionContext: SessionContext) {
+    if (this.disposing || !this.isCurrentSession(sessionContext)) {
       return;
     }
 
     this.stopSessionRefresh();
     this.sessionRefreshTimer = setInterval(() => {
-      void this.reconcileExpectedDecksLog(generation);
-      void this.followNewestSession(generation);
+      void this.reconcileExpectedDecksLog(sessionContext);
+      void this.followNewestSession(sessionContext);
     }, 1_000);
   }
 
@@ -730,16 +804,16 @@ export class TrackerService {
       clearInterval(this.sessionRefreshTimer);
       this.sessionRefreshTimer = undefined;
     }
-    this.sessionRefreshGeneration = undefined;
+    this.sessionRefreshKey = undefined;
   }
 
-  private startArenaScreenRecognition(generation: number) {
-    if (this.disposing || !this.isCurrentMonitoringGeneration(generation)) {
+  private startArenaScreenRecognition(sessionContext: SessionContext) {
+    if (this.disposing || !this.isCurrentSession(sessionContext)) {
       return;
     }
     this.stopArenaScreenRecognition();
     this.arenaScreenRecognitionTimer = setInterval(() => {
-      void this.refreshArenaScreenChoices(generation);
+      void this.refreshArenaScreenChoices(sessionContext);
     }, 450);
     this.arenaScreenRecognitionTimer.unref();
   }
@@ -752,7 +826,7 @@ export class TrackerService {
     this.arenaScreenRecognitionError = undefined;
   }
 
-  private async refreshArenaScreenChoices(generation: number) {
+  private async refreshArenaScreenChoices(sessionContext: SessionContext) {
     const arenaState = this.arena.getState();
     const isArenaChoosing = arenaState.status === "drafting" || arenaState.status === "redrafting";
     const shouldRecognizeArenaChoices = isArenaChoosing && arenaState.currentChoices.length < 3;
@@ -762,7 +836,7 @@ export class TrackerService {
       shouldRecognizeConstructedDeckScreen(arenaState.status, this.activeArenaGame);
     const arenaRecognitionContext = shouldRecognizeArenaChoices ? getArenaRecognitionContext(arenaState) : undefined;
     if (
-      !this.isCurrentMonitoringGeneration(generation) ||
+      !this.isCurrentSession(sessionContext) ||
       this.arenaScreenRecognitionInFlight ||
       (!shouldRecognizeArenaChoices && !shouldRecognizeConstructedDeck)
     ) {
@@ -779,7 +853,7 @@ export class TrackerService {
         requireHearthstoneFrontmost: true,
         profile: shouldRecognizeArenaChoices ? "arena" : "constructed"
       });
-      if (!this.isCurrentMonitoringGeneration(generation)) {
+      if (!this.isCurrentSession(sessionContext)) {
         return;
       }
       const currentArenaState = this.arena.getState();
@@ -870,6 +944,7 @@ export class TrackerService {
         this.constructedScreenMode = undefined;
 
         if (leftConstructedScreen) {
+          this.syncArenaDeckToTracker();
           this.pushState();
         }
         return;
@@ -907,22 +982,22 @@ export class TrackerService {
     }
   }
 
-  private async followNewestSession(generation: number) {
+  private async followNewestSession(sessionContext: SessionContext) {
     if (process.env.QA_LOCK_LOG_PATH === "1") {
       return;
     }
     if (
       this.disposing ||
-      !this.isCurrentMonitoringGeneration(generation) ||
-      this.sessionRefreshGeneration !== undefined
+      !this.isCurrentSession(sessionContext) ||
+      this.sessionRefreshKey !== undefined
     ) {
       return;
     }
 
-    this.sessionRefreshGeneration = generation;
+    this.sessionRefreshKey = sessionContext.key;
     try {
       const session = await resolveBestLogTarget();
-      if (this.disposing || !this.isCurrentMonitoringGeneration(generation)) {
+      if (this.disposing || !this.isCurrentSession(sessionContext)) {
         return;
       }
 
@@ -930,6 +1005,7 @@ export class TrackerService {
       if (
         !session ||
         !nextLogPath ||
+        (sessionContext.root && path.resolve(session.root) !== sessionContext.root) ||
         (
           this.activeLogPath &&
           path.resolve(nextLogPath) === path.resolve(this.activeLogPath)
@@ -942,24 +1018,27 @@ export class TrackerService {
     } catch {
       // Keep the active watcher running if a periodic discovery pass fails.
     } finally {
-      if (this.sessionRefreshGeneration === generation) {
-        this.sessionRefreshGeneration = undefined;
+      if (this.sessionRefreshKey === sessionContext.key) {
+        this.sessionRefreshKey = undefined;
       }
     }
   }
 
-  private async importDeckIntoEngine(deckText: string) {
+  private async importDeckIntoEngine(deckText: string, sessionContext?: SessionContext) {
     const cardDatabase = await this.cardData.loadCardDatabase({ preferCache: true });
+    if (sessionContext && !this.isCurrentSession(sessionContext)) {
+      return;
+    }
     this.engine.importDeck(deckText, cardDatabase.database, cardDatabase.warnings);
   }
 
-  private async refreshCollectionDecks(logPath: string, monitoringGeneration: number): Promise<CollectionDeck | undefined> {
-    if (!this.collectionDecks) {
+  private async refreshCollectionDecks(logPath: string, sessionContext: SessionContext): Promise<CollectionDeck | undefined> {
+    if (!this.collectionDecks || !this.isCurrentSession(sessionContext) || !sessionOwnsLogPath(sessionContext, logPath)) {
       return undefined;
     }
 
     const result = await this.collectionDecks.scanAndImportDecks({ logPath });
-    if (!this.isCurrentMonitoringGeneration(monitoringGeneration) || result.status !== "ok") {
+    if (!this.isCurrentSession(sessionContext) || result.status !== "ok") {
       return undefined;
     }
 
@@ -979,16 +1058,19 @@ export class TrackerService {
       : undefined;
   }
 
-  private async loadCardDatabaseIntoEngine() {
+  private async loadCardDatabaseIntoEngine(sessionContext: SessionContext) {
     const cardDatabase = await this.cardData.loadCardDatabase({ preferCache: true });
+    if (!this.isCurrentSession(sessionContext)) {
+      return;
+    }
     if (cardDatabase.database) {
       this.engine.setCardDatabase(cardDatabase.database);
       this.arena.setCardDatabase(cardDatabase.database);
     }
   }
 
-  private ensureArenaRatingsForCurrentArena(generation: number) {
-    if (this.disposing || !this.isCurrentMonitoringGeneration(generation)) {
+  private ensureArenaRatingsForCurrentArena(sessionContext: SessionContext) {
+    if (this.disposing || !this.isCurrentSession(sessionContext)) {
       return;
     }
     const arenaState = this.arena.getState();
@@ -999,7 +1081,7 @@ export class TrackerService {
     }
 
     if (
-      this.arenaRatingsRequest?.generation === generation &&
+      this.arenaRatingsRequest?.sessionKey === sessionContext.key &&
       this.arenaRatingsRequest.className === className
     ) {
       return;
@@ -1010,7 +1092,7 @@ export class TrackerService {
       .then((result) => {
         if (
           this.disposing ||
-          !this.isCurrentMonitoringGeneration(generation) ||
+          !this.isCurrentSession(sessionContext) ||
           this.arenaRatingsRequest?.id !== requestId
         ) {
           return;
@@ -1043,7 +1125,7 @@ export class TrackerService {
       .catch((error) => {
         if (
           !this.disposing &&
-          this.isCurrentMonitoringGeneration(generation) &&
+          this.isCurrentSession(sessionContext) &&
           this.arenaRatingsRequest?.id === requestId &&
           this.arena.getState().hero?.className === className
         ) {
@@ -1057,7 +1139,7 @@ export class TrackerService {
           this.arenaRatingsRequest = undefined;
         }
       });
-    this.arenaRatingsRequest = { id: requestId, generation, className, promise };
+    this.arenaRatingsRequest = { id: requestId, sessionKey: sessionContext.key, className, promise };
   }
 
   private applyPowerText(
@@ -1401,8 +1483,8 @@ export class TrackerService {
     this.engine.syncDeckCards(trackerEngineDeck, trackerDeckName);
   }
 
-  private applyExactArenaDeck(deck: CollectionDeck | undefined) {
-    if (!isArenaCollectionDeck(deck)) {
+  private applyExactArenaDeck(deck: CollectionDeck | undefined, sessionContext: SessionContext) {
+    if (!this.isCurrentSession(sessionContext) || !isArenaCollectionDeck(deck)) {
       return false;
     }
     const status = this.arena.getState().status;
@@ -1416,7 +1498,10 @@ export class TrackerService {
     return applied;
   }
 
-  private deferExactArenaDeck(deck: CollectionDeck) {
+  private deferExactArenaDeck(deck: CollectionDeck, sessionContext: SessionContext) {
+    if (!this.isCurrentSession(sessionContext)) {
+      return false;
+    }
     const state = this.arena.getState();
     const total = deck.cards.reduce((sum, card) => sum + card.count, 0);
     if (
@@ -1430,6 +1515,7 @@ export class TrackerService {
     }
 
     this.pendingExactArenaDeck = {
+      sessionKey: sessionContext.key,
       deck: {
         ...deck,
         cards: deck.cards.map((card) => ({ ...card }))
@@ -1440,7 +1526,15 @@ export class TrackerService {
     return true;
   }
 
-  private rememberLatestExactArenaDeck(deck: CollectionDeck, appendedText: string, modifiedAtMs: number) {
+  private rememberLatestExactArenaDeck(
+    deck: CollectionDeck,
+    appendedText: string,
+    modifiedAtMs: number,
+    sessionContext: SessionContext
+  ) {
+    if (!this.isCurrentSession(sessionContext)) {
+      return false;
+    }
     const eventAtMs = resolveLatestLogEventAt(`${appendedText}\n${deck.rawText}`, modifiedAtMs);
     if (eventAtMs === undefined) {
       this.latestExactArenaDeckObservation = undefined;
@@ -1448,6 +1542,7 @@ export class TrackerService {
     }
 
     this.latestExactArenaDeckObservation = {
+      sessionKey: sessionContext.key,
       deck: {
         ...deck,
         cards: deck.cards.map((card) => ({ ...card }))
@@ -1460,8 +1555,12 @@ export class TrackerService {
   private bindLatestExactArenaDeckToNewRedraft(
     previousRedraftGenerationId: string | undefined,
     arenaText: string,
-    modifiedAtMs: number
+    modifiedAtMs: number,
+    sessionContext: SessionContext
   ) {
+    if (!this.isCurrentSession(sessionContext)) {
+      return false;
+    }
     const state = this.arena.getState();
     if (!state.redraftGenerationId || state.redraftGenerationId === previousRedraftGenerationId) {
       return false;
@@ -1476,6 +1575,7 @@ export class TrackerService {
     );
     if (
       !observation ||
+      observation.sessionKey !== sessionContext.key ||
       redraftAtMs === undefined ||
       observation.eventAtMs < redraftAtMs ||
       !state.deckId ||
@@ -1485,6 +1585,7 @@ export class TrackerService {
     }
 
     this.pendingExactArenaDeck = {
+      sessionKey: sessionContext.key,
       deck: observation.deck,
       arenaDeckId: state.deckId,
       redraftGenerationId: state.redraftGenerationId
@@ -1492,14 +1593,15 @@ export class TrackerService {
     return true;
   }
 
-  private applyPendingExactArenaDeck() {
+  private applyPendingExactArenaDeck(sessionContext: SessionContext) {
     const pending = this.pendingExactArenaDeck;
-    if (!pending) {
+    if (!this.isCurrentSession(sessionContext) || !pending) {
       return false;
     }
 
     const state = this.arena.getState();
     if (
+      pending.sessionKey !== sessionContext.key ||
       state.redraftGenerationId !== pending.redraftGenerationId ||
       state.deckId !== pending.arenaDeckId
     ) {
@@ -1511,15 +1613,19 @@ export class TrackerService {
     }
     this.pendingExactArenaDeck = undefined;
     this.latestExactArenaDeckObservation = undefined;
-    return this.applyExactArenaDeck(pending.deck);
+    return this.applyExactArenaDeck(pending.deck, sessionContext);
   }
 
-  private async applyInitialExactArenaDeck(deck: CollectionDeck | undefined, arenaLogPath: string | undefined) {
-    if (!isArenaCollectionDeck(deck)) {
+  private async applyInitialExactArenaDeck(
+    deck: CollectionDeck | undefined,
+    arenaLogPath: string | undefined,
+    sessionContext: SessionContext
+  ) {
+    if (!this.isCurrentSession(sessionContext) || !isArenaCollectionDeck(deck)) {
       return false;
     }
     if (!this.arena.getState().redraftGenerationId) {
-      return this.applyExactArenaDeck(deck);
+      return this.applyExactArenaDeck(deck, sessionContext);
     }
     if (!arenaLogPath || !deck.sourcePath) {
       return false;
@@ -1529,16 +1635,19 @@ export class TrackerService {
       fs.stat(arenaLogPath).catch(() => undefined),
       fs.stat(deck.sourcePath).catch(() => undefined)
     ]);
-    if (!arenaStat || !decksStat || decksStat.mtimeMs < arenaStat.mtimeMs) {
+    if (!this.isCurrentSession(sessionContext) || !arenaStat || !decksStat || decksStat.mtimeMs < arenaStat.mtimeMs) {
       return false;
     }
-    return this.applyExactArenaDeck(deck);
+    return this.applyExactArenaDeck(deck, sessionContext);
   }
 
   private previewCollectionDeck(deck: CollectionDeck, source: "decks-log" | "screen") {
     this.arena.reset();
     const previousState = this.engine.getState();
-    if (!this.engine.previewCollectionDeck(deck.id, { expectedSize: getConstructedExpectedDeckSize(deck) })) {
+    if (!this.engine.previewCollectionDeck(deck.id, {
+      expectedSize: getConstructedExpectedDeckSize(deck),
+      source
+    })) {
       return false;
     }
 
@@ -1572,16 +1681,16 @@ export class TrackerService {
     this.pendingArenaExitConfirmations = 0;
   }
 
-  private isArenaLog(logPath: string) {
-    return Boolean(this.arenaLogPath && path.resolve(logPath) === path.resolve(this.arenaLogPath));
+  private isArenaLog(logPath: string, sessionContext: SessionContext) {
+    return sessionOwnsLogPath(sessionContext, logPath, "arena");
   }
 
-  private isDecksLog(logPath: string) {
-    return Boolean(this.decksLogPath && path.resolve(logPath) === path.resolve(this.decksLogPath));
+  private isDecksLog(logPath: string, sessionContext: SessionContext) {
+    return sessionOwnsLogPath(sessionContext, logPath, "decks");
   }
 
-  private isPlayerLog(logPath: string) {
-    return Boolean(this.playerLogPath && path.resolve(logPath) === path.resolve(this.playerLogPath));
+  private isPlayerLog(logPath: string, sessionContext: SessionContext) {
+    return sessionOwnsLogPath(sessionContext, logPath, "player");
   }
 
   private pushState() {

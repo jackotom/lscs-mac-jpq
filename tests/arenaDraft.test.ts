@@ -76,6 +76,16 @@ describe("arena log parsing", () => {
     expect(parseArenaLogLine("D 12:00:02.000 Client chooses: [TEST_001]")).toEqual([
       expect.objectContaining({ type: "card-picked", cardId: "TEST_001" })
     ]);
+    expect(parseArenaLogLine("D 12:00:03.000 Client chooses: [TIME_009t1]")).toEqual([
+      expect.objectContaining({ type: "card-picked", cardId: "TIME_009t1" })
+    ]);
+  });
+
+  it("does not turn lowercase underscored text into a card id", () => {
+    expect(parseArenaLogLine("D 12:00:02.000 Client chooses: [foo_bar]")).toEqual([
+      expect.objectContaining({ type: "card-picked", cardName: "foo_bar" })
+    ]);
+    expect(parseArenaLogLine("D 12:00:02.000 Client chooses: [foo_bar]")[0]).not.toHaveProperty("cardId");
   });
 
   it("does not count repeated hero selections as drafted cards", () => {
@@ -620,6 +630,13 @@ D 12:00:02.000 ChoiceCardMgr.WaitThenShowChoices() - id=1 BEGIN
       expect.objectContaining({ cardId: "TEST_003", quality: { tier: "unknown", label: "暂无评分" }, name: "Sample Multi" })
     ]);
 
+    expect(engine.applyScreenChoices(["Sample Multi", "Sample Pair", "Sample Singleton"])).toBe(false);
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
+      "TEST_001",
+      "TEST_002",
+      "TEST_003"
+    ]);
+
     engine.applyArenaLine("D 12:00:03.000 Client chooses: [TEST_001]");
     engine.applyArenaLine("D 12:00:04.000 Client chooses: [TEST_002]");
 
@@ -824,6 +841,12 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
 
     expect(engine.applyScreenChoices(["Sample Multi", "Sample Singletom", "Sample Pair"])).toBe(true);
     expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "TEST_003", name: "Sample Multi", screenSlot: 0 }),
+      expect.objectContaining({ cardId: "TEST_002", name: "Sample Pair", screenSlot: 2 })
+    ]);
+
+    expect(engine.applyScreenChoices(["Sample Multi", "Sample Singletom", "Sample Pair"])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({ cardId: "TEST_003", name: "Sample Multi" }),
       expect.objectContaining({ cardId: "TEST_001", name: "Sample Singleton" }),
       expect.objectContaining({ cardId: "TEST_002", name: "Sample Pair" })
@@ -837,6 +860,11 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
 
       expect(normalDraft.applyScreenChoices(["鱼人吸血鬼", "寒冰护体", noisyName])).toBe(true);
       expect(normalDraft.getState().currentChoices).toEqual([
+        expect.objectContaining({ cardId: "TEST_MURLOC", screenSlot: 0 }),
+        expect.objectContaining({ cardId: "TEST_BARRIER", screenSlot: 1 })
+      ]);
+      expect(normalDraft.applyScreenChoices(["鱼人吸血鬼", "寒冰护体", noisyName])).toBe(true);
+      expect(normalDraft.getState().currentChoices).toEqual([
         expect.objectContaining({ cardId: "TEST_MURLOC", name: "鱼人吸血鬼" }),
         expect.objectContaining({ cardId: "TEST_BARRIER", name: "寒冰护体" }),
         expect.objectContaining({ cardId: "JAIL_456", name: "P1CK-P0K3T扒窃机" })
@@ -846,6 +874,8 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     const legendaryDraft = new ArenaDraftEngine({ cardDatabase: realOcrCardDb });
     legendaryDraft.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
 
+    expect(legendaryDraft.applyScreenChoices(["摩拉格", "背叛者高弗雷", "潔员摩洛免。福尔李斯"])).toBe(true);
+    expect(legendaryDraft.getState().currentChoices).toHaveLength(2);
     expect(legendaryDraft.applyScreenChoices(["摩拉格", "背叛者高弗雷", "潔员摩洛免。福尔李斯"])).toBe(true);
     expect(legendaryDraft.getState().currentChoices[2]).toMatchObject({
       cardId: "TEST_HOLMES",
@@ -873,6 +903,8 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     const engine = new ArenaDraftEngine({ cardDatabase: realOcrCardDb, ratings: screenshotRatings });
     engine.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
 
+    expect(engine.applyScreenChoices(["时光之主诺的墜總", "摩拉格", "克罗米"])).toBe(true);
+    expect(engine.getState().currentChoices).toHaveLength(2);
     expect(engine.applyScreenChoices(["时光之主诺的墜總", "摩拉格", "克罗米"])).toBe(true);
     expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({
@@ -926,6 +958,7 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
 
     expect(engine.applyScreenChoices(["万能钥匙", "融合独奏团", "巅峄无限"])).toBe(true);
     engine.setRatings(delayedRatings);
+    expect(engine.applyScreenChoices(["万能钥匙", "融合独奏团", "巅峄无限"])).toBe(true);
 
     expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({ cardId: "JAIL_319", rating: expect.objectContaining({ pickRate: 25.8 }) }),
@@ -1083,6 +1116,12 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
       "奇制亚斯受华版$000g",
       "末世的姆诺药岊",
       "瓦丝琪女男露"
+    ])).toBe(false);
+    expect(engine.getState().currentChoices).toEqual([]);
+    expect(engine.applyScreenChoices([
+      "奇制亚斯受华版$000g",
+      "末世的姆诺药岊",
+      "瓦丝琪女男露"
     ])).toBe(true);
     expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({
@@ -1149,6 +1188,15 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
       "RAT-CAICHSR捕園"
     ])).toBe(true);
     expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "ETC_208", screenSlot: 0 }),
+      expect.objectContaining({ cardId: "MIS_914", screenSlot: 1 })
+    ]);
+    expect(engine.applyScreenChoices([
+      "荆棘谷之心",
+      "量产品9号",
+      "RAT-CAICHSR捕園"
+    ])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({
         cardId: "ETC_208",
         name: "荆棘谷之心",
@@ -1190,6 +1238,15 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ])).toBe(true);
     expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({ cardId: "MIS_914", screenSlot: 0 }),
+      expect.objectContaining({ cardId: "ETC_208", screenSlot: 1 })
+    ]);
+    expect(engine.applyScreenChoices([
+      "量产品9号",
+      "荆棘谷之心",
+      "游供将军标尔瓦刻糖"
+    ])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "MIS_914", screenSlot: 0 }),
       expect.objectContaining({ cardId: "ETC_208", screenSlot: 1 }),
       expect.objectContaining({ cardId: "TIME_609", name: "游侠将军希尔瓦娜斯", screenSlot: 2 })
     ]);
@@ -1210,6 +1267,11 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
       "末世的姆诺兹多",
       "瓦丝琪女男爵"
     ])).toBe(true);
+    expect(engine.applyScreenChoices([
+      "超长传说名字甲乙丙丁丙",
+      "末世的姆诺兹多",
+      "瓦丝琪女男爵"
+    ])).toBe(false);
     expect(engine.getState().currentChoices).toEqual([
       expect.objectContaining({ cardId: "END_037", screenSlot: 1 }),
       expect.objectContaining({ cardId: "REV_925", screenSlot: 2 })
@@ -1243,6 +1305,35 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     expect(engine.getState().currentChoices).toHaveLength(3);
   });
 
+  it("stabilizes a changed OCR slot without clearing the other confirmed lanes", () => {
+    const slotCardDb = createCardDatabase([
+      { dbfId: 6201, name: "Alpha Long Card", cardId: "SLOT_A", collectible: true },
+      { dbfId: 6202, name: "Bravo Long Card", cardId: "SLOT_B", collectible: true },
+      { dbfId: 6203, name: "Charlie Long Card", cardId: "SLOT_C", collectible: true },
+      { dbfId: 6204, name: "Delta Long Card", cardId: "SLOT_D", collectible: true },
+      { dbfId: 6205, name: "Echo Long Card", cardId: "SLOT_E", collectible: true }
+    ]);
+    const engine = new ArenaDraftEngine({ cardDatabase: slotCardDb });
+    engine.applyArenaLine("D 12:42:39.000 Arena.SetDraftMode - DRAFTING");
+    expect(engine.applyScreenChoices(["Alpha Long Card", "Bravo Long Card", "Charlie Long Card"])).toBe(true);
+
+    expect(engine.applyScreenChoices(["Alpha Long Card", "Delta Long Carx", "Charlie Long Card"])).toBe(false);
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
+      "SLOT_A",
+      "SLOT_B",
+      "SLOT_C"
+    ]);
+
+    expect(engine.applyScreenChoices(["Alpha Long Card", "Echo Long Carx", "Charlie Long Card"])).toBe(false);
+    expect(engine.applyScreenChoices(["Alpha Long Card", "Delta Long Carx", "Charlie Long Card"])).toBe(false);
+    expect(engine.applyScreenChoices(["Alpha Long Card", "Delta Long Carx", "Charlie Long Card"])).toBe(true);
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
+      "SLOT_A",
+      "SLOT_D",
+      "SLOT_C"
+    ]);
+  });
+
   it("corrects a unique one-character OCR error in a three-character legendary name", () => {
     const shortLegendaryCardDb = createCardDatabase([
       { dbfId: 103169, name: "希希集", cardId: "TOY_913", collectible: true, cardType: "随从" },
@@ -1252,6 +1343,11 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     const engine = new ArenaDraftEngine({ cardDatabase: shortLegendaryCardDb });
     engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
 
+    expect(engine.applyScreenChoices(["希希巢", "伊莉达，寻罪", "克罗妮卡"])).toBe(true);
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
+      "JAIL_719",
+      "END_006"
+    ]);
     expect(engine.applyScreenChoices(["希希巢", "伊莉达，寻罪", "克罗妮卡"])).toBe(true);
     expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
       "TOY_913",

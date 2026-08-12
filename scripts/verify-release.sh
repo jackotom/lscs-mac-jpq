@@ -189,6 +189,7 @@ run_capture() {
   local name="$1"
   local fixture="$2"
   local qa_flag="${3:-}"
+  local attempt="${4:-1}"
   local screenshot="$screenshots_dir/$name.png"
   local inspection="$inspections_dir/$name.json"
   local qa_user_data="$evidence_dir/user-data/$name"
@@ -200,6 +201,8 @@ run_capture() {
   started="$(now_ms)"
   rm -rf "$qa_user_data"
   mkdir -p "$qa_user_data"
+  local original_log_snapshot="$qa_user_data/qa-log-before-capture"
+  cp "$qa_log_path" "$original_log_snapshot"
   if [[ -f "$root_dir/$fixture/cards.qa-cache.json" ]]; then
     cp "$root_dir/$fixture/cards.qa-cache.json" "$qa_user_data/hearthstone-cards.zhCN.blizzard.json"
   fi
@@ -266,8 +269,23 @@ run_capture() {
   wait "$active_qa_pid" || qa_status=$?
   active_qa_pid=""
   if [[ "$qa_status" -ne 0 ]]; then
+    if [[ "$attempt" -lt 2 ]]; then
+      echo "QA 场景首次异常退出，正在重试：$name" >&2
+      cp "$original_log_snapshot" "$qa_log_path"
+      run_capture "$name" "$fixture" "$qa_flag" "$((attempt + 1))"
+      return
+    fi
     echo "QA 场景异常退出：$name（状态 $qa_status）" >&2
     return "$qa_status"
+  fi
+
+  if [[ ! -s "$screenshot" || ! -s "$inspection" ]]; then
+    if [[ "$attempt" -lt 2 ]]; then
+      echo "QA 场景首次缺少截图证据，正在重试：$name" >&2
+      cp "$original_log_snapshot" "$qa_log_path"
+      run_capture "$name" "$fixture" "$qa_flag" "$((attempt + 1))"
+      return
+    fi
   fi
 
   require_file "$screenshot"

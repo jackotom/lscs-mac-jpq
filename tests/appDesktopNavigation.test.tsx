@@ -99,4 +99,42 @@ describe("desktop navigation shell", () => {
     await waitFor(() => expect(importCollectionDeck).toHaveBeenCalledWith("deck-1"));
     expect(container.querySelector(".modal-backdrop, .modal")).not.toBeInTheDocument();
   });
+
+  it("shows candidate deck copy and never presents stale deck data as confirmed", async () => {
+    const candidateState = createPublicTrackerState({
+      status: "watching",
+      gameActive: true,
+      deckName: "上一局套牌",
+      autoMatchedDeckId: "stale-deck",
+      deckIdentity: {
+        status: "waiting",
+        source: "inferred",
+        observedDistinctCards: 1,
+        candidateCount: 2,
+        bestScore: 3,
+        scoreLead: 0
+      },
+      deck: [{ name: "不应出现的旧牌", count: 2, remaining: 2, drawn: 0, played: 0 }],
+      summary: { totalCards: 30, remainingCards: 30, drawnCards: 0, opponentPlayedCount: 0 }
+    });
+    window.hearthstoneTracker = {
+      discoverLogs: vi.fn(async () => []),
+      getState: vi.fn(async () => candidateState),
+      onUpdate: vi.fn(() => () => undefined),
+      getTrackerSettings: vi.fn(async () => settings)
+    } as unknown as typeof window.hearthstoneTracker;
+
+    render(<App />);
+    await waitFor(() => expect(screen.queryByText("正在读取记牌器状态")).not.toBeInTheDocument());
+
+    expect(screen.getByText("还不能确定是哪套")).toBeInTheDocument();
+    expect(screen.getByText("可能是 2 套；继续对局后会自动确认。")).toBeInTheDocument();
+    expect(screen.getByText("套牌仍在确认中")).toBeInTheDocument();
+    expect(screen.queryByText(/牌库剩余 0 张/)).not.toBeInTheDocument();
+    expect(screen.queryByText("上一局套牌")).not.toBeInTheDocument();
+    expect(screen.queryByText("不应出现的旧牌")).not.toBeInTheDocument();
+
+    await openWorkbench();
+    expect(screen.getByLabelText("当前对局概览")).toHaveTextContent("牌库剩余?已抽0");
+  });
 });

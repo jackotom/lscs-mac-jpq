@@ -125,7 +125,7 @@ function extractCardReference(input: string): { cardId?: string; cardName?: stri
   const candidate = (bracketMatch?.[1] ?? trimmed)
     .replace(/^(?:Card(?:ID| Id)?|cardId)\s*[:=]\s*/i, "")
     .trim();
-  const cardId = candidate.match(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/)?.[0];
+  const cardId = candidate.match(/\b[A-Z][A-Z0-9]*_[A-Za-z0-9_]+\b/)?.[0];
 
   if (cardId) {
     return { cardId };

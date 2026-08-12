@@ -310,7 +310,124 @@ describe("overlay view", () => {
     expect(view.deckIdentity).toEqual({
       name: "奥术法师",
       status: "automatic",
-      detail: "自动识别当前对局"
+      detail: "自动识别当前对局",
+      compactName: "奥术法师",
+      compactDetail: "自动识别"
+    });
+  });
+
+  it.each([
+    ["decks-log", "炉石已确认这套牌", "炉石确认"],
+    ["screen", "已从游戏画面找到", "画面找到"],
+    ["inferred", "已根据本局卡牌匹配", "本局匹配"]
+  ] as const)("maps a confirmed %s identity to fixed visible copy", (source, detail, compactDetail) => {
+    const state = createPublicTrackerState({
+      status: "watching",
+      gameActive: true,
+      deckName: "冰霜法",
+      autoMatchedDeckId: "deck-frost",
+      deckIdentity: {
+        status: "confirmed",
+        source,
+        deckId: "deck-frost",
+        observedDistinctCards: source === "inferred" ? 2 : 0,
+        candidateCount: 1,
+        bestScore: source === "inferred" ? 6 : 0,
+        scoreLead: source === "inferred" ? 6 : 0
+      }
+    });
+
+    expect(toOverlayPanelViewModel(state).deckIdentity).toEqual({
+      name: "冰霜法",
+      compactName: "冰霜法",
+      status: "confirmed",
+      source,
+      detail,
+      compactDetail
+    });
+  });
+
+  it.each([
+    ["waiting", 2],
+    ["probable", 1]
+  ] as const)("keeps an unconfirmed %s candidate result from exposing a stale deck", (status, candidateCount) => {
+    const tracking = structuredClone(createEmptyCardTracking("candidate-game"));
+    const friendlyCurrent = tracking.friendly.current as unknown as Record<string, unknown>;
+    friendlyCurrent.deck = {
+      status: "known",
+      knownCount: 1,
+      totalCount: 1,
+      cards: [{ cardKey: "STALE_001", name: "旧牌库卡牌", count: 1 }]
+    };
+    const state = createPublicTrackerState({
+      status: "watching",
+      gameActive: true,
+      deckName: "上一局套牌",
+      autoMatchedDeckId: "stale-deck",
+      deckIdentity: {
+        status,
+        source: "inferred",
+        ...(status === "probable" ? { deckId: "candidate-a" } : {}),
+        observedDistinctCards: 1,
+        candidateCount,
+        bestScore: 3,
+        scoreLead: status === "probable" ? 1 : 0
+      },
+      deck: [{ name: "旧牌库卡牌", count: 1, remaining: 1, drawn: 0, played: 0 }],
+      events: [{ id: "old-draw", kind: "draw", player: "friendly", at: "2026-08-12T10:00:00.000Z", cardName: "旧牌库卡牌" }],
+      summary: { totalCards: 30, remainingCards: 29, drawnCards: 1, opponentPlayedCount: 0 },
+      cardTracking: tracking
+    });
+
+    const view = toOverlayPanelViewModel(state);
+
+    expect(view.deckIdentity).toEqual(candidateCount > 1 ? {
+      name: "还不能确定是哪套",
+      compactName: "还不能确定",
+      status: "candidates",
+      source: "inferred",
+      candidateCount,
+      detail: `可能是 ${candidateCount} 套；继续对局后会自动确认。`,
+      compactDetail: `${candidateCount} 套可能`
+    } : {
+      name: "等待套牌信息",
+      compactName: "等待套牌",
+      status: "waiting",
+      source: "inferred",
+      detail: "继续对局，出现更多卡牌后会自动查找。",
+      compactDetail: "继续对局"
+    });
+    expect(view.summary).toEqual({ totalCards: 0, remainingCards: undefined, drawnCards: 0 });
+    expect(view.cardTracking.current.deck).toMatchObject({ status: "unknown", countLabel: "?", cards: [] });
+    expect(view.remainingDeck).toEqual([]);
+    expect(view.recentDraws).toEqual([]);
+  });
+
+  it.each([
+    [{ constructedScreenMode: "standard" as const }, "停留在选牌页，记牌器会自动查找。", "进入选牌页"],
+    [{ gameActive: true }, "继续对局，出现更多卡牌后会自动查找。", "继续对局"],
+    [{ gameActive: false }, "进入选牌页或开始一局后会自动查找。", "等待开局"]
+  ])("maps a no-evidence waiting identity to its current scene", (scene, detail, compactDetail) => {
+    const state = createPublicTrackerState({
+      status: "watching",
+      ...scene,
+      deckIdentity: {
+        status: "waiting",
+        source: "inferred",
+        observedDistinctCards: 0,
+        candidateCount: 0,
+        bestScore: 0,
+        scoreLead: 0
+      }
+    });
+
+    expect(toOverlayPanelViewModel(state).deckIdentity).toEqual({
+      name: "等待套牌信息",
+      compactName: "等待套牌",
+      status: "waiting",
+      source: "inferred",
+      detail,
+      compactDetail
     });
   });
 
@@ -329,7 +446,9 @@ describe("overlay view", () => {
     expect(view.deckIdentity).toEqual({
       name: "等待识别",
       status: "waiting",
-      detail: "抽到或打出卡牌后自动匹配"
+      detail: "抽到或打出卡牌后自动匹配",
+      compactName: "等待识别",
+      compactDetail: "等待识别"
     });
   });
 
@@ -349,9 +468,11 @@ describe("overlay view", () => {
     expect(view.deckIdentity).toEqual({
       name: "正在识别套牌",
       status: "waiting",
-      detail: "标准套牌识别中"
+      detail: "标准套牌识别中",
+      compactName: "正在识别套牌",
+      compactDetail: "识别中"
     });
-    expect(view.summary).toEqual({ totalCards: 0, remainingCards: 0, drawnCards: 0 });
+    expect(view.summary).toEqual({ totalCards: 0, remainingCards: undefined, drawnCards: 0 });
     expect(view.remainingDeck).toEqual([]);
     expect(view.recentDraws).toEqual([]);
   });
@@ -393,9 +514,11 @@ describe("overlay view", () => {
     expect(view.deckIdentity).toEqual({
       name: "正在识别套牌",
       status: "waiting",
-      detail: "狂野套牌识别中"
+      detail: "狂野套牌识别中",
+      compactName: "正在识别套牌",
+      compactDetail: "识别中"
     });
-    expect(view.summary).toEqual({ totalCards: 0, remainingCards: 0, drawnCards: 0 });
+    expect(view.summary).toEqual({ totalCards: 0, remainingCards: undefined, drawnCards: 0 });
     expect(view.remainingDeck).toEqual([]);
     expect(view.recentDraws).toEqual([]);
   });

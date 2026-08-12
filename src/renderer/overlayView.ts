@@ -41,13 +41,21 @@ export function toOverlayPanelViewModel(
   const maxRecentRows = normalizeLimit(options.maxRecentRows, defaultMaxRecentRows);
   const side = options.side ?? "friendly";
   const showSecretCandidates = options.showSecretCandidates ?? true;
-  const cardTracking = toCardTrackingView(state.cardTracking, side, {
+  const deckIdentity = toOverlayDeckIdentity(state);
+  const publishedIdentityUnconfirmed = isPublishedIdentityUnconfirmed(state);
+  const baseCardTracking = toCardTrackingView(state.cardTracking, side, {
     showSecretCandidates
   });
+  const cardTracking = side === "friendly" && publishedIdentityUnconfirmed
+    ? concealFriendlyDeck(baseCardTracking)
+    : baseCardTracking;
   const recentEvents = [...state.events].reverse();
   const logIssueStatus = toLogIssueStatus(state);
-  const isRecognizingConstructedDeck = Boolean(state.constructedScreenMode && !state.autoMatchedDeckId);
-  const shouldClearTrackedData = Boolean(logIssueStatus || isRecognizingConstructedDeck);
+  const isRecognizingConstructedDeck = Boolean(
+    !state.deckIdentity && state.constructedScreenMode && !state.autoMatchedDeckId
+  );
+  const hasUnknownConstructedDeck = publishedIdentityUnconfirmed || isRecognizingConstructedDeck;
+  const shouldClearTrackedData = Boolean(logIssueStatus || hasUnknownConstructedDeck);
   const isUnknownActiveDeckCount =
     !shouldClearTrackedData &&
     state.gameActive === true &&
@@ -77,14 +85,14 @@ export function toOverlayPanelViewModel(
     cardTracking,
     summary: {
       totalCards: shouldClearTrackedData ? 0 : state.summary.totalCards,
-      remainingCards: isUnknownActiveDeckCount
+      remainingCards: hasUnknownConstructedDeck || isUnknownActiveDeckCount
         ? undefined
         : shouldClearTrackedData
           ? 0
           : state.summary.remainingCards,
       drawnCards: shouldClearTrackedData ? 0 : state.summary.drawnCards
     },
-    deckIdentity: toDeckIdentity(state),
+    deckIdentity,
     remainingDeck: shouldClearTrackedData ? [] : toRemainingDeckItems(state.deck, maxDeckRows),
     recentDraws: shouldClearTrackedData
       ? []
@@ -108,7 +116,7 @@ export function toOverlayPanelViewModel(
   };
 }
 
-function toDeckIdentity(state: PublicTrackerState): OverlayDeckIdentity {
+export function toOverlayDeckIdentity(state: PublicTrackerState): OverlayDeckIdentity {
   if (state.arena?.status && state.arena.status !== "inactive") {
     const confirmedCount = 30 - state.arena.unresolvedCount;
     return {
@@ -120,11 +128,52 @@ function toDeckIdentity(state: PublicTrackerState): OverlayDeckIdentity {
     };
   }
 
-  if (state.autoMatchedDeckId) {
+  if (state.deckIdentity) {
+    const identity = state.deckIdentity;
+    if (identity.status === "confirmed") {
+      const copy = confirmedIdentityCopy(identity.source);
+      const name = state.deckName?.trim() || "已识别套牌";
+      return {
+        name,
+        compactName: name,
+        status: "confirmed",
+        source: identity.source,
+        detail: copy.detail,
+        compactDetail: copy.compactDetail
+      };
+    }
+
+    if (identity.candidateCount > 1) {
+      return {
+        name: "还不能确定是哪套",
+        compactName: "还不能确定",
+        status: "candidates",
+        source: identity.source,
+        candidateCount: identity.candidateCount,
+        detail: `可能是 ${identity.candidateCount} 套；继续对局后会自动确认。`,
+        compactDetail: `${identity.candidateCount} 套可能`
+      };
+    }
+
+    const waitingCopy = waitingIdentityCopy(state);
     return {
-      name: state.deckName?.trim() || "已识别套牌",
+      name: "等待套牌信息",
+      compactName: "等待套牌",
+      status: "waiting",
+      source: identity.source,
+      detail: waitingCopy.detail,
+      compactDetail: waitingCopy.compactDetail
+    };
+  }
+
+  if (state.autoMatchedDeckId) {
+    const name = state.deckName?.trim() || "已识别套牌";
+    return {
+      name,
+      compactName: name,
       status: "automatic",
-      detail: "自动识别当前对局"
+      detail: "自动识别当前对局",
+      compactDetail: "自动识别"
     };
   }
 
@@ -132,14 +181,64 @@ function toDeckIdentity(state: PublicTrackerState): OverlayDeckIdentity {
     return {
       name: "正在识别套牌",
       status: "waiting",
-      detail: state.constructedScreenMode === "standard" ? "标准套牌识别中" : "狂野套牌识别中"
+      detail: state.constructedScreenMode === "standard" ? "标准套牌识别中" : "狂野套牌识别中",
+      compactName: "正在识别套牌",
+      compactDetail: "识别中"
     };
   }
 
   return {
     name: "等待识别",
     status: "waiting",
-    detail: "抽到或打出卡牌后自动匹配"
+    detail: "抽到或打出卡牌后自动匹配",
+    compactName: "等待识别",
+    compactDetail: "等待识别"
+  };
+}
+
+function confirmedIdentityCopy(source: NonNullable<PublicTrackerState["deckIdentity"]>["source"]) {
+  if (source === "decks-log") {
+    return { detail: "炉石已确认这套牌", compactDetail: "炉石确认" };
+  }
+  if (source === "screen") {
+    return { detail: "已从游戏画面找到", compactDetail: "画面找到" };
+  }
+  return { detail: "已根据本局卡牌匹配", compactDetail: "本局匹配" };
+}
+
+function waitingIdentityCopy(state: PublicTrackerState) {
+  if (state.constructedScreenMode) {
+    return { detail: "停留在选牌页，记牌器会自动查找。", compactDetail: "进入选牌页" };
+  }
+  if (state.gameActive) {
+    return { detail: "继续对局，出现更多卡牌后会自动查找。", compactDetail: "继续对局" };
+  }
+  return { detail: "进入选牌页或开始一局后会自动查找。", compactDetail: "等待开局" };
+}
+
+function isPublishedIdentityUnconfirmed(state: PublicTrackerState): boolean {
+  return Boolean(
+    state.deckIdentity &&
+    state.deckIdentity.status !== "confirmed" &&
+    (!state.arena || state.arena.status === "inactive")
+  );
+}
+
+function concealFriendlyDeck(
+  tracking: OverlayPanelViewModel["cardTracking"]
+): OverlayPanelViewModel["cardTracking"] {
+  return {
+    ...tracking,
+    current: {
+      ...tracking.current,
+      deck: {
+        key: "deck",
+        status: "unknown",
+        knownCount: 0,
+        countLabel: "?",
+        cards: []
+      }
+    }
   };
 }
 

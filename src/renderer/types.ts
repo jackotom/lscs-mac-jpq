@@ -4,6 +4,7 @@ import type {
   CardLibraryResult,
   CardPreviewRequest,
   CollectionDeckScanResult,
+  DeckIdentitySource,
   LogCandidate,
   PublicCardZone,
   PublicDeckInsertionTracking,
@@ -193,12 +194,16 @@ export interface OverlayDeckSummary {
   drawnCards: number;
 }
 
-export type OverlayDeckIdentityStatus = "automatic" | "waiting" | "arena";
+export type OverlayDeckIdentityStatus = "confirmed" | "candidates" | "automatic" | "waiting" | "arena";
 
 export interface OverlayDeckIdentity {
   name: string;
+  compactName?: string;
   status: OverlayDeckIdentityStatus;
+  source?: DeckIdentitySource;
+  candidateCount?: number;
   detail: string;
+  compactDetail?: string;
 }
 
 export interface OverlayArenaChoice {

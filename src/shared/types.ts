@@ -356,6 +356,19 @@ export interface PublicCardTracking {
 export const LEGACY_USED_ROWS_KEY: "opponentPlayed" = "opponentPlayed";
 export const LEGACY_USED_COUNT_KEY: "opponentPlayedCount" = "opponentPlayedCount";
 
+export type DeckIdentitySource = "decks-log" | "screen" | "inferred";
+export type DeckIdentityStatus = "confirmed" | "probable" | "waiting";
+
+export interface DeckIdentityEvidence {
+  readonly status: DeckIdentityStatus;
+  readonly source: DeckIdentitySource;
+  readonly deckId?: string;
+  readonly observedDistinctCards: number;
+  readonly candidateCount: number;
+  readonly bestScore: number;
+  readonly scoreLead: number;
+}
+
 export interface PublicTrackerState {
   status: "idle" | "watching" | "paused" | "missing-log" | "error";
   trackerMode?: TrackerMode;
@@ -366,6 +379,7 @@ export interface PublicTrackerState {
   deckCode?: string;
   deckName?: string;
   autoMatchedDeckId?: string;
+  deckIdentity?: DeckIdentityEvidence;
   deck: CardTrackerRow[];
   friendlyHand?: TrackerZoneCard[];
   friendlyOther?: TrackerZoneCard[];

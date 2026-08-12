@@ -2250,6 +2250,15 @@ D 12:00:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
 
     const state = engine.getState();
     expect(state.autoMatchedDeckId).toBe("deck-a");
+    expect(state.deckIdentity).toEqual({
+      status: "confirmed",
+      source: "inferred",
+      deckId: "deck-a",
+      observedDistinctCards: 2,
+      candidateCount: 1,
+      bestScore: 6,
+      scoreLead: 6
+    });
     expect(state.deckName).toBe("自动套牌 A");
     expect(state.summary).toMatchObject({ totalCards: 3, remainingCards: 1, drawnCards: 2 });
     expect(state.deck.find((card) => card.cardId === "TEST_001")).toMatchObject({ remaining: 0, drawn: 1 });
@@ -2281,7 +2290,43 @@ D 12:00:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
     expect(state).toMatchObject({
       deckName: "自动套牌 A",
       autoMatchedDeckId: "deck-a",
+      deckIdentity: {
+        status: "confirmed",
+        source: "decks-log",
+        deckId: "deck-a",
+        observedDistinctCards: 0,
+        candidateCount: 1,
+        bestScore: 0,
+        scoreLead: 0
+      },
       summary: { totalCards: 3, remainingCards: 3, drawnCards: 0 }
+    });
+  });
+
+  it("does not count a card twice when its card id arrives after the name", () => {
+    const engine = new TrackerEngine({
+      collectionDecks: [
+        createCollectionDeck("deck-a", "唯一候选", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 1, cardId: "TEST_002" }
+        ])
+      ]
+    });
+    engine.setFriendlyController(1);
+
+    engine.applyText([
+      "D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME",
+      "D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Singleton id=64 zone=DECK zonePos=1 cardId= player=1] tag=ZONE value=HAND",
+      "D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Singleton id=64 zone=HAND zonePos=1 cardId=TEST_001 player=1] tag=ZONE value=PLAY"
+    ].join("\n"));
+
+    expect(engine.getState()).toMatchObject({
+      autoMatchedDeckId: undefined,
+      deckIdentity: {
+        status: "probable",
+        observedDistinctCards: 1,
+        candidateCount: 1
+      }
     });
   });
 
@@ -2300,9 +2345,42 @@ D 12:00:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
       expect.objectContaining({
         deckName: "偷取牌库",
         autoMatchedDeckId: "preview-deck",
+        deckIdentity: {
+          status: "confirmed",
+          source: "screen",
+          deckId: "preview-deck",
+          observedDistinctCards: 0,
+          candidateCount: 1,
+          bestScore: 0,
+          scoreLead: 0
+        },
         summary: expect.objectContaining({ totalCards: 3, remainingCards: 3 })
       })
     );
+  });
+
+  it("accepts an explicit preview source while keeping old preview calls compatible", () => {
+    const engine = new TrackerEngine({
+      collectionDecks: [
+        createCollectionDeck("preview-deck", "日志套牌", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" }
+        ])
+      ]
+    });
+
+    expect(engine.previewCollectionDeck("preview-deck", { source: "decks-log" })).toBe(true);
+    expect(engine.getState().deckIdentity).toMatchObject({
+      status: "confirmed",
+      source: "decks-log",
+      deckId: "preview-deck"
+    });
+
+    expect(engine.previewCollectionDeck("preview-deck", "screen")).toBe(true);
+    expect(engine.getState().deckIdentity).toMatchObject({
+      status: "confirmed",
+      source: "decks-log",
+      deckId: "preview-deck"
+    });
   });
 
   it("keeps the selected collection deck when the live game begins", () => {
@@ -2402,6 +2480,11 @@ D 12:00:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
     expect(engine.getState()).toMatchObject({
       deckName: "偷取牌库",
       autoMatchedDeckId: "explicit-20",
+      deckIdentity: {
+        status: "confirmed",
+        source: "decks-log",
+        deckId: "explicit-20"
+      },
       summary: { totalCards: 30, remainingCards: 27, drawnCards: 3 }
     });
     expect(engine.getState().deck.find((card) => card.name === "日志缺失的收藏牌")).toMatchObject({
@@ -2509,6 +2592,59 @@ D 12:00:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
     ].join("\n"));
 
     expect(engine.getState().autoMatchedDeckId).toBeUndefined();
+  });
+
+  it("publishes waiting and probable evidence without activating a slightly leading similar deck", () => {
+    const engine = new TrackerEngine({
+      cardDatabase: cardDb,
+      collectionDecks: [
+        createCollectionDeck("deck-a", "精确候选", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 1, cardId: "TEST_002" }
+        ]),
+        createCollectionDeck("deck-b", "相似候选", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 1, cardId: "ALT_TEST_002" }
+        ])
+      ]
+    });
+    engine.setFriendlyController(1);
+
+    engine.applyText([
+      "D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME",
+      "D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=64 zone=DECK zonePos=1 cardId=TEST_001 player=1] tag=ZONE value=HAND"
+    ].join("\n"));
+
+    expect(engine.getState()).toMatchObject({
+      autoMatchedDeckId: undefined,
+      deckIdentity: {
+        status: "waiting",
+        source: "inferred",
+        observedDistinctCards: 1,
+        candidateCount: 2,
+        bestScore: 3,
+        scoreLead: 0
+      }
+    });
+    expect(engine.getState().deckIdentity?.deckId).toBeUndefined();
+
+    engine.applyLine(
+      "D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=65 zone=DECK zonePos=2 cardId=TEST_002 player=1] tag=ZONE value=HAND"
+    );
+
+    expect(engine.getState()).toMatchObject({
+      autoMatchedDeckId: undefined,
+      deckName: undefined,
+      deckIdentity: {
+        status: "probable",
+        source: "inferred",
+        deckId: "deck-a",
+        observedDistinctCards: 2,
+        candidateCount: 2,
+        bestScore: 6,
+        scoreLead: 2
+      }
+    });
   });
 
   it("waits for the friendly controller before classifying controller 1 plays without collection decks", () => {

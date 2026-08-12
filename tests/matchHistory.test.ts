@@ -720,6 +720,52 @@ describe("TrackerService match history", () => {
     expect(disposed).toBe(true);
   });
 
+  it("keeps a completed match when a new session starts before its history write finishes", async () => {
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return { warnings: [] };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "match-history-session-switch-"));
+    tempDirs.push(root);
+    const powerLog = path.join(root, "Power.log");
+    const records: MatchRecord[] = [];
+    let releaseWrite: (() => void) | undefined;
+    const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    const store = {
+      add: vi.fn(async (match: MatchRecord) => {
+        await writeGate;
+        if (!records.some((entry) => entry.id === match.id)) records.unshift(match);
+      }),
+      getHistory: vi.fn(async () => ({
+        status: "ok" as const,
+        matches: records,
+        summary: { total: records.length, wins: records.length, losses: 0, ties: 0, winRate: records.length ? 100 : 0 }
+      }))
+    } as unknown as MatchHistoryStore;
+    await writeFile(powerLog, completedPowerLog("14:30:01", "WON"), "utf8");
+    const service = new TrackerService(
+      undefined,
+      { recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] })) },
+      store
+    );
+
+    await service.start({ logPath: powerLog });
+    expect(store.add).toHaveBeenCalledTimes(1);
+    const nextStart = service.start({ logPath: powerLog });
+    releaseWrite?.();
+    await nextStart;
+    const history = await service.getMatchHistory();
+    await service.dispose();
+
+    expect(store.add).toHaveBeenCalledTimes(1);
+    expect(history).toMatchObject({ status: "ok", summary: { total: 1 }, matches: [{ result: "win" }] });
+  });
+
   it("performs a final Power.log read before dispose when the watcher has not delivered the result", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({

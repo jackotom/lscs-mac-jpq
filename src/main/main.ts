@@ -67,6 +67,7 @@ import { getLadderDeckOverlayBounds } from "./ladderDeckOverlayBounds.js";
 import { assertTrustedIpcEvent, configureSecureNavigation, createSecureWebPreferences } from "./electronSecurity.js";
 import { resolveTrustedDevServerUrl } from "./rendererPage.js";
 import { AppQuitController } from "./appQuitController.js";
+import { AppRunState } from "./appRunState.js";
 import { DEFAULT_TRACKER_SETTINGS, parseTrackerSettings, TrackerSettingsStore } from "./trackerSettingsStore.js";
 import { createCardLibraryErrorResult, listCardLibrary } from "../shared/cardDatabase.js";
 import { DiagnosticLogger } from "./diagnosticLogger.js";
@@ -114,6 +115,7 @@ async function loadRendererPage(
 }
 
 const diagnosticLogger = new DiagnosticLogger(app.getPath("logs"));
+const appRunState = new AppRunState(app.getPath("userData"));
 process.on("uncaughtExceptionMonitor", (error) => {
   diagnosticLogger.error("主进程未捕获异常", error);
 });
@@ -194,6 +196,9 @@ let currentLadderDeckCode: string | undefined;
 const appQuitController = new AppQuitController({
   cleanup: async () => {
     diagnosticLogger.info("开始退出清理");
+    await appRunState.markPhase("stopping").catch((error) => {
+      diagnosticLogger.warn("保存退出阶段失败", error);
+    });
     automaticOverlayController.stop();
     automaticOpponentOverlayController.stop();
     stopOpponentSecretOverlayMonitor();
@@ -209,6 +214,9 @@ const appQuitController = new AppQuitController({
     statusTray?.destroy();
     statusTray = undefined;
     await tracker.dispose();
+    await appRunState.markClean().catch((error) => {
+      diagnosticLogger.warn("保存正常退出状态失败", error);
+    });
     diagnosticLogger.info("退出清理完成");
   },
   quit: () => app.quit(),
@@ -492,6 +500,20 @@ function readQaWindowDimension(value: string | undefined, fallback: number, mini
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
     diagnosticLogger.info("应用启动");
+    const previousRun = await appRunState.begin(app.getVersion()).catch((error) => {
+      diagnosticLogger.warn("运行状态初始化失败，将继续启动", error);
+      return { wasUnclean: false as const };
+    });
+    if (previousRun.wasUnclean) {
+      diagnosticLogger.warn("检测到上次异常退出", {
+        version: previousRun.version,
+        startedAt: previousRun.startedAt,
+        phase: previousRun.phase
+      });
+    }
+    await appRunState.markPhase("startup-health").catch((error) => {
+      diagnosticLogger.warn("保存启动检修阶段失败", error);
+    });
     if (useQaAccessoryActivationPolicy) {
       await hideQaDockAfterLaunch(app.dock);
     }
@@ -568,6 +590,9 @@ if (hasSingleInstanceLock) {
     registerIpc();
     registerAppActivateHandler();
     await createWindow();
+    await appRunState.markPhase("ready").catch((error) => {
+      diagnosticLogger.warn("保存启动完成阶段失败", error);
+    });
     const isQaScreenshotRun = process.env.QA_EXIT_AFTER_SCREENSHOT === "1" && Boolean(
       process.env.QA_SCREENSHOT_PATH || process.env.QA_INSPECT_PATH
     );
@@ -623,6 +648,9 @@ if (hasSingleInstanceLock) {
       startCardPreviewVisibilityMonitor();
       if (trackerSettings.overlay.enabled) ladderDeckOverlayController.start();
       if (trackerSettings.overlay.enabled && trackerSettings.overlay.arenaHeroWinRateRanking) startArenaHeroRankingMonitor();
+      await appRunState.markPhase("monitoring").catch((error) => {
+        diagnosticLogger.warn("保存监听阶段失败", error);
+      });
     }
   }).catch(async (error) => {
     const reason = error instanceof Error && error.message

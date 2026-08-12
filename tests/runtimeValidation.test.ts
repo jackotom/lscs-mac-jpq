@@ -116,6 +116,48 @@ describe("card tracking runtime validation", () => {
     expect(() => parsePublicTrackerState(state)).not.toThrow();
   });
 
+  it("accepts the published deck identity and keeps legacy states compatible", () => {
+    const published = createPublicTrackerState({
+      deckIdentity: {
+        status: "confirmed",
+        source: "decks-log",
+        deckId: "deck-1",
+        observedDistinctCards: 0,
+        candidateCount: 1,
+        bestScore: 0,
+        scoreLead: 0
+      }
+    });
+
+    expect(parsePublicTrackerState(published).deckIdentity).toEqual(published.deckIdentity);
+
+    const legacy = createPublicTrackerState() as unknown as Record<string, unknown>;
+    delete legacy.deckIdentity;
+    expect(() => parsePublicTrackerState(legacy)).not.toThrow();
+  });
+
+  it.each([
+    ["unknown status", { status: "done" }],
+    ["unknown source", { source: "manual" }],
+    ["negative candidate count", { candidateCount: -1 }],
+    ["fractional observation count", { observedDistinctCards: 1.5 }],
+    ["non-finite score", { bestScore: Number.NaN }],
+    ["empty deck id", { deckId: " " }]
+  ])("rejects a malformed deck identity: %s", (_label, override) => {
+    const state = createPublicTrackerState() as unknown as Record<string, unknown>;
+    state.deckIdentity = {
+      status: "waiting",
+      source: "inferred",
+      observedDistinctCards: 0,
+      candidateCount: 0,
+      bestScore: 0,
+      scoreLead: 0,
+      ...override
+    };
+
+    expect(() => parsePublicTrackerState(state)).toThrow(/套牌识别状态数据无效/);
+  });
+
   it("rejects states without required card tracking", () => {
     const state = createPublicTrackerState() as unknown as Record<string, unknown>;
     delete state.cardTracking;

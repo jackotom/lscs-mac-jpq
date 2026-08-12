@@ -29,6 +29,36 @@ function hearthArenaHtml(cardId: string, score: number, classSlug = "hunter", dt
 }
 
 describe("ArenaRatingService", () => {
+  it("falls back to the last valid rating cache with a warning when the primary is corrupt and the network fails", async () => {
+    const { ArenaRatingService } = await import("../src/main/arenaRatingService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "arena-rating-cache-recovery-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "ratings.json");
+    await writeFile(cachePath, '{"source":"broken",', "utf8");
+    await writeFile(
+      `${cachePath}.backup`,
+      JSON.stringify({
+        source: "cached-backup",
+        version: 7,
+        fetchedAt: "2020-01-01T00:00:00.000Z",
+        ratings: { Mage: { TEST_001: 88 } }
+      }),
+      "utf8"
+    );
+    const fetcher = vi.fn(async () => {
+      throw new Error("offline");
+    });
+
+    const result = await new ArenaRatingService(cachePath, fetcher).loadRatings();
+
+    expect(result.table).toMatchObject({ source: "cached-backup", version: 7 });
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("正式缓存损坏"),
+      expect.stringContaining("继续使用本地")
+    ]));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("uses a fresh local rating cache without fetching", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "arena-ratings-"));
     tempDirs.push(root);

@@ -81,6 +81,36 @@ describe("standard tracker overlay", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses compact candidate copy without claiming that the deck is loaded", () => {
+    const { container } = render(<OverlayPanel view={view({
+      deckIdentity: {
+        name: "还不能确定是哪套很长的套牌名称",
+        compactName: "还不能确定",
+        status: "candidates",
+        source: "inferred",
+        candidateCount: 2,
+        detail: "可能是 2 套；继续对局后会自动确认。",
+        compactDetail: "2 套可能"
+      }
+    })} />);
+
+    expect(screen.getByText("还不能确定")).toBeInTheDocument();
+    expect(screen.getByText("2 套可能")).toBeInTheDocument();
+    expect(screen.queryByText("还不能确定是哪套很长的套牌名称")).not.toBeInTheDocument();
+    expect(container.querySelector(".overlay-deck-identity-compact svg")).toHaveAttribute(
+      "class",
+      expect.stringContaining("clock")
+    );
+    expect(container.querySelector(".overlay-deck-name")).toHaveAttribute(
+      "title",
+      expect.stringContaining("识别中")
+    );
+    expect(container.querySelector(".overlay-deck-name")).not.toHaveAttribute(
+      "title",
+      expect.stringContaining("已加载")
+    );
+  });
+
   it("uses lifecycle groups without an old other group", () => {
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
     const { container } = render(<OverlayPanel view={view()} />);
@@ -317,6 +347,71 @@ describe("standard tracker overlay", () => {
     expect(within(arena).getByLabelText("卡组影响 -9.13")).toHaveClass("is-negative");
     expect(within(arena).getAllByText("—")).toHaveLength(2);
     expect(within(arena).getByLabelText("数量 2")).toHaveTextContent("2");
+  });
+
+  it("renders lowercase-token Arena cards as localized rows without leaking internal ids", () => {
+    const state = createPublicTrackerState({
+      status: "watching",
+      trackerMode: "arena",
+      deck: [],
+      events: [],
+      summary: { totalCards: 30, remainingCards: 30, drawnCards: 0, opponentPlayedCount: 0 },
+      arena: {
+        status: "complete",
+        currentChoices: [],
+        picks: [],
+        deck: [
+          {
+            cardId: "TIME_009t1",
+            name: "侏儒光环",
+            count: 15,
+            deckImpact: 0.99,
+            details: {
+              dbfId: 119919,
+              cardId: "TIME_009t1",
+              name: "侏儒光环",
+              manaCost: 4,
+              isSpell: true,
+              relatedCards: []
+            }
+          },
+          {
+            cardId: "TIME_009t2",
+            name: "梅卡托克的光环",
+            count: 15,
+            deckImpact: 0.98,
+            details: {
+              dbfId: 119920,
+              cardId: "TIME_009t2",
+              name: "梅卡托克的光环",
+              manaCost: 5,
+              isSpell: true,
+              relatedCards: []
+            }
+          }
+        ],
+        draftCount: 30,
+        unresolvedCount: 0
+      }
+    });
+    const overlayView = toOverlayPanelViewModel(parsePublicTrackerState(state), { maxDeckRows: 40 });
+
+    render(<OverlayPanel view={overlayView} />);
+
+    const arena = screen.getByLabelText("竞技场卡组影响");
+    const gnomishAuraRow = within(arena).getByText("侏儒光环").closest("li");
+    const mekkatorqueAuraRow = within(arena).getByText("梅卡托克的光环").closest("li");
+    expect(gnomishAuraRow).not.toBeNull();
+    expect(mekkatorqueAuraRow).not.toBeNull();
+    expect(within(gnomishAuraRow as HTMLElement).getByLabelText("费用 4")).toBeInTheDocument();
+    expect(within(gnomishAuraRow as HTMLElement).getByLabelText("选取率 —")).toBeInTheDocument();
+    expect(within(gnomishAuraRow as HTMLElement).getByLabelText("卡组影响 0.99")).toBeInTheDocument();
+    expect(within(mekkatorqueAuraRow as HTMLElement).getByLabelText("费用 5")).toBeInTheDocument();
+    expect(within(mekkatorqueAuraRow as HTMLElement).getByLabelText("选取率 —")).toBeInTheDocument();
+    expect(within(mekkatorqueAuraRow as HTMLElement).getByLabelText("卡组影响 0.98")).toBeInTheDocument();
+    expect(arena).not.toHaveTextContent("TIME_009t1");
+    expect(arena).not.toHaveTextContent("TIME_009t2");
+    expect(within(arena).queryAllByLabelText("费用 ?")).toHaveLength(0);
   });
 
   it("returns the Arena deck list to the top when its first card or quantity changes", () => {

@@ -18,6 +18,8 @@ const trackerZones = new Set(["DECK", "HAND", "PLAY", "GRAVEYARD", "REMOVEDFROMG
 const publicCardZones = ["deck", "hand", "play", "secret", "graveyard", "removed"] as const;
 const publicTrackingStatuses = new Set(["known", "partial", "unknown"]);
 const publicTrackingConfidences = new Set(["confirmed", "inferred"]);
+const deckIdentityStatuses = new Set(["confirmed", "probable", "waiting"]);
+const deckIdentitySources = new Set(["decks-log", "screen", "inferred"]);
 const MAX_PUBLIC_HISTORY_ITEMS = 30;
 const MAX_OUTCOME_TREE_DEPTH = 16;
 const MAX_OUTCOME_TREE_NODES = 512;
@@ -41,10 +43,26 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isOptionalMatchFlow(value.matchFlow)) {
     throw new Error("对局进程数据无效，已拒绝更新界面。");
   }
+  if (value.deckIdentity !== undefined && !isDeckIdentity(value.deckIdentity)) {
+    throw new Error("套牌识别状态数据无效，已拒绝更新界面。");
+  }
   if (!isPublicCardTracking(value.cardTracking)) {
     throw new Error("卡牌生命周期数据无效，已拒绝更新界面。");
   }
   return value as unknown as PublicTrackerState;
+}
+
+function isDeckIdentity(value: unknown): boolean {
+  return isRecord(value) && hasOnlyKeys(value, [
+    "status", "source", "deckId", "observedDistinctCards", "candidateCount", "bestScore", "scoreLead"
+  ]) &&
+    typeof value.status === "string" && deckIdentityStatuses.has(value.status) &&
+    typeof value.source === "string" && deckIdentitySources.has(value.source) &&
+    (value.deckId === undefined || isNonEmptyString(value.deckId)) &&
+    isNonNegativeInteger(value.observedDistinctCards) &&
+    isNonNegativeInteger(value.candidateCount) &&
+    typeof value.bestScore === "number" && Number.isFinite(value.bestScore) && value.bestScore >= 0 &&
+    typeof value.scoreLead === "number" && Number.isFinite(value.scoreLead) && value.scoreLead >= 0;
 }
 
 export function parseTrackerSettings(value: unknown): TrackerSettings {

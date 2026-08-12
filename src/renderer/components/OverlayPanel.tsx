@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Hand, Layers3, Settings, X } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleCheck, Clock3, Hand, Layers3, Settings, X } from "lucide-react";
 import type { OverlayCardItem, OverlayPanelProps, OverlayStatusTone } from "../types";
 import { CardHoverPreview } from "./CardHoverPreview";
 import { CardTrackingGroups } from "./CardTrackingGroups";
@@ -92,11 +92,14 @@ function NormalOverlay({ view }: { view: OverlayPanelProps["view"] }) {
   return (
     <div className="overlay-normal">
       <section className="overlay-deck-summary" aria-label="套牌概览">
-        <span className="overlay-deck-identity-compact">
+        <span className="overlay-deck-identity-compact" role="status" aria-live="polite">
           <strong className="overlay-deck-name" title={`${deckIdentity.name} · ${deckIdentity.status} · ${deckIdentity.detail}`}>
-            {deckIdentity.name}
+            {deckIdentity.compactName}
           </strong>
-          <ChevronDown aria-hidden="true" size={11} />
+          {deckIdentity.tone === "waiting"
+            ? <Clock3 aria-hidden="true" size={11} />
+            : <CircleCheck aria-hidden="true" size={11} />}
+          <small className="overlay-deck-status-compact">{deckIdentity.compactDetail}</small>
         </span>
         <span className="overlay-summary-count" aria-label="手牌总数" title="手牌总数">
           <Hand aria-hidden="true" size={13} />
@@ -314,16 +317,20 @@ type DeckIdentityTone = "recognized" | "manual" | "waiting";
 
 interface ResolvedDeckIdentity {
   name: string;
+  compactName: string;
   status: string;
   detail: string;
+  compactDetail: string;
   tone: DeckIdentityTone;
 }
 
 interface OptionalDeckIdentity {
   name?: unknown;
+  compactName?: unknown;
   status?: unknown;
   label?: unknown;
   detail?: unknown;
+  compactDetail?: unknown;
   isAutoMatched?: unknown;
 }
 
@@ -338,11 +345,14 @@ function resolveDeckIdentity(view: OverlayPanelProps["view"]): ResolvedDeckIdent
   const rawIdentity = extendedView.deckIdentity;
   const identity = rawIdentity && typeof rawIdentity === "object" ? rawIdentity : undefined;
   const name = asText(identity?.name) ?? asText(rawIdentity) ?? asText(extendedView.deckName);
+  const compactName = asText(identity?.compactName) ?? name;
   const status = asText(identity?.status) ?? asText(identity?.label);
   const detail = asText(identity?.detail);
+  const compactDetail = asText(identity?.compactDetail) ?? detail;
   const normalizedStatus = status?.toLocaleLowerCase("zh-CN") ?? "";
-  const isWaiting = !name || /等待|识别中|pending|unmatched|waiting/.test(normalizedStatus);
+  const isWaiting = !name || normalizedStatus === "candidates" || /等待|识别中|pending|unmatched|waiting/.test(normalizedStatus);
   const isAutomatic =
+    normalizedStatus === "confirmed" ||
     Boolean(extendedView.autoMatchedDeckId) ||
     identity?.isAutoMatched === true ||
     /自动|匹配|识别|auto|match|identified/.test(normalizedStatus);
@@ -350,8 +360,10 @@ function resolveDeckIdentity(view: OverlayPanelProps["view"]): ResolvedDeckIdent
   if (isWaiting) {
     return {
       name: name ?? "等待识别",
+      compactName: compactName ?? "等待识别",
       status: "识别中",
       detail: detail ?? "抽到或打出牌后自动匹配",
+      compactDetail: compactDetail ?? "等待识别",
       tone: "waiting"
     };
   }
@@ -359,16 +371,20 @@ function resolveDeckIdentity(view: OverlayPanelProps["view"]): ResolvedDeckIdent
   if (isAutomatic) {
     return {
       name,
+      compactName: compactName ?? name,
       status: "已自动识别",
       detail: detail ?? "已匹配当前对局牌库",
+      compactDetail: compactDetail ?? "已识别",
       tone: "recognized"
     };
   }
 
   return {
     name,
+    compactName: compactName ?? name,
     status: "已加载",
     detail: detail ?? "正在记录当前对局",
+    compactDetail: compactDetail ?? "已加载",
     tone: "manual"
   };
 }

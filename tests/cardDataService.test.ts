@@ -20,6 +20,68 @@ afterEach(async () => {
 });
 
 describe("CardDataService", () => {
+  it("reads the old cache format and upgrades it after a successful refresh", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "card-data-schema-upgrade-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "cards.json");
+    await writeFile(
+      cachePath,
+      JSON.stringify({
+        source: "Blizzard 官方卡牌浏览器",
+        version: "old-version",
+        fetchedAt: "2020-01-01T00:00:00.000Z",
+        cards: [{ dbfId: 1001, name: "旧格式卡", cardId: "TEST_001" }]
+      }),
+      "utf8"
+    );
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://hs.blizzard.cn/cards/") {
+        return responseText('<script src="https://hs.res.netease.com/pc/zt/version/js/cards/index_new.js"></script>');
+      }
+      if (url.includes("hs-cards-api-server")) {
+        return responseJson({ code: 0, data: { total: 1, list: [{ id: 1001, name: "新格式卡" }] } });
+      }
+      return response([{ dbfId: 1001, id: "TEST_001", name: "旧编号卡" }]);
+    });
+
+    const result = await new CardDataService(cachePath, fetchMock as never).loadCardDatabase();
+
+    expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "新格式卡" }));
+    expect(JSON.parse(await readFile(cachePath, "utf8"))).toMatchObject({ schemaVersion: 1, version: expect.stringContaining("index_new.js") });
+    expect(JSON.parse(await readFile(`${cachePath}.backup`, "utf8"))).toMatchObject({ version: "old-version" });
+  });
+
+  it("falls back to the last valid cache with a warning when the primary is corrupt and the network fails", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "card-data-cache-recovery-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "cards.json");
+    await writeFile(cachePath, '{"schemaVersion":1,"cards":', "utf8");
+    await writeFile(
+      `${cachePath}.backup`,
+      JSON.stringify({
+        source: "Blizzard 官方卡牌浏览器",
+        version: "backup-version",
+        fetchedAt: "2020-01-01T00:00:00.000Z",
+        cards: [{ dbfId: 1001, name: "备份卡", cardId: "TEST_001" }]
+      }),
+      "utf8"
+    );
+    const fetchMock = vi.fn(async () => {
+      throw new Error("offline");
+    });
+
+    const result = await new CardDataService(cachePath, fetchMock as never).loadCardDatabase();
+
+    expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "备份卡" }));
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("正式缓存损坏"),
+      expect.stringContaining("继续使用本地")
+    ]));
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it("refreshes an in-memory database when explicitly requested", async () => {
     const { CardDataService } = await import("../src/main/cardDataService.js");
     const root = await mkdtemp(path.join(os.tmpdir(), "card-data-service-refresh-"));

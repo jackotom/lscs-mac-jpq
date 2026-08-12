@@ -17,6 +17,8 @@ import type {
   CardTrackerRow,
   CollectionDeck,
   DeckCard,
+  DeckIdentityEvidence,
+  DeckIdentitySource,
   EntitySnapshot,
   OpponentSecretSlot,
   ParsedLogEvent,
@@ -44,6 +46,7 @@ interface EngineOptions {
 }
 
 interface FriendlyObservation {
+  readonly entityId?: string;
   readonly cardName: string;
   readonly rawCardName?: string;
   readonly cardId?: string;
@@ -52,6 +55,13 @@ interface FriendlyObservation {
   readonly toZone: Zone;
   readonly raw: string;
   applied: boolean;
+}
+
+type ExplicitDeckIdentitySource = Exclude<DeckIdentitySource, "inferred">;
+
+interface CollectionDeckPreviewOptions {
+  readonly expectedSize?: number;
+  readonly source?: ExplicitDeckIdentitySource;
 }
 
 type CardOutcomeSide = "friendly" | "opponent";
@@ -158,6 +168,7 @@ export class TrackerEngine {
   private deckCode: string | undefined;
   private deckName: string | undefined;
   private autoMatchedDeckId: string | undefined;
+  private deckIdentity: DeckIdentityEvidence = createWaitingDeckIdentity();
   private deckRows = new Map<string, CardTrackerRow>();
   private opponentRows = new Map<string, CardTrackerRow>();
   private globalEffects = new Map<string, EntitySnapshot>();
@@ -277,6 +288,7 @@ export class TrackerEngine {
     this.deckCode = imported.rawCode;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows = new Map(createEmptyDeckRows(imported.cards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.opponentRows.clear();
@@ -309,6 +321,9 @@ export class TrackerEngine {
 
   setCollectionDecks(decks: readonly CollectionDeck[]) {
     this.collectionDecks = decks.filter((deck) => deck.cards.length > 0);
+    if (!this.autoMatchedDeckId) {
+      this.resetDeckIdentity();
+    }
     if (this.collectionDecks.length > 0 && this.deckRows.size === 0) {
       this.tryAutoMatchDeck();
     }
@@ -329,10 +344,12 @@ export class TrackerEngine {
     }
 
     if (this.autoMatchedDeckId === deck.id) {
+      this.confirmExplicitDeckIdentity(deck.id, "decks-log");
       return true;
     }
 
     this.activateAutoMatchedDeck(deck);
+    this.confirmExplicitDeckIdentity(deck.id, "decks-log");
     return true;
   }
 
@@ -348,18 +365,33 @@ export class TrackerEngine {
     }
 
     if (this.autoMatchedDeckId === deck.id) {
+      this.confirmExplicitDeckIdentity(deck.id, "decks-log");
       return true;
     }
 
     this.activateExplicitDeck(deck, options);
+    this.confirmExplicitDeckIdentity(deck.id, "decks-log");
     return true;
   }
 
-  previewCollectionDeck(deckId: string, options: { expectedSize?: number } = {}): boolean {
+  previewCollectionDeck(
+    deckId: string,
+    optionsOrSource: CollectionDeckPreviewOptions | ExplicitDeckIdentitySource = {}
+  ): boolean {
     const deck = this.collectionDecks.find((candidate) => candidate.id === deckId);
     if (!deck) {
       return false;
     }
+
+    const options = typeof optionsOrSource === "string"
+      ? { source: optionsOrSource }
+      : optionsOrSource;
+    const requestedSource = options.source ?? "screen";
+    const source = requestedSource === "screen" &&
+      this.deckIdentity.source === "decks-log" &&
+      this.deckIdentity.deckId === deck.id
+      ? "decks-log"
+      : requestedSource;
 
     const deckSize = deck.cards.reduce((total, card) => total + card.count, 0);
     const missingCards = options.expectedSize && options.expectedSize > deckSize
@@ -369,6 +401,7 @@ export class TrackerEngine {
     this.deckCode = deck.rawDeckString;
     this.deckName = deck.name ?? "当前套牌";
     this.autoMatchedDeckId = deck.id;
+    this.confirmExplicitDeckIdentity(deck.id, source);
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.usingUnmatchedDeckSnapshot = false;
@@ -388,6 +421,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows.clear();
     this.deckRowsByCardId.clear();
     this.usingUnmatchedDeckSnapshot = false;
@@ -409,6 +443,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = "等待精确识别";
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows = new Map([
       [
         deckCardKey(placeholder),
@@ -432,6 +467,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = name;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.unresolvedDrawEntityIds.clear();
@@ -590,6 +626,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = name;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows = nextRows;
     this.rebuildDeckCardIdIndex();
     this.usingUnmatchedDeckSnapshot = false;
@@ -605,6 +642,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows.clear();
     this.deckRowsByCardId.clear();
     this.unresolvedDrawEntityIds.clear();
@@ -648,6 +686,9 @@ export class TrackerEngine {
     this.gameSetupComplete = false;
     this.friendlyDeckSnapshot = undefined;
     this.usingUnmatchedDeckSnapshot = false;
+    if (!this.autoMatchedDeckId) {
+      this.resetDeckIdentity();
+    }
     this.lastGameStartTimestamp = undefined;
     this.addEvent("game-start", "unknown", { cardName: "新对局开始" });
   }
@@ -657,6 +698,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.resetDeckIdentity();
     this.deckRows.clear();
     this.deckRowsByCardId.clear();
     this.opponentRows.clear();
@@ -766,6 +808,7 @@ export class TrackerEngine {
       deckCode: this.deckCode,
       deckName: this.deckName,
       autoMatchedDeckId: this.autoMatchedDeckId,
+      deckIdentity: this.deckIdentity,
       deck: deck.map((row) => this.withCardDetails(row, true)),
       friendlyHand,
       friendlyOther,
@@ -1127,6 +1170,7 @@ export class TrackerEngine {
       this.isFriendlyController(controller)
     ) {
       const observation = this.observeFriendlyCard({
+        entityId: event.entityId,
         cardName,
         rawCardName: event.cardName ?? existing?.name,
         cardId,
@@ -1203,6 +1247,7 @@ export class TrackerEngine {
     if (event.toZone === "PLAY") {
       if (!deckRow && this.deckRows.size === 0 && this.gameActive && this.isFriendlyController(controller)) {
         const observation = this.observeFriendlyCard({
+          entityId: event.entityId,
           cardName,
           rawCardName: event.cardName ?? existing?.name,
           cardId,
@@ -1459,22 +1504,48 @@ export class TrackerEngine {
       return;
     }
 
+    const matchingObservations = collapseFriendlyObservations(this.friendlyObservations);
     const matches = this.collectionDecks
       .filter((deck) => this.matchesFriendlyDeckSnapshot(deck))
-      .map((deck) => ({ deck, score: scoreCollectionDeck(deck, this.friendlyObservations) }))
+      .map((deck) => ({ deck, score: scoreCollectionDeck(deck, matchingObservations) }))
       .filter((match) => match.score > 0)
       .sort((left, right) => right.score - left.score);
 
-    if (matches.length === 0) {
+    const observedDistinctCards = new Set(matchingObservations.map((observation) => observationKey(observation))).size;
+    const best = matches[0];
+    const second = matches[1];
+    const scoreLead = best ? best.score - (second?.score ?? 0) : 0;
+
+    if (!best) {
+      this.deckIdentity = {
+        status: "waiting",
+        source: "inferred",
+        observedDistinctCards,
+        candidateCount: 0,
+        bestScore: 0,
+        scoreLead: 0
+      };
       return;
     }
 
-    const observedDistinctCards = new Set(this.friendlyObservations.map((observation) => observationKey(observation))).size;
-    const best = matches[0];
-    const second = matches[1];
-    const isConfident = observedDistinctCards >= 2 && (!second || best.score > second.score);
+    const isUniqueCandidate = matches.length === 1;
+    const hasStrictLeader = scoreLead > 0;
+    const status = isUniqueCandidate && observedDistinctCards >= 2
+      ? "confirmed"
+      : isUniqueCandidate || hasStrictLeader
+        ? "probable"
+        : "waiting";
+    this.deckIdentity = {
+      status,
+      source: "inferred",
+      ...(status === "waiting" ? {} : { deckId: best.deck.id }),
+      observedDistinctCards,
+      candidateCount: matches.length,
+      bestScore: best.score,
+      scoreLead
+    };
 
-    if (!isConfident) {
+    if (status !== "confirmed") {
       return;
     }
 
@@ -1509,6 +1580,24 @@ export class TrackerEngine {
     this.error = undefined;
     this.addEvent("info", "friendly", { cardName: `已读取当前套牌：${this.deckName}` });
     this.applyPendingFriendlyObservations();
+  }
+
+  private confirmExplicitDeckIdentity(deckId: string, source: ExplicitDeckIdentitySource) {
+    this.deckIdentity = {
+      status: "confirmed",
+      source,
+      deckId,
+      observedDistinctCards: new Set(
+        collapseFriendlyObservations(this.friendlyObservations).map((observation) => observationKey(observation))
+      ).size,
+      candidateCount: 1,
+      bestScore: 0,
+      scoreLead: 0
+    };
+  }
+
+  private resetDeckIdentity() {
+    this.deckIdentity = createWaitingDeckIdentity();
   }
 
   private applyPendingFriendlyObservations() {
@@ -3149,7 +3238,7 @@ function scoreCollectionDeck(deck: CollectionDeck, observations: readonly Friend
     }
 
     observedCounts.set(key, nextObservedCount);
-    score += observation.cardId ? 3 : 1;
+    score += key.startsWith("id:") ? 3 : 1;
   }
 
   return score;
@@ -3179,6 +3268,33 @@ function observationKeys(observation: FriendlyObservation) {
 
 function observationKey(observation: FriendlyObservation) {
   return observation.cardId ? `id:${normalizeCardId(observation.cardId)}` : `name:${normalizeCardKey(observation.cardName)}`;
+}
+
+function collapseFriendlyObservations(observations: readonly FriendlyObservation[]): FriendlyObservation[] {
+  const withoutEntity: FriendlyObservation[] = [];
+  const byEntity = new Map<string, FriendlyObservation>();
+  for (const observation of observations) {
+    if (observation.entityId === undefined) {
+      withoutEntity.push(observation);
+      continue;
+    }
+    const previous = byEntity.get(observation.entityId);
+    if (!previous || observation.cardId || !previous.cardId) {
+      byEntity.set(observation.entityId, observation);
+    }
+  }
+  return [...withoutEntity, ...byEntity.values()];
+}
+
+function createWaitingDeckIdentity(): DeckIdentityEvidence {
+  return {
+    status: "waiting",
+    source: "inferred",
+    observedDistinctCards: 0,
+    candidateCount: 0,
+    bestScore: 0,
+    scoreLead: 0
+  };
 }
 
 function observationToEventPayload(observation: FriendlyObservation): Partial<TrackerEvent> {

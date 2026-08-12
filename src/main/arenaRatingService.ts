@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
+import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 import type {
   ArenaRatingTable,
   FirestoneCardRating,
@@ -59,8 +60,10 @@ export class ArenaRatingService {
   private readonly fetcher: typeof fetch;
   private cachedTable: ArenaRatingTable | undefined;
   private cachedTableLoadedAt = 0;
+  private cachedTableCacheMtimeMs: number | undefined;
   private baseRefreshPromise: Promise<void> | undefined;
   private baseRefreshWarning: string | undefined;
+  private baseRefreshRetryAfter = 0;
   private readonly firestoneClassLoadedAt = new Map<string, number>();
   private readonly firestoneClassRefreshPromises = new Map<string, Promise<ArenaRatingLoadResult>>();
   private readonly firestoneClassRefreshWarnings = new Map<string, string>();
@@ -130,7 +133,9 @@ export class ArenaRatingService {
     }
 
     if (this.cachedTable) {
-      this.startBaseRefresh(this.cachedTable);
+      if (Date.now() >= this.baseRefreshRetryAfter) {
+        this.startBaseRefresh(this.cachedTable);
+      }
       return {
         table: this.cachedTable,
         warnings: [
@@ -140,38 +145,43 @@ export class ArenaRatingService {
       };
     }
 
-    const cached = await this.readCache();
+    const cachedResult = await this.readCache();
+    const cached = cachedResult.table;
+    const cacheWarnings = cachedResult.warning ? [cachedResult.warning] : [];
     if (cached) {
       this.cachedTable = cached;
+      this.cachedTableCacheMtimeMs = cachedResult.mtimeMs;
       if (!cached.firestone || !hasFirestoneDraftStats(cached.firestone) || !hasHearthArenaWebStats(cached.hearthArenaWeb)) {
         this.cachedTableLoadedAt = 0;
-        return this.refresh(cached);
+        return this.refresh(cached, cacheWarnings, cachedResult.mtimeMs);
       }
-      if (await this.isStale()) {
+      if (await this.isStale(cachedResult.mtimeMs)) {
         this.cachedTableLoadedAt = 0;
         this.startBaseRefresh(cached);
         return {
           table: cached,
-          warnings: [`竞技场评分缓存已过期，正在后台更新；继续使用本地 v${cached.version}`]
+          warnings: [...cacheWarnings, `竞技场评分缓存已过期，正在后台更新；继续使用本地 v${cached.version}`]
         };
       }
       this.cachedTableLoadedAt = Date.now();
-      return { table: cached, warnings: [] };
+      return { table: cached, warnings: cacheWarnings };
     }
 
-    return this.refresh(undefined);
+    return this.refresh(undefined, cacheWarnings);
   }
 
   private startBaseRefresh(cached: ArenaRatingTable): void {
     if (this.baseRefreshPromise) {
       return;
     }
-    const promise = this.refresh(cached)
+    const promise = this.refresh(cached, [], this.cachedTableCacheMtimeMs)
       .then((result) => {
         this.baseRefreshWarning = result.warnings[0];
+        this.baseRefreshRetryAfter = result.warnings.length > 0 ? Date.now() + FETCH_RETRY_DELAY_MS : 0;
       })
       .catch((error) => {
         this.baseRefreshWarning = `竞技场评分更新失败，继续使用本地 v${cached.version}：${formatError(error)}`;
+        this.baseRefreshRetryAfter = Date.now() + FETCH_RETRY_DELAY_MS;
       })
       .finally(() => {
         if (this.baseRefreshPromise === promise) {
@@ -287,11 +297,15 @@ export class ArenaRatingService {
     }
   }
 
-  private async refresh(cached: ArenaRatingTable | undefined): Promise<ArenaRatingLoadResult> {
-    const warnings: string[] = [];
+  private async refresh(
+    cached: ArenaRatingTable | undefined,
+    initialWarnings: readonly string[] = [],
+    cacheMtimeMs = this.cachedTableCacheMtimeMs
+  ): Promise<ArenaRatingLoadResult> {
+    const warnings: string[] = [...initialWarnings];
 
     try {
-      const cacheIsStale = !cached || (await this.isStale());
+      const cacheIsStale = !cached || (await this.isStale(cacheMtimeMs));
       const versionPayload = await this.fetchJson(VERSION_URL);
       const version = parseVersion(versionPayload);
       const firestoneVersion = await this.fetchFirestoneVersion().catch((error) => {
@@ -366,32 +380,44 @@ export class ArenaRatingService {
         firestoneClasses: this.cachedTable?.firestoneClasses ?? cached?.firestoneClasses
       };
       const cachePath = this.getCachePath();
-      await fs.mkdir(path.dirname(cachePath), { recursive: true });
-      await fs.writeFile(cachePath, JSON.stringify(table), "utf8");
+      await writeValidatedJsonCache(cachePath, table, parseCachedTable);
       this.cachedTable = table;
       this.cachedTableLoadedAt = Date.now();
+      this.cachedTableCacheMtimeMs = Date.now();
+      const refreshWarning = warnings.slice(initialWarnings.length)[0];
+      this.baseRefreshWarning = refreshWarning;
+      this.baseRefreshRetryAfter = refreshWarning ? Date.now() + FETCH_RETRY_DELAY_MS : 0;
       return { table, warnings };
     } catch (error) {
       if (cached) {
         const table = preserveFirestoneClasses(cached, this.cachedTable);
+        const refreshWarning = `竞技场评分更新失败，继续使用本地 v${cached.version}：${formatError(error)}`;
         this.cachedTable = table;
         this.cachedTableLoadedAt = 0;
-        return { table, warnings: [`竞技场评分更新失败，继续使用本地 v${cached.version}：${formatError(error)}`] };
+        this.baseRefreshWarning = refreshWarning;
+        this.baseRefreshRetryAfter = Date.now() + FETCH_RETRY_DELAY_MS;
+        return {
+          table,
+          warnings: [...warnings, refreshWarning]
+        };
       }
-      return { warnings: [`竞技场评分读取失败：${formatError(error)}`] };
+      return { warnings: [...warnings, `竞技场评分读取失败：${formatError(error)}`] };
     }
   }
 
-  private async readCache(): Promise<ArenaRatingTable | undefined> {
-    try {
-      const raw = JSON.parse(await fs.readFile(this.getCachePath(), "utf8")) as unknown;
-      return parseCachedTable(raw);
-    } catch {
-      return undefined;
-    }
+  private async readCache(): Promise<{
+    readonly table?: ArenaRatingTable;
+    readonly warning?: string;
+    readonly mtimeMs?: number;
+  }> {
+    const cache = await readValidatedJsonCache(this.getCachePath(), parseCachedTable, "竞技场评分");
+    return { table: cache.value, warning: cache.warning, mtimeMs: cache.mtimeMs };
   }
 
-  private async isStale() {
+  private async isStale(mtimeMs = this.cachedTableCacheMtimeMs) {
+    if (mtimeMs !== undefined) {
+      return Date.now() - mtimeMs > CACHE_MAX_AGE_MS;
+    }
     try {
       const stat = await fs.stat(this.getCachePath());
       return Date.now() - stat.mtimeMs > CACHE_MAX_AGE_MS;
