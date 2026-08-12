@@ -1,9 +1,71 @@
+@import "./smartCounterOverlayStyles.css";
+@import "./secretOverlayStyles.css";
+
 html.board-attack-overlay-document,
 html.board-attack-overlay-document body,
 html.board-attack-overlay-document #root {
   margin: 0;
   overflow: hidden;
   background: transparent;
+}
+
+html.single-attack-overlay-document,
+html.single-attack-overlay-document body,
+html.single-attack-overlay-document #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.single-attack-overlay {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+  user-select: none;
+}
+
+.single-attack-counter {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  box-sizing: border-box;
+  place-items: center;
+  padding: 0;
+  overflow: visible;
+  border: 2px solid rgba(181, 199, 230, 0.92);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(15, 28, 73, 0.96);
+  box-shadow:
+    inset 0 0 0 2px rgba(36, 63, 129, 0.9),
+    inset 0 -5px 9px rgba(1, 6, 24, 0.58),
+    0 1px 4px rgba(0, 0, 0, 0.82);
+}
+
+.single-attack-counter .board-attack-counter-icon {
+  top: 5px;
+  width: 18px;
+  height: 16px;
+  color: #dbe8ff;
+}
+
+.single-attack-counter .board-attack-counter-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+
+.single-attack-counter .board-attack-counter-value {
+  align-self: end;
+  margin-bottom: 5px;
+  font-size: 17px;
 }
 
 .board-attack-overlay-canvas {
@@ -26,12 +88,7 @@ html.board-attack-overlay-document #root {
   border: 1px solid rgba(156, 177, 230, 0.86);
   border-radius: 50%;
   color: #e8efff;
-  background: radial-gradient(
-    circle at 40% 30%,
-    rgba(67, 78, 166, 0.98) 0%,
-    rgba(16, 27, 78, 0.98) 58%,
-    rgba(5, 10, 34, 0.98) 100%
-  );
+  background: rgba(16, 27, 78, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(231, 238, 255, 0.34),
     inset 0 -4px 8px rgba(2, 5, 24, 0.58),

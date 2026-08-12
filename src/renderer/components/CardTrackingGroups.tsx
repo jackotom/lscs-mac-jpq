@@ -49,10 +49,12 @@ const labels: Record<TrackingGroupKey, string> = {
 export function CardTrackingGroups({
   view,
   opponent = false,
+  hideSecret = false,
   unknownDeck
 }: {
   readonly view: OverlayCardTrackingView;
   readonly opponent?: boolean;
+  readonly hideSecret?: boolean;
   readonly unknownDeck?: {
     readonly label: "待识别" | "识别中" | "不可用";
     readonly emptyLabel: string;
@@ -169,7 +171,9 @@ export function CardTrackingGroups({
     });
   };
 
-  const visibleKeys: readonly TrackingGroupKey[] = page === "current" ? currentKeys : historyKeys;
+  const visibleKeys: readonly TrackingGroupKey[] = page === "current"
+    ? (hideSecret ? currentKeys.filter((key) => key !== "secret") : currentKeys)
+    : historyKeys;
 
   return (
     <div

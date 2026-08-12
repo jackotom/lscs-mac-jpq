@@ -25,6 +25,7 @@ const settings: TrackerSettings = {
     showFriendlyAttack: true,
     showOpponentAttack: true,
     secretPrediction: true,
+    smartCardCounters: true,
     position: "right",
     offsetX: 20,
     offsetY: -10,

@@ -68,10 +68,27 @@ export function TrackerThemeBridge() {
 }
 
 const rootElement = document.getElementById("root");
-const isBoardAttackOverlay = new URLSearchParams(window.location.search).get("board-attack-overlay") === "1";
+const overlaySearchParams = new URLSearchParams(window.location.search);
+const isBoardAttackOverlay = overlaySearchParams.get("board-attack-overlay") === "1";
+const isSingleAttackOverlay = overlaySearchParams.get("friendly-attack-overlay") === "1" ||
+  overlaySearchParams.get("opponent-attack-overlay") === "1";
+const isSecretOverlay = overlaySearchParams.get("secret-overlay") === "1";
+const isSmartCounterOverlay = overlaySearchParams.get("smart-counter-overlay") === "1";
 
 if (isBoardAttackOverlay) {
   document.documentElement.classList.add("board-attack-overlay-document");
+}
+
+if (isSingleAttackOverlay) {
+  document.documentElement.classList.add("single-attack-overlay-document");
+}
+
+if (isSecretOverlay) {
+  document.documentElement.classList.add("secret-overlay-document");
+}
+
+if (isSmartCounterOverlay) {
+  document.documentElement.classList.add("smart-counter-overlay-document");
 }
 
 if (rootElement) {

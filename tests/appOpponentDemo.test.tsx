@@ -12,11 +12,8 @@ describe("opponent overlay QA demo", () => {
 
     render(<App />);
 
-    expect(screen.getByRole("region", { name: "奥秘 1 候选" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "奥秘 2 候选" })).toBeInTheDocument();
-    expect(screen.getByText("法术反制")).toBeInTheDocument();
-    expect(screen.getByText("寒冰护体").closest("li")).toHaveClass("secret-candidate-excluded");
-    expect(screen.getByText("攻击英雄未触发")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /奥秘 \d+ 候选/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("法术反制")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "对方公开计数" })).toBeInTheDocument();
     expect(screen.getByLabelText("对方下次疲劳伤害 3")).toBeInTheDocument();
     expect(screen.getByLabelText("对方尸体 4")).toBeInTheDocument();

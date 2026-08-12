@@ -23,7 +23,14 @@ function getPreloadCapability(search: string): PreloadCapability {
   if (params.get("card-preview") === "1") return "card-preview";
   if (params.get("ladder-deck-overlay") === "1") return "ladder-deck";
   if (params.get("arena-hero-ranking-overlay") === "1") return "arena-hero-ranking";
-  if (params.get("board-attack-overlay") === "1" || params.get("arena-choice-overlay") === "1") return "state-display";
+  if (
+    params.get("board-attack-overlay") === "1" ||
+    params.get("arena-choice-overlay") === "1" ||
+    params.get("friendly-attack-overlay") === "1" ||
+    params.get("opponent-attack-overlay") === "1" ||
+    params.get("secret-overlay") === "1" ||
+    params.get("smart-counter-overlay") === "1"
+  ) return "state-display";
   if (params.get("opponent-overlay") === "1") return "opponent-overlay";
   if (params.get("overlay") === "1") return "tracker-overlay";
   return "main";
@@ -35,14 +42,6 @@ const stateDisplayApi = {
     const listener = (_event: Electron.IpcRendererEvent, state: PublicTrackerState) => callback(state);
     ipcRenderer.on("tracker:update", listener);
     return () => ipcRenderer.removeListener("tracker:update", listener);
-  }
-};
-
-const opponentSecretPredictionApi = {
-  onOpponentSecretPredictionChange: (callback: (enabled: boolean) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, enabled: boolean) => callback(enabled);
-    ipcRenderer.on("tracker:secret-prediction:update", listener);
-    return () => ipcRenderer.removeListener("tracker:secret-prediction:update", listener);
   }
 };
 
@@ -172,7 +171,6 @@ const api = capability === "state-display"
           ...stateDisplayApi,
           ...settingsReaderApi,
           ...cardPreviewSourceApi,
-          ...opponentSecretPredictionApi,
           openSettings: mainApi.openSettings,
           getOpponentOverlayCollapsed: mainApi.getOpponentOverlayCollapsed,
           setOpponentOverlayCollapsed: mainApi.setOpponentOverlayCollapsed,

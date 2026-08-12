@@ -56,20 +56,24 @@ describe("transient overlay window lifecycle", () => {
     expect(main).toContain("await opponentOverlayBoundsPersistence.flush");
   });
 
-  it("invalidates pending secret updates and rechecks settings after async creation", () => {
-    expect(main).toContain("opponentSecretOverlayGeneration");
-    expect(main).toMatch(
-      /async function showOpponentOverlayInactive\(generation:[\s\S]*?await createOpponentOverlayWindow[\s\S]*?generation !== opponentSecretOverlayGeneration[\s\S]*?!isDeckTrackerEnabled\("opponentDeckTracker"\)[\s\S]*?opponentOverlayWindow !== window/
-    );
+  it("rechecks live secret state before showing the dedicated secret window", () => {
+    const start = main.indexOf("async function refreshBoardAttackOverlayWindow");
+    const end = main.indexOf("async function refreshAuxiliaryOverlayWindow", start);
+    const refreshSource = main.slice(start, end);
+
+    expect(refreshSource).toContain("trackerSettings.overlay.secretPrediction");
+    expect(refreshSource).toContain("state.opponentSecrets?.length");
+    expect(refreshSource).toContain("createSecretOverlayWindow");
+    expect(refreshSource).toContain("releaseSecretOverlayWindow");
   });
 
-  it("updates secret prediction in-place instead of releasing a manually opened opponent window", () => {
-    const start = main.indexOf("previous && previous.overlay.secretPrediction");
+  it("turns off only the dedicated secret window without closing the opponent tracker", () => {
+    const start = main.indexOf("previous.overlay.secretPrediction");
     const settingsSection = main.slice(
       start,
-      main.indexOf("function getConfiguredCardDatabaseLoadOptions", start)
+      main.indexOf("previous.overlay.smartCardCounters", start)
     );
-    expect(settingsSection).toContain('"tracker:secret-prediction:update"');
+    expect(settingsSection).toContain("releaseSecretOverlayWindow");
     expect(settingsSection).not.toContain("releaseOpponentOverlayWindow");
   });
 

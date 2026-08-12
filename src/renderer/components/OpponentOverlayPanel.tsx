@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { Minus, ShieldQuestion } from "lucide-react";
+import { Layers3, Minus } from "lucide-react";
 import type { OpponentOverlayPanelProps, OverlayCardItem, OverlayStatusTone } from "../types";
 import { CollapsibleCardGroup } from "./OverlayPanel";
 import { CardTrackingGroups } from "./CardTrackingGroups";
@@ -16,8 +16,6 @@ export function OpponentOverlayPanel({
   loadError
 }: OpponentOverlayPanelProps) {
   const needsLogRepair = view.status.tone === "offline";
-  const secretCount = view.cardTracking.secretSlots.length;
-
   if (isCollapsed) {
     return (
       <section className={`${className} opponent-overlay-collapsed`} style={style} aria-label="对手记牌器置顶小窗">
@@ -25,10 +23,9 @@ export function OpponentOverlayPanel({
           type="button"
           className="opponent-overlay-restore"
           onClick={() => onCollapsedChange?.(false)}
-          aria-label={`恢复对手小窗，${secretCount} 个奥秘`}
+          aria-label="恢复对手记牌小窗"
         >
-          <ShieldQuestion aria-hidden="true" size={18} />
-          <strong>{secretCount}</strong>
+          <Layers3 aria-hidden="true" size={18} />
         </button>
       </section>
     );
@@ -69,7 +66,6 @@ export function OpponentOverlayPanel({
           <section className="opponent-tracking-summary" aria-label="对手概览">
             <span>牌库 <strong>{view.cardTracking.current.deck.countLabel}</strong></span>
             <span>手牌 <strong>{view.cardTracking.current.hand.countLabel}</strong></span>
-            <span>奥秘 <strong>{view.cardTracking.secretSlots.length}</strong></span>
           </section>
           <PublicMatchCounters side="opponent" counters={view.opponentCounters} />
           {view.opponentGlobalEffects?.length ? (
@@ -80,7 +76,7 @@ export function OpponentOverlayPanel({
               emptyLabel="暂无全局影响"
             />
           ) : null}
-          <CardTrackingGroups view={view.cardTracking} opponent />
+          <CardTrackingGroups view={view.cardTracking} opponent hideSecret />
         </>
       )}
     </section>

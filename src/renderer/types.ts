@@ -39,7 +39,6 @@ export interface HearthstoneTrackerApi {
   getOpponentOverlayCollapsed?: () => Promise<boolean>;
   setOpponentOverlayCollapsed?: (collapsed: boolean) => Promise<boolean>;
   onOpponentOverlayCollapsedChange?: (callback: (collapsed: boolean) => void) => () => void;
-  onOpponentSecretPredictionChange?: (callback: (enabled: boolean) => void) => () => void;
   minimizeMain?: () => Promise<boolean>;
   listCardLibrary?: (query: CardLibraryQuery) => Promise<CardLibraryResult>;
   showCardPreview?: (request: CardPreviewRequest) => Promise<void>;
@@ -253,6 +252,17 @@ export interface OverlaySecretSlot {
 export interface OverlayBoardAttack {
   friendly: number;
   opponent: number;
+}
+
+export interface OverlaySmartCounter {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number;
+  readonly target?: number;
+  readonly side?: "friendly" | "opponent";
+  readonly cardId?: string;
+  readonly imageUrl?: string;
+  readonly details?: CardDetails;
 }
 
 export interface OverlayPublicMatchCounters {

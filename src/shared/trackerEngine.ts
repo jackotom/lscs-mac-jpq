@@ -37,6 +37,7 @@ import type {
 import { SecretTracker } from "./secretTracker.js";
 import { resolveMatchCardRelations } from "./matchCardRelations.js";
 import { MatchFlow } from "./matchFlow.js";
+import { buildSmartCardCounters } from "./smartCounters.js";
 
 interface EngineOptions {
   deckText?: string;
@@ -116,6 +117,7 @@ interface RecordedCardUse {
   readonly sequence: number;
   readonly entityId: string;
   readonly side: CardOutcomeSide;
+  readonly action: "play";
   readonly turn?: number;
   readonly cardId?: string;
   readonly name?: string;
@@ -271,11 +273,7 @@ export class TrackerEngine {
 
   private applyFriendlyController(controller?: number) {
     this.friendlyController = controller;
-    if (controller !== undefined && this.pendingControllerEvents.length > 0) {
-      const pending = this.pendingControllerEvents;
-      this.pendingControllerEvents = [];
-      pending.forEach((event) => this.applyParsedEvent(event, true));
-    }
+    this.flushPendingControllerEvents();
   }
 
   importDeck(deckText: string, cardDatabase?: CardDatabase, cardDatabaseWarnings: readonly string[] = []) {
@@ -823,6 +821,14 @@ export class TrackerEngine {
       opponentSecrets: opponentSecretSlots,
       boardAttack: this.buildBoardAttack(),
       matchCounters: this.buildMatchCounters(),
+      smartCounters: buildSmartCardCounters({
+        uses: this.cardUses,
+        friendlyDeck: this.deckCards,
+        currentTurn: matchFlow?.globalTurn,
+        activeSide: matchFlow?.activeSide,
+        resolveCard: (cardId, name, entityId) => this.resolveCardInfo(cardId, name, entityId),
+        toDetails: (card) => this.cardDatabase ? toCardDetails(this.cardDatabase, card) : undefined
+      }),
       ...(matchFlow ? { matchFlow } : {}),
       events: this.events.slice(-120).reverse(),
       summary,
@@ -833,7 +839,7 @@ export class TrackerEngine {
   }
 
   private applyParsedEvent(event: ParsedLogEvent, replayingPendingControllerEvent = false) {
-    if (this.shouldWaitForFriendlyController(event)) {
+    if (!replayingPendingControllerEvent && this.shouldWaitForFriendlyController(event)) {
       this.pendingControllerEvents.push(event);
       return;
     }
@@ -1017,6 +1023,7 @@ export class TrackerEngine {
       const merged = this.mergeEntity({ id: event.entityId, controller: event.controller });
       if (merged?.id) {
         this.reconcileInsertedDeckEntity(merged.id);
+        this.flushPendingControllerEvents(merged.id);
       }
       return;
     }
@@ -2248,6 +2255,14 @@ export class TrackerEngine {
     };
   }
 
+  private resolveCardInfo(cardId?: string, name?: string, entityId?: string): CardInfo | undefined {
+    const finalEntity = entityId ? this.entities.get(entityId) : undefined;
+    const resolvedCardId = finalEntity?.cardId ?? cardId;
+    const resolvedName = finalEntity?.name ?? name;
+    const byId = resolvedCardId ? this.cardInfoByCardId.get(normalizeCardId(resolvedCardId)) : undefined;
+    return byId ?? (resolvedName ? this.cardInfoByName.get(normalizeCardKey(resolvedName)) : undefined);
+  }
+
   private buildPublicBurnHistory(side: CardOutcomeSide): PublicCardHistoryGroup {
     const records = this.burns.filter((burn) => burn.side === side);
     const items = records.slice(-30).reverse().map((burn) => {
@@ -2484,11 +2499,35 @@ export class TrackerEngine {
   }
 
   private shouldWaitForFriendlyController(event: ParsedLogEvent) {
-    if (this.friendlyController !== undefined || event.type !== "zone-change") {
+    if (event.type === "zone-change") {
+      return this.friendlyController === undefined && this.resolveZoneEventController(event) !== undefined;
+    }
+    if (event.type !== "action-boundary" || event.phase !== "start" || event.action !== "play" || !event.entity?.id) {
       return false;
     }
+    const controller = event.entity.controller ?? this.entities.get(event.entity.id)?.controller;
+    return this.friendlyController === undefined || controller === undefined;
+  }
 
-    return this.resolveZoneEventController(event) !== undefined;
+  private flushPendingControllerEvents(entityId?: string) {
+    if (this.friendlyController === undefined || this.pendingControllerEvents.length === 0) return;
+    const ready: ParsedLogEvent[] = [];
+    const waiting: ParsedLogEvent[] = [];
+    for (const event of this.pendingControllerEvents) {
+      const pendingEntityId = event.type === "action-boundary"
+        ? event.entity?.id
+        : event.type === "zone-change" ? event.entityId : undefined;
+      const controller = event.type === "action-boundary"
+        ? event.entity?.controller ?? (pendingEntityId ? this.entities.get(pendingEntityId)?.controller : undefined)
+        : event.type === "zone-change" ? this.resolveZoneEventController(event) : undefined;
+      if ((entityId === undefined || pendingEntityId === entityId) && controller !== undefined) {
+        ready.push(event);
+      } else {
+        waiting.push(event);
+      }
+    }
+    this.pendingControllerEvents = waiting;
+    ready.forEach((event) => this.applyParsedEvent(event, true));
   }
 
   private resolveZoneEventController(event: ParsedLogEvent) {
@@ -2581,6 +2620,7 @@ export class TrackerEngine {
       sequence,
       entityId,
       side,
+      action: "play",
       ...(turn !== undefined ? { turn } : {}),
       ...(cardId ? { cardId } : {}),
       ...(name ? { name } : {})

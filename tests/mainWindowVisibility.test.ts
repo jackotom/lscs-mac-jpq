@@ -34,6 +34,19 @@ describe("main window launch visibility", () => {
     })).toBe(false);
   });
 
+  it.each([
+    "QA_OPEN_FRIENDLY_ATTACK_OVERLAY",
+    "QA_OPEN_OPPONENT_ATTACK_OVERLAY",
+    "QA_OPEN_SECRET_OVERLAY",
+    "QA_OPEN_SMART_COUNTER_OVERLAY"
+  ])("keeps the main window hidden when QA is capturing %s", (flag) => {
+    expect(shouldShowMainWindowOnLaunch({
+      QA_SCREENSHOT_PATH: "/tmp/auxiliary-overlay.png",
+      QA_EXIT_AFTER_SCREENSHOT: "1",
+      [flag]: "1"
+    })).toBe(false);
+  });
+
   it("keeps the main window hidden when QA is capturing the ladder recommendation overlay", () => {
     expect(shouldShowMainWindowOnLaunch({
       QA_SCREENSHOT_PATH: "/tmp/ladder.png",

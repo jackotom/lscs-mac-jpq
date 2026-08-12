@@ -49,11 +49,12 @@ describe("tracker settings IPC", () => {
     expect(main).toContain("getAnchoredOverlayWindowBounds");
     expect(main).toContain("applyConfiguredOverlayPositions");
     expect(main.match(/applyConfiguredOverlayPositions\(\);/g)).toHaveLength(1);
-    expect(main).toContain('isDeckTrackerEnabled("opponentDeckTracker") && trackerSettings.overlay.secretPrediction');
-    expect(main).toContain("trackerSettings.overlay.showFriendlyAttack || trackerSettings.overlay.showOpponentAttack");
+    expect(main).toContain("trackerSettings.overlay.secretPrediction &&");
+    expect(main).toContain("trackerSettings.overlay.showFriendlyAttack ||");
+    expect(main).toContain("trackerSettings.overlay.smartCardCounters");
     expect(main).toContain('mainWindow.webContents.send("tracker:settings:update", trackerSettings)');
     expect(main).toContain("return isDeckTrackerEnabled(setting)");
-    expect(main).toContain('if (!isDeckTrackerEnabled("opponentDeckTracker")) return;');
+    expect(main).toContain('(state.opponentSecrets?.length ?? 0) > 0');
     expect(main).toContain("trackerSettings.general.minimizeToMenuBar");
     expect(main).toContain("trackerSettings.general.startMinimized");
     expect(main).not.toContain("mainWindow.setAlwaysOnTop");

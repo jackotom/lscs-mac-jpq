@@ -38,17 +38,18 @@ import {
   normalizeOpponentOverlayWindowBounds,
   normalizeOverlayWindowBounds
 } from "./overlayWindowBounds.js";
-import { OpponentSecretOverlayVisibility } from "./opponentSecretOverlayVisibility.js";
 import {
   didOverlayPreviewControlsChange,
   OverlaySettingsPreviewSession,
   shouldAllowOverlayDuringSettingsPreview
 } from "./overlaySettingsPreviewSession.js";
-import { presentOpponentSecretOverlay } from "./opponentSecretOverlayPresenter.js";
 import {
+  type AuxiliaryOverlayKind,
   configureBoardAttackOverlayWindow,
-  getBoardAttackOverlayQuery,
+  getAuxiliaryOverlayBounds,
   getBoardAttackOverlayWindowOptions,
+  getSecretOverlayBounds,
+  getSmartCounterOverlayBounds,
   shouldShowBoardAttackOverlay
 } from "./boardAttackOverlay.js";
 import { registerFriendlyOverlayIpc } from "./friendlyOverlayIpc.js";
@@ -137,7 +138,12 @@ let overlayWindow: BrowserWindow | undefined;
 let overlayWindowCreationPromise: Promise<BrowserWindow> | undefined;
 let opponentOverlayWindow: BrowserWindow | undefined;
 let opponentOverlayWindowCreationPromise: Promise<BrowserWindow> | undefined;
-let boardAttackOverlayWindow: BrowserWindow | undefined;
+let friendlyAttackOverlayWindow: BrowserWindow | undefined;
+let opponentAttackOverlayWindow: BrowserWindow | undefined;
+let secretOverlayWindow: BrowserWindow | undefined;
+const smartCounterOverlayWindows = new Map<string, BrowserWindow>();
+const trustedAuxiliaryWebContents = new Set<Electron.WebContents>();
+const smartCounterOverlayGenerations = new Map<string, symbol>();
 let ladderDeckOverlayWindow: BrowserWindow | undefined;
 let arenaChoiceOverlayWindow: BrowserWindow | undefined;
 let arenaHeroRankingWindow: BrowserWindow | undefined;
@@ -169,10 +175,15 @@ let initialLaunchActivateObserved = false;
 let mainWindowUserActivationAllowedAfterMs = Number.POSITIVE_INFINITY;
 let screenRecordingSettingsOpened = false;
 let lastCaptureDiagnostic: string | undefined;
-let opponentSecretOverlayMonitor: NodeJS.Timeout | undefined;
-let opponentSecretOverlayGeneration = 0;
 let boardAttackOverlayMonitor: NodeJS.Timeout | undefined;
 let boardAttackOverlayRefreshInFlight = false;
+const auxiliaryOverlayGenerations: Record<AuxiliaryOverlayKind, number> = {
+  "friendly-attack": 0,
+  "opponent-attack": 0,
+  secret: 0,
+  "smart-counter": 0
+};
+let cachedHearthstoneDisplay: { readonly id: number; readonly expiresAt: number } | undefined;
 let opponentOverlayWindowState: OpponentOverlayWindowState | undefined;
 let opponentOverlayRestoreCollapsed = false;
 const overlayBoundsPersistence = new WindowBoundsPersistence(
@@ -201,7 +212,6 @@ const appQuitController = new AppQuitController({
     });
     automaticOverlayController.stop();
     automaticOpponentOverlayController.stop();
-    stopOpponentSecretOverlayMonitor();
     stopBoardAttackOverlayMonitor();
     await releaseOverlayWindow();
     stopArenaChoiceOverlayMonitor();
@@ -241,7 +251,6 @@ let overlaySettingsPreviewWindows = {
 };
 const cardPreviewVisibilityGate = new CardPreviewVisibilityGate();
 const cardPreviewPinAccelerator = "Alt+Q";
-const opponentSecretOverlayVisibility = new OpponentSecretOverlayVisibility();
 
 const ladderDeckOverlayController = new LadderDeckOverlayController({
   getState: () => tracker.getState(),
@@ -484,6 +493,10 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
     process.env.QA_OPEN_ARENA_CHOICE_OVERLAY !== "1"
     && process.env.QA_OPEN_LADDER_DECK_OVERLAY !== "1"
     && process.env.QA_OPEN_BOARD_ATTACK_OVERLAY !== "1"
+    && process.env.QA_OPEN_FRIENDLY_ATTACK_OVERLAY !== "1"
+    && process.env.QA_OPEN_OPPONENT_ATTACK_OVERLAY !== "1"
+    && process.env.QA_OPEN_SECRET_OVERLAY !== "1"
+    && process.env.QA_OPEN_SMART_COUNTER_OVERLAY !== "1"
     && process.env.QA_OPEN_ARENA_HERO_RANKING_OVERLAY !== "1"
     && process.env.QA_OPEN_THREE_WINDOW_LAYOUT !== "1"
   ) {
@@ -620,11 +633,34 @@ if (hasSingleInstanceLock) {
       const mode = process.env.QA_LADDER_MODE === "wild" ? "wild" : "standard";
       const window = await createLadderDeckOverlayWindow({ showWhenReady: true, qaDemo: true, mode });
       await captureQaScreenshotIfRequested(window);
-    } else if (process.env.QA_OPEN_BOARD_ATTACK_OVERLAY === "1") {
-      const window = await createBoardAttackOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+    } else if (
+      process.env.QA_OPEN_BOARD_ATTACK_OVERLAY === "1" ||
+      process.env.QA_OPEN_FRIENDLY_ATTACK_OVERLAY === "1"
+    ) {
+      const window = await createFriendlyAttackOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
       if (!window) {
-        throw new Error("场攻悬浮层渲染验证失败");
+        throw new Error("我方场攻悬浮窗渲染验证失败");
       }
+      window.showInactive();
+      await captureQaScreenshotIfRequested(window);
+    } else if (process.env.QA_OPEN_OPPONENT_ATTACK_OVERLAY === "1") {
+      const window = await createOpponentAttackOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+      if (!window) throw new Error("对手场攻悬浮窗渲染验证失败");
+      window.showInactive();
+      await captureQaScreenshotIfRequested(window);
+    } else if (process.env.QA_OPEN_SECRET_OVERLAY === "1") {
+      const window = await createSecretOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+      if (!window) throw new Error("奥秘预测悬浮窗渲染验证失败");
+      window.showInactive();
+      await captureQaScreenshotIfRequested(window);
+    } else if (process.env.QA_OPEN_SMART_COUNTER_OVERLAY === "1") {
+      const window = await createSmartCounterOverlayWindow(
+        "qa-friendly-dragons",
+        screen.getPrimaryDisplay().bounds,
+        0,
+        { qaDemo: true }
+      );
+      if (!window) throw new Error("智能卡牌计数悬浮窗渲染验证失败");
       window.showInactive();
       await captureQaScreenshotIfRequested(window);
     } else if (process.env.QA_OPEN_ARENA_HERO_RANKING_OVERLAY === "1") {
@@ -976,9 +1012,24 @@ function registerIpc() {
 
 function getTrustedWebContents(): ReadonlySet<Electron.WebContents> {
   return new Set(
-    [mainWindow, overlayWindow, opponentOverlayWindow, boardAttackOverlayWindow, ladderDeckOverlayWindow, arenaChoiceOverlayWindow, arenaHeroRankingWindow, cardPreviewWindow]
-      .filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()))
-      .map((window) => window.webContents)
+    [
+      ...trustedAuxiliaryWebContents,
+      ...[
+      mainWindow,
+      overlayWindow,
+      opponentOverlayWindow,
+      friendlyAttackOverlayWindow,
+      opponentAttackOverlayWindow,
+      secretOverlayWindow,
+      ...smartCounterOverlayWindows.values(),
+      ladderDeckOverlayWindow,
+      arenaChoiceOverlayWindow,
+      arenaHeroRankingWindow,
+      cardPreviewWindow
+      ]
+        .filter((window): window is BrowserWindow => Boolean(window && !window.isDestroyed()))
+        .map((window) => window.webContents)
+    ]
   );
 }
 
@@ -1018,21 +1069,36 @@ async function applyTrackerSettingsEffects(
     applyConfiguredOverlayPositions();
   }
 
-  const showBoardAttack = trackerSettings.overlay.enabled &&
-    (trackerSettings.overlay.showFriendlyAttack || trackerSettings.overlay.showOpponentAttack);
-  const boardConfigurationChanged = previous && (
-    previous.overlay.showFriendlyAttack !== trackerSettings.overlay.showFriendlyAttack ||
-    previous.overlay.showOpponentAttack !== trackerSettings.overlay.showOpponentAttack
-  );
-  if (boardConfigurationChanged) stopBoardAttackOverlayMonitor();
-  if (showBoardAttack) startBoardAttackOverlayMonitor();
-  else stopBoardAttackOverlayMonitor();
-
-  if (isDeckTrackerEnabled("opponentDeckTracker") && trackerSettings.overlay.secretPrediction) {
-    startOpponentSecretOverlayMonitor();
-  } else {
-    stopOpponentSecretOverlayMonitor();
+  if (previous && previous.overlay.showFriendlyAttack !== trackerSettings.overlay.showFriendlyAttack &&
+      !trackerSettings.overlay.showFriendlyAttack) {
+    releaseFriendlyAttackOverlayWindow();
   }
+  if (previous && previous.overlay.showOpponentAttack !== trackerSettings.overlay.showOpponentAttack &&
+      !trackerSettings.overlay.showOpponentAttack) {
+    releaseOpponentAttackOverlayWindow();
+  }
+  if (previous && previous.overlay.secretPrediction !== trackerSettings.overlay.secretPrediction &&
+      !trackerSettings.overlay.secretPrediction) {
+    releaseSecretOverlayWindow();
+  }
+  if (previous && previous.overlay.smartCardCounters !== trackerSettings.overlay.smartCardCounters &&
+      !trackerSettings.overlay.smartCardCounters) {
+    releaseAllSmartCounterOverlayWindows();
+  }
+  if (previous && previous.overlay.hiddenSmartCounterIds !== trackerSettings.overlay.hiddenSmartCounterIds) {
+    const hidden = new Set(trackerSettings.overlay.hiddenSmartCounterIds ?? []);
+    for (const counterId of smartCounterOverlayWindows.keys()) {
+      if (hidden.has(counterId)) releaseSmartCounterOverlayWindow(counterId);
+    }
+  }
+  const showAnyAuxiliaryOverlay = trackerSettings.overlay.enabled && (
+    trackerSettings.overlay.showFriendlyAttack ||
+    trackerSettings.overlay.showOpponentAttack ||
+    trackerSettings.overlay.secretPrediction ||
+    trackerSettings.overlay.smartCardCounters
+  );
+  if (showAnyAuxiliaryOverlay) startBoardAttackOverlayMonitor();
+  else stopBoardAttackOverlayMonitor();
 
   if (!isDeckTrackerEnabled("friendlyDeckTracker")) {
     automaticOverlayController.stop();
@@ -1061,14 +1127,6 @@ async function applyTrackerSettingsEffects(
   } else {
     stopArenaHeroRankingMonitor();
   }
-  if (previous && previous.overlay.secretPrediction !== trackerSettings.overlay.secretPrediction &&
-      opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
-    opponentOverlayWindow.webContents.send(
-      "tracker:secret-prediction:update",
-      trackerSettings.overlay.secretPrediction
-    );
-  }
-
   if (trackerSettings.overlay.enabled) {
     automaticOverlayController.start();
     automaticOpponentOverlayController.start();
@@ -1094,7 +1152,10 @@ function overlayWindows(): BrowserWindow[] {
   return [
     overlayWindow,
     opponentOverlayWindow,
-    boardAttackOverlayWindow,
+    friendlyAttackOverlayWindow,
+    opponentAttackOverlayWindow,
+    secretOverlayWindow,
+    ...smartCounterOverlayWindows.values(),
     ladderDeckOverlayWindow,
     arenaChoiceOverlayWindow,
     arenaHeroRankingWindow,
@@ -1459,7 +1520,6 @@ async function createOpponentOverlayWindowInstance(qaDemo: boolean): Promise<Bro
 
   await loadRendererPage(createdWindow, {
     "opponent-overlay": "1",
-    "show-secret-prediction": trackerSettings.overlay.secretPrediction ? "1" : "0",
     ...(qaDemo ? { "qa-opponent-demo": "1" } : {})
   });
 
@@ -1535,68 +1595,6 @@ function getOpponentOverlayBoundsPath() {
   return path.join(app.getPath("userData"), "opponent-overlay-window-bounds.json");
 }
 
-function startOpponentSecretOverlayMonitor() {
-  if (opponentSecretOverlayMonitor) {
-    return;
-  }
-  const generation = opponentSecretOverlayGeneration;
-  opponentSecretOverlayMonitor = setInterval(() => {
-    const secrets = tracker.getState().opponentSecrets ?? [];
-    if (opponentSecretOverlayVisibility.update(secrets)) {
-      void showOpponentOverlayInactive(generation);
-    }
-  }, 250);
-  opponentSecretOverlayMonitor.unref();
-}
-
-function stopOpponentSecretOverlayMonitor() {
-  opponentSecretOverlayGeneration += 1;
-  if (!opponentSecretOverlayMonitor) {
-    return;
-  }
-  clearInterval(opponentSecretOverlayMonitor);
-  opponentSecretOverlayMonitor = undefined;
-}
-
-async function showOpponentOverlayInactive(generation: number) {
-  if (generation !== opponentSecretOverlayGeneration) return;
-  if (!isDeckTrackerEnabled("opponentDeckTracker")) return;
-  const frontmostAppName = await getFrontmostAppName();
-  if (
-    !isOverlayFrontmostAllowed(frontmostAppName, overlaySettingsPreviewWindows.opponent) &&
-    !isAnyInteractiveOverlayFocused() &&
-    !isAnyOverlayInteractionActive()
-  ) return;
-  const ensureWindow = async (options: { readonly showWhenReady: false }) =>
-    await createOpponentOverlayWindow({
-      ...options,
-      restoreCollapsedWhenReady: false
-    });
-  await presentOpponentSecretOverlay({
-    ensureWindow,
-    isStillValid: (window) => {
-      if (
-        generation !== opponentSecretOverlayGeneration ||
-        !isDeckTrackerEnabled("opponentDeckTracker") ||
-        opponentOverlayWindow !== window ||
-        window.isDestroyed()
-      ) {
-        return false;
-      }
-      return true;
-    },
-    showInactive: showOpponentOverlayWindowInactive
-  });
-}
-
-async function showOpponentOverlayWindowInactive() {
-  if (opponentOverlayRestoreCollapsed && !opponentOverlayWindowState?.isCollapsed()) {
-    await collapseOpponentOverlayWindow();
-    return;
-  }
-  opponentOverlayWindowController.showInactive();
-}
-
 function startBoardAttackOverlayMonitor() {
   if (boardAttackOverlayMonitor) {
     return;
@@ -1613,8 +1611,10 @@ function stopBoardAttackOverlayMonitor() {
     clearInterval(boardAttackOverlayMonitor);
     boardAttackOverlayMonitor = undefined;
   }
-  boardAttackOverlayWindow?.close();
-  boardAttackOverlayWindow = undefined;
+  releaseFriendlyAttackOverlayWindow();
+  releaseOpponentAttackOverlayWindow();
+  releaseSecretOverlayWindow();
+  releaseAllSmartCounterOverlayWindows();
 }
 
 async function refreshBoardAttackOverlayWindow() {
@@ -1623,83 +1623,309 @@ async function refreshBoardAttackOverlayWindow() {
   }
   boardAttackOverlayRefreshInFlight = true;
   try {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
-      releaseTransientWindow(boardAttackOverlayWindow);
+    const hideAll = () => {
+      releaseFriendlyAttackOverlayWindow();
+      releaseOpponentAttackOverlayWindow();
+      releaseSecretOverlayWindow();
+      releaseAllSmartCounterOverlayWindows();
+    };
+    if (!trackerSettings.overlay.enabled || (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused())) {
+      hideAll();
       return;
     }
+    const state = tracker.getState();
     const frontmostAppName = await getFrontmostAppName();
-    if (!shouldShowBoardAttackOverlay(Boolean(tracker.getState().gameActive), frontmostAppName)) {
-      releaseTransientWindow(boardAttackOverlayWindow);
+    if (!shouldShowBoardAttackOverlay(Boolean(state.gameActive), frontmostAppName)) {
+      hideAll();
       return;
     }
 
-    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const window = await createBoardAttackOverlayWindow(display.bounds);
-    if (window && !window.isDestroyed()) {
-      window.setBounds(display.bounds, false);
-      window.showInactive();
-    }
+    const display = await resolveHearthstoneDisplay();
+    await refreshAuxiliaryOverlayWindow(
+      trackerSettings.overlay.showFriendlyAttack,
+      () => createFriendlyAttackOverlayWindow(display.bounds),
+      releaseFriendlyAttackOverlayWindow
+    );
+    await refreshAuxiliaryOverlayWindow(
+      trackerSettings.overlay.showOpponentAttack,
+      () => createOpponentAttackOverlayWindow(display.bounds),
+      releaseOpponentAttackOverlayWindow
+    );
+    await refreshAuxiliaryOverlayWindow(
+      trackerSettings.overlay.secretPrediction && (state.opponentSecrets?.length ?? 0) > 0,
+      () => createSecretOverlayWindow(display.bounds, {
+        possibleCandidateCounts: (state.opponentSecrets ?? []).map((slot) =>
+          slot.candidates.filter((candidate) => candidate.status === "possible").length
+        )
+      }),
+      releaseSecretOverlayWindow
+    );
+    await refreshSmartCounterOverlayWindows(state.smartCounters ?? [], display.bounds);
   } finally {
     boardAttackOverlayRefreshInFlight = false;
   }
 }
 
-async function createBoardAttackOverlayWindow(
-  bounds: { x: number; y: number; width: number; height: number },
-  options: { qaDemo?: boolean } = {}
-) {
-  if (boardAttackOverlayWindow && !boardAttackOverlayWindow.isDestroyed()) {
-    return boardAttackOverlayWindow;
+async function refreshAuxiliaryOverlayWindow(
+  shouldShow: boolean,
+  createWindow: () => Promise<BrowserWindow | undefined>,
+  releaseWindow: () => void
+): Promise<void> {
+  if (!shouldShow) {
+    releaseWindow();
+    return;
   }
-  boardAttackOverlayWindow = new BrowserWindow(
-    getBoardAttackOverlayWindowOptions(bounds, path.join(__dirname, "preload.cjs"))
-  );
-  installQaConsoleErrorListener(boardAttackOverlayWindow);
-  configureSecureNavigation(boardAttackOverlayWindow);
-  configureBoardAttackOverlayWindow(boardAttackOverlayWindow);
-  applyOverlayWindowAppearance();
-  tracker.attachWindow(boardAttackOverlayWindow);
-  boardAttackOverlayWindow.on("closed", () => {
-    boardAttackOverlayWindow = undefined;
-  });
+  const window = await createWindow();
+  if (window && !window.isDestroyed()) window.showInactive();
+}
+
+async function resolveHearthstoneDisplay() {
+  const now = Date.now();
+  if (cachedHearthstoneDisplay && cachedHearthstoneDisplay.expiresAt > now) {
+    const cached = screen.getAllDisplays().find((display) => display.id === cachedHearthstoneDisplay?.id);
+    if (cached) return cached;
+  }
 
   try {
-    await loadRendererPage(
-      boardAttackOverlayWindow,
-      getBoardAttackOverlayQuery(Boolean(options.qaDemo), {
-        showFriendly: trackerSettings.overlay.showFriendlyAttack,
-        showOpponent: trackerSettings.overlay.showOpponentAttack
-      })
-    );
-    const rendererStatus = await boardAttackOverlayWindow.webContents.executeJavaScript(`
-      (() => {
-        const canvas = document.querySelector(".board-attack-overlay-canvas");
-        const icons = document.querySelectorAll(".board-attack-icon");
-        const ready = document.documentElement.dataset.rendererReady === "true";
-        const htmlBackground = getComputedStyle(document.documentElement).backgroundColor;
-        const bodyBackground = getComputedStyle(document.body).backgroundColor;
-        return { ready, hasCanvas: Boolean(canvas), iconCount: icons.length, htmlBackground, bodyBackground };
-      })()
-    `);
-    const expectedIconCount = options.qaDemo
-      ? 2
-      : Number(trackerSettings.overlay.showFriendlyAttack) + Number(trackerSettings.overlay.showOpponentAttack);
-    const rendererReady = rendererStatus.ready
-      && rendererStatus.hasCanvas
-      && rendererStatus.iconCount === expectedIconCount
-      && rendererStatus.htmlBackground === "rgba(0, 0, 0, 0)"
-      && rendererStatus.bodyBackground === "rgba(0, 0, 0, 0)";
-    if (rendererReady) {
-      return boardAttackOverlayWindow;
+    const sources = await desktopCapturer.getSources({
+      types: [...HEARTHSTONE_WINDOW_CAPTURE_TYPES],
+      thumbnailSize: { width: 1, height: 1 },
+      fetchWindowIcons: false
+    });
+    const source = selectHearthstoneWindowCaptureSource(sources);
+    const displayId = Number(source?.display_id);
+    const display = Number.isFinite(displayId)
+      ? screen.getAllDisplays().find((candidate) => candidate.id === displayId)
+      : undefined;
+    if (display) {
+      cachedHearthstoneDisplay = { id: display.id, expiresAt: now + 2_000 };
+      return display;
     }
-    console.error("场攻悬浮层拒绝显示", rendererStatus);
   } catch {
-    // A broken overlay must remain invisible and be recreated on the next check.
+    // Screen capture permission or source lookup can be temporarily unavailable.
   }
-  if (boardAttackOverlayWindow && !boardAttackOverlayWindow.isDestroyed()) {
-    boardAttackOverlayWindow.destroy();
+
+  const fallback = screen.getPrimaryDisplay();
+  cachedHearthstoneDisplay = { id: fallback.id, expiresAt: now + 2_000 };
+  return fallback;
+}
+
+function updateAuxiliaryOverlayBounds(window: BrowserWindow, bounds: { x: number; y: number; width: number; height: number }) {
+  const current = window.getBounds();
+  if (current.x !== bounds.x || current.y !== bounds.y || current.width !== bounds.width || current.height !== bounds.height) {
+    window.setBounds(bounds, false);
   }
-  boardAttackOverlayWindow = undefined;
+}
+
+function beginAuxiliaryOverlayCreation(kind: AuxiliaryOverlayKind): number {
+  return auxiliaryOverlayGenerations[kind];
+}
+
+function cancelAuxiliaryOverlayCreation(kind: AuxiliaryOverlayKind): void {
+  auxiliaryOverlayGenerations[kind] += 1;
+}
+
+function isAuxiliaryOverlayCreationCurrent(kind: AuxiliaryOverlayKind, generation: number): boolean {
+  return auxiliaryOverlayGenerations[kind] === generation;
+}
+
+async function createFriendlyAttackOverlayWindow(
+  displayBounds: { x: number; y: number; width: number; height: number },
+  options: { qaDemo?: boolean } = {}
+) {
+  const bounds = getAuxiliaryOverlayBounds(displayBounds, "friendly-attack");
+  if (friendlyAttackOverlayWindow && !friendlyAttackOverlayWindow.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(friendlyAttackOverlayWindow, bounds);
+    return friendlyAttackOverlayWindow;
+  }
+  const generation = beginAuxiliaryOverlayCreation("friendly-attack");
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    bounds,
+    { "friendly-attack-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
+    ".single-attack-overlay"
+  );
+  if (!isAuxiliaryOverlayCreationCurrent("friendly-attack", generation)) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  friendlyAttackOverlayWindow = createdWindow;
+  createdWindow?.on("closed", () => {
+    if (friendlyAttackOverlayWindow === createdWindow) friendlyAttackOverlayWindow = undefined;
+  });
+  return createdWindow;
+}
+
+function releaseFriendlyAttackOverlayWindow(): void {
+  cancelAuxiliaryOverlayCreation("friendly-attack");
+  friendlyAttackOverlayWindow?.close();
+  friendlyAttackOverlayWindow = undefined;
+}
+
+async function createOpponentAttackOverlayWindow(
+  displayBounds: { x: number; y: number; width: number; height: number },
+  options: { qaDemo?: boolean } = {}
+) {
+  const bounds = getAuxiliaryOverlayBounds(displayBounds, "opponent-attack");
+  if (opponentAttackOverlayWindow && !opponentAttackOverlayWindow.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(opponentAttackOverlayWindow, bounds);
+    return opponentAttackOverlayWindow;
+  }
+  const generation = beginAuxiliaryOverlayCreation("opponent-attack");
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    bounds,
+    { "opponent-attack-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
+    ".single-attack-overlay"
+  );
+  if (!isAuxiliaryOverlayCreationCurrent("opponent-attack", generation)) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  opponentAttackOverlayWindow = createdWindow;
+  createdWindow?.on("closed", () => {
+    if (opponentAttackOverlayWindow === createdWindow) opponentAttackOverlayWindow = undefined;
+  });
+  return createdWindow;
+}
+
+function releaseOpponentAttackOverlayWindow(): void {
+  cancelAuxiliaryOverlayCreation("opponent-attack");
+  opponentAttackOverlayWindow?.close();
+  opponentAttackOverlayWindow = undefined;
+}
+
+async function createSecretOverlayWindow(
+  displayBounds: { x: number; y: number; width: number; height: number },
+  options: { qaDemo?: boolean; possibleCandidateCounts?: readonly number[] } = {}
+) {
+  const bounds = getSecretOverlayBounds(displayBounds, options.possibleCandidateCounts ?? []);
+  if (secretOverlayWindow && !secretOverlayWindow.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(secretOverlayWindow, bounds);
+    return secretOverlayWindow;
+  }
+  const generation = beginAuxiliaryOverlayCreation("secret");
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    bounds,
+    { "secret-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
+    ".secret-overlay"
+  );
+  if (!isAuxiliaryOverlayCreationCurrent("secret", generation)) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  secretOverlayWindow = createdWindow;
+  createdWindow?.on("closed", () => {
+    if (secretOverlayWindow === createdWindow) secretOverlayWindow = undefined;
+  });
+  return createdWindow;
+}
+
+function releaseSecretOverlayWindow(): void {
+  cancelAuxiliaryOverlayCreation("secret");
+  secretOverlayWindow?.close();
+  secretOverlayWindow = undefined;
+}
+
+async function refreshSmartCounterOverlayWindows(
+  counters: readonly { readonly id: string }[],
+  displayBounds: { x: number; y: number; width: number; height: number }
+): Promise<void> {
+  const hidden = new Set(trackerSettings.overlay.hiddenSmartCounterIds ?? []);
+  const visibleCounters = trackerSettings.overlay.smartCardCounters
+    ? counters.filter((counter) => !hidden.has(counter.id))
+    : [];
+  const visibleIds = new Set(visibleCounters.map((counter) => counter.id));
+
+  for (const counterId of [...smartCounterOverlayWindows.keys()]) {
+    if (!visibleIds.has(counterId)) releaseSmartCounterOverlayWindow(counterId);
+  }
+
+  await Promise.all(visibleCounters.map(async (counter, index) => {
+    const window = await createSmartCounterOverlayWindow(counter.id, displayBounds, index);
+    if (window && !window.isDestroyed()) window.showInactive();
+  }));
+}
+
+async function createSmartCounterOverlayWindow(
+  counterId: string,
+  displayBounds: { x: number; y: number; width: number; height: number },
+  index = 0,
+  options: { qaDemo?: boolean } = {}
+) {
+  const bounds = getSmartCounterOverlayBounds(displayBounds, index);
+  const existing = smartCounterOverlayWindows.get(counterId);
+  if (existing && !existing.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(existing, bounds);
+    return existing;
+  }
+
+  const generation = Symbol(counterId);
+  smartCounterOverlayGenerations.set(counterId, generation);
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    bounds,
+    {
+      "smart-counter-overlay": "1",
+      "smart-counter-id": counterId,
+      ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {})
+    },
+    ".smart-counter-overlay"
+  );
+  if (smartCounterOverlayGenerations.get(counterId) !== generation) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  smartCounterOverlayGenerations.delete(counterId);
+
+  if (!createdWindow) return undefined;
+  smartCounterOverlayWindows.set(counterId, createdWindow);
+  createdWindow.on("closed", () => {
+    if (smartCounterOverlayWindows.get(counterId) === createdWindow) {
+      smartCounterOverlayWindows.delete(counterId);
+    }
+  });
+  return createdWindow;
+}
+
+function releaseSmartCounterOverlayWindow(counterId: string): void {
+  smartCounterOverlayGenerations.delete(counterId);
+  const window = smartCounterOverlayWindows.get(counterId);
+  if (window && !window.isDestroyed()) window.close();
+  smartCounterOverlayWindows.delete(counterId);
+}
+
+function releaseAllSmartCounterOverlayWindows(): void {
+  const counterIds = new Set([
+    ...smartCounterOverlayGenerations.keys(),
+    ...smartCounterOverlayWindows.keys()
+  ]);
+  for (const counterId of counterIds) releaseSmartCounterOverlayWindow(counterId);
+}
+
+async function createAuxiliaryOverlayWindow(
+  bounds: { x: number; y: number; width: number; height: number },
+  query: Readonly<Record<string, string>>,
+  rootSelector: string
+): Promise<BrowserWindow | undefined> {
+  const window = new BrowserWindow(getBoardAttackOverlayWindowOptions(bounds, path.join(__dirname, "preload.cjs")));
+  trustedAuxiliaryWebContents.add(window.webContents);
+  window.webContents.once("destroyed", () => {
+    trustedAuxiliaryWebContents.delete(window.webContents);
+  });
+  installQaConsoleErrorListener(window);
+  configureSecureNavigation(window);
+  configureBoardAttackOverlayWindow(window);
+  window.setOpacity(trackerSettings.overlay.opacity / 100);
+  configureOverlayWorkspaceWindow(window, !trackerSettings.overlay.hideInFullscreen);
+  tracker.attachWindow(window);
+  try {
+    await loadRendererPage(window, query);
+    const rendererReady = await window.webContents.executeJavaScript(`
+      (() => document.documentElement.dataset.rendererReady === "true" && Boolean(document.querySelector(${JSON.stringify(rootSelector)})))()
+    `);
+    if (rendererReady) return window;
+  } catch {
+    // A broken auxiliary overlay stays invisible and is recreated by the next monitor tick.
+  }
+  if (!window.isDestroyed()) window.destroy();
   return undefined;
 }
 

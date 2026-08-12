@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.4.1");
+    expect(packageJson.version).toBe("0.4.2");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');
@@ -149,6 +149,13 @@ describe("release verification entrypoint", () => {
     expect(mainSource).toContain('"qa-arena-hero-ranking": "1"');
     expect(mainSource).toContain("qaMainWindowVisible");
     expect(script).toContain("report.qaMainWindowVisible !== false");
+  });
+
+  it("expects the split friendly-attack route in packaged board-attack QA", () => {
+    const script = read("scripts/verify-release.sh");
+
+    expect(script).toContain('"board-attack-overlay": "friendly-attack-overlay=1"');
+    expect(script).not.toContain('"board-attack-overlay": "board-attack-overlay=1"');
   });
 
   it("requires Arena choice evidence with all four card metrics", () => {

@@ -33,7 +33,7 @@ describe("opponent overlay collapsed-state sync", () => {
     const { unmount } = render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "恢复对手小窗，2 个奥秘" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "恢复对手记牌小窗" })).toBeInTheDocument();
     });
 
     act(() => notifyCollapsedChange?.(false));
@@ -42,7 +42,7 @@ describe("opponent overlay collapsed-state sync", () => {
 
     act(() => notifyCollapsedChange?.(true));
 
-    expect(screen.getByRole("button", { name: "恢复对手小窗，2 个奥秘" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复对手记牌小窗" })).toBeInTheDocument();
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledOnce();
@@ -72,48 +72,10 @@ describe("opponent overlay collapsed-state sync", () => {
     render(<App />);
 
     act(() => notifyCollapsedChange?.(true));
-    expect(screen.getByRole("button", { name: "恢复对手小窗，2 个奥秘" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复对手记牌小窗" })).toBeInTheDocument();
 
     await act(async () => resolveInitialState(false));
 
-    expect(screen.getByRole("button", { name: "恢复对手小窗，2 个奥秘" })).toBeInTheDocument();
-  });
-
-  it("updates secret visibility without closing or recreating the opponent window", async () => {
-    let notifySecretPredictionChange: ((enabled: boolean) => void) | undefined;
-
-    Object.defineProperty(window, "hearthstoneTracker", {
-      configurable: true,
-      value: {
-        discoverLogs: () => Promise.resolve([]),
-        getState: () => new Promise<never>(() => undefined),
-        getOpponentOverlayCollapsed: () => Promise.resolve(false),
-        onOpponentOverlayCollapsedChange: () => () => undefined,
-        onOpponentSecretPredictionChange: (callback: (enabled: boolean) => void) => {
-          notifySecretPredictionChange = callback;
-          return () => undefined;
-        },
-        onUpdate: () => () => undefined
-      }
-    });
-    window.history.replaceState(
-      {},
-      "",
-      "/?opponent-overlay=1&qa-opponent-demo=1&show-secret-prediction=1"
-    );
-
-    render(<App />);
-    expect(await screen.findByRole("region", { name: "奥秘 1 候选" })).toBeInTheDocument();
-
-    act(() => notifySecretPredictionChange?.(false));
-    expect(screen.getByRole("region", { name: "奥秘 1 候选" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "奥秘 当前 2" })).toBeInTheDocument();
-    expect(screen.getAllByText("候选未显示")).toHaveLength(2);
-    expect(screen.queryByText("法术反制")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("对手记牌器置顶小窗")).toBeInTheDocument();
-
-    act(() => notifySecretPredictionChange?.(true));
-    expect(screen.getByRole("region", { name: "奥秘 1 候选" })).toBeInTheDocument();
-    expect(screen.getByText("法术反制")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复对手记牌小窗" })).toBeInTheDocument();
   });
 });

@@ -105,14 +105,16 @@ describe("window experience configuration", () => {
     );
   });
 
-  it("keeps a folded opponent entry folded when secrets update", () => {
+  it("keeps secret presentation independent from the folded opponent tracker", () => {
     const main = source("src/main/main.ts");
     const section = main.slice(
-      main.indexOf("async function showOpponentOverlayInactive"),
-      main.indexOf("function startBoardAttackOverlayMonitor")
+      main.indexOf("async function refreshBoardAttackOverlayWindow"),
+      main.indexOf("async function refreshAuxiliaryOverlayWindow")
     );
-    expect(section).toContain("presentOpponentSecretOverlay");
+    expect(section).toContain("createSecretOverlayWindow");
+    expect(section).toContain("releaseSecretOverlayWindow");
     expect(section).not.toContain("expandOpponentOverlayWindow");
+    expect(section).not.toContain("createOpponentOverlayWindow");
   });
 
   it("keeps automatic overlay paths inactive while leaving explicit opponent opening focusable", () => {
@@ -142,17 +144,16 @@ describe("window experience configuration", () => {
     expect(explicitOpponentToggle).toContain("showWhenReady: true");
   });
 
-  it("routes only new-secret transitions through the no-focus presenter", () => {
+  it("routes active secrets through a dedicated no-focus window", () => {
     const main = source("src/main/main.ts");
     const monitor = main.slice(
-      main.indexOf("function startOpponentSecretOverlayMonitor"),
-      main.indexOf("function startBoardAttackOverlayMonitor")
+      main.indexOf("async function refreshBoardAttackOverlayWindow"),
+      main.indexOf("async function refreshAuxiliaryOverlayWindow")
     );
 
-    expect(monitor).toMatch(
-      /opponentSecretOverlayVisibility\.update\(secrets\)[\s\S]*?showOpponentOverlayInactive\(generation\)/
-    );
-    expect(monitor).toContain("presentOpponentSecretOverlay");
+    expect(monitor).toContain("trackerSettings.overlay.secretPrediction");
+    expect(monitor).toContain("state.opponentSecrets?.length");
+    expect(monitor).toContain("createSecretOverlayWindow");
     expect(monitor).not.toMatch(/\.show\(/);
     expect(monitor).not.toMatch(/\.focus\(/);
   });

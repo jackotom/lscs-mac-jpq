@@ -90,11 +90,27 @@ export interface TrackerOverlaySettings {
   readonly showFriendlyAttack: boolean;
   readonly showOpponentAttack: boolean;
   readonly secretPrediction: boolean;
+  readonly smartCardCounters: boolean;
+  readonly hiddenSmartCounterIds?: readonly string[];
   readonly position: "left" | "right";
   readonly offsetX: number;
   readonly offsetY: number;
   readonly opacity: number;
   readonly hideInFullscreen: boolean;
+}
+
+export type SmartCardCounterSide = "friendly" | "opponent";
+
+export interface SmartCardCounter {
+  readonly id: string;
+  readonly ruleId?: string;
+  readonly side: SmartCardCounterSide;
+  readonly label: string;
+  readonly value: number;
+  readonly target?: number;
+  readonly scope?: "current-turn" | "previous-turn";
+  readonly cardId?: string;
+  readonly details?: CardDetails;
 }
 
 export interface TrackerAppearanceSettings {
@@ -394,6 +410,7 @@ export interface PublicTrackerState {
   opponentSecrets?: OpponentSecretSlot[];
   boardAttack?: BoardAttackSummary;
   matchCounters?: MatchCounters;
+  smartCounters?: readonly SmartCardCounter[];
   matchFlow?: MatchFlowSnapshot;
   events: TrackerEvent[];
   summary: TrackerSummary;

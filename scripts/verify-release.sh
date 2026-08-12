@@ -404,7 +404,7 @@ run_capture() {
         if (["选取率", "卡牌", "影响"].every((label) => body.includes(label))) process.exit(24);
       }
     }
-    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "board-attack-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
+    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "friendly-attack-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
     if (candidateMatch) routeByScenario[scenario] = "overlay=1";
     if (routeByScenario[scenario] && !report.location.includes(routeByScenario[scenario])) process.exit(7);
     if (routeByScenario[scenario] && report.qaMainWindowVisible !== false) process.exit(36);

@@ -40,6 +40,9 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isOptionalMatchCounters(value.matchCounters)) {
     throw new Error("本局公开计数数据无效，已拒绝更新界面。");
   }
+  if (!isOptionalSmartCounters(value.smartCounters)) {
+    throw new Error("智能卡牌计数数据无效，已拒绝更新界面。");
+  }
   if (!isOptionalMatchFlow(value.matchFlow)) {
     throw new Error("对局进程数据无效，已拒绝更新界面。");
   }
@@ -142,17 +145,40 @@ function isGeneralSettings(value: unknown): boolean {
 }
 
 function isOverlaySettings(value: unknown): boolean {
-  return hasExactKeys(value, [
-    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
-    "offsetX", "offsetY", "opacity", "hideInFullscreen"
+  return isRecord(value) && hasOnlyKeys(value, [
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "position",
+    "offsetX", "offsetY", "opacity", "hideInFullscreen", "hiddenSmartCounterIds"
   ]) &&
-    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
     isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&
     isNumberInRange(value.offsetX, -200, 200) &&
     isNumberInRange(value.offsetY, -200, 200) &&
-    isNumberInRange(value.opacity, 30, 100);
+    isNumberInRange(value.opacity, 30, 100) &&
+    (value.hiddenSmartCounterIds === undefined || (
+      Array.isArray(value.hiddenSmartCounterIds) &&
+      value.hiddenSmartCounterIds.every(isNonEmptyString)
+    ));
+}
+
+function isOptionalSmartCounters(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((counter) =>
+    isRecord(counter) && hasOnlyKeys(counter, ["id", "ruleId", "side", "label", "value", "target", "scope", "cardId", "details"]) &&
+    isSafeSmartCounterId(counter.id) &&
+    (counter.ruleId === undefined || isSafeSmartCounterId(counter.ruleId)) &&
+    isOneOf(counter.side, ["friendly", "opponent"]) &&
+    isNonEmptyString(counter.label) &&
+    isNonNegativeInteger(counter.value) &&
+    (counter.target === undefined || isPositiveInteger(counter.target)) &&
+    (counter.scope === undefined || isOneOf(counter.scope, ["current-turn", "previous-turn"])) &&
+    isOptionalString(counter.cardId) &&
+    (counter.details === undefined || isCardDetails(counter.details))
+  ));
+}
+
+function isSafeSmartCounterId(value: unknown): boolean {
+  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,127}$/u.test(value);
 }
 
 function isAppearanceSettings(value: unknown): boolean {

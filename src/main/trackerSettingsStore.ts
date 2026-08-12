@@ -31,6 +31,8 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettings = {
     showFriendlyAttack: false,
     showOpponentAttack: false,
     secretPrediction: true,
+    smartCardCounters: true,
+    hiddenSmartCounterIds: [],
     position: "right",
     offsetX: 20,
     offsetY: 0,
@@ -299,17 +301,19 @@ function migratePreviousOverlaySettings(
   value: unknown,
   appearance: unknown
 ): TrackerOverlaySettings | undefined {
-  if (!isRecord(value) || (
-    "theme" in value &&
-    "showOnlyInGame" in value &&
-    "arenaHeroWinRateRanking" in value
-  )) return undefined;
+  if (!isRecord(value)) return undefined;
 
   const candidate = {
     theme: migratedOverlayTheme(appearance),
     showOnlyInGame: true,
     arenaHeroWinRateRanking: true,
-    ...value
+    ...value,
+    smartCardCounters: typeof value.smartCardCounters === "boolean"
+      ? value.smartCardCounters
+      : true,
+    hiddenSmartCounterIds: Array.isArray(value.hiddenSmartCounterIds)
+      ? value.hiddenSmartCounterIds
+      : []
   };
   return isOverlaySettings(candidate) ? candidate : undefined;
 }
@@ -320,11 +324,14 @@ function migratedOverlayTheme(value: unknown): TrackerOverlaySettings["theme"] {
 
 function isOverlaySettings(value: unknown): value is TrackerOverlaySettings {
   return hasExactKeys(value, [
-    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "hiddenSmartCounterIds", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen"
   ]) &&
-    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
+    Array.isArray(value.hiddenSmartCounterIds) &&
+    value.hiddenSmartCounterIds.length <= 200 &&
+    value.hiddenSmartCounterIds.every((id) => typeof id === "string" && id.length > 0 && id.length <= 128) &&
     isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&
     isNumberInRange(value.offsetX, -200, 200) &&

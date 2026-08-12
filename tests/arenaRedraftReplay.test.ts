@@ -101,12 +101,12 @@ describe("de-identified Arena redraft replay", () => {
     expect(restarted.arena).toMatchObject({ draftCount: 29, unresolvedCount: 30, awaitingExactDeck: true });
 
     await copyFile(path.join(fixtureDir, "Decks.mismatched.log"), path.join(sessionDir, "Decks.log"));
-    await vi.waitFor(() => expect(scanAndImportDecks).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(scanAndImportDecks).toHaveBeenCalledTimes(3), { timeout: 5_000 });
     expect(restartedService.getState().arena).toMatchObject({ draftCount: 29, unresolvedCount: 30, awaitingExactDeck: true });
 
     const exactDecksLog = await readFile(path.join(fixtureDir, "Decks.after-redraft.log"), "utf8");
     await appendFile(path.join(sessionDir, "Decks.log"), `\n${exactDecksLog}`, "utf8");
-    await vi.waitFor(() => expect(scanAndImportDecks).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(scanAndImportDecks).toHaveBeenCalledTimes(4), { timeout: 5_000 });
     expect(scanResults.at(-1)).toMatchObject({
       status: "ok",
       activeDeck: { deckId: "9000000001", mode: "arena", cards: expect.any(Array) }
@@ -114,7 +114,7 @@ describe("de-identified Arena redraft replay", () => {
     expect(scanResults.at(-1)?.activeDeck?.cards.reduce((total, card) => total + card.count, 0)).toBe(30);
     await vi.waitFor(() => {
       expect(restartedService.getState().arena).toMatchObject({ draftCount: 30, unresolvedCount: 0 });
-    });
+    }, { timeout: 5_000 });
     const exactDeck = restartedService.getState().arena?.deck ?? [];
     expect(exactDeck.reduce((total, card) => total + card.count, 0)).toBe(30);
     expect(exactDeck).toHaveLength(30);

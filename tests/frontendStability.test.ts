@@ -48,6 +48,26 @@ describe("frontend stability helpers", () => {
     expect(parsePublicTrackerState(state)).toEqual(state);
   });
 
+  it("accepts extensible smart-counter ids and scoped rule output", () => {
+    const state = createPublicTrackerState({
+      smartCounters: [{
+        id: "friendly-current-turn-spells",
+        ruleId: "friendly-current-turn-spells",
+        side: "friendly",
+        label: "本回合法术",
+        value: 2,
+        target: 3,
+        scope: "current-turn"
+      }]
+    });
+
+    expect(parsePublicTrackerState(state).smartCounters).toEqual(state.smartCounters);
+    expect(() => parsePublicTrackerState({
+      ...state,
+      smartCounters: [{ ...state.smartCounters![0], id: "../../unsafe" }]
+    })).toThrow(/智能卡牌计数数据无效/);
+  });
+
   it("validates supplied global-effect data", () => {
     const base = createPublicTrackerState();
     expect(parsePublicTrackerState(base)).toEqual(base);
@@ -111,6 +131,7 @@ describe("frontend stability helpers", () => {
         showFriendlyAttack: true,
         showOpponentAttack: true,
         secretPrediction: true,
+        smartCardCounters: true,
         position: "left",
         offsetX: 20,
         offsetY: 0,

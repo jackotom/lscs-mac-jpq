@@ -30,7 +30,9 @@ function loadPreloadApi() {
     api: exposeInMainWorld.mock.calls[0]?.[1] as {
       closeFriendlyOverlay?: () => Promise<void>;
       toggleOverlay?: () => Promise<boolean>;
-      onOpponentSecretPredictionChange?: (callback: (enabled: boolean) => void) => () => void;
+      getState?: () => Promise<unknown>;
+      start?: () => Promise<unknown>;
+      setTrackerSettings?: () => Promise<unknown>;
     },
     invoke
   };
@@ -51,10 +53,25 @@ describe("preload capabilities", () => {
     expect(invoke).toHaveBeenCalledWith("tracker:close-friendly-overlay");
   });
 
-  it("gives the opponent overlay a live secret-prediction update capability", () => {
+  it("does not expose the removed opponent-secret coupling", () => {
     window.history.replaceState({}, "", "/?opponent-overlay=1");
     const { api } = loadPreloadApi();
 
-    expect(api.onOpponentSecretPredictionChange).toBeTypeOf("function");
+    expect(api).not.toHaveProperty("onOpponentSecretPredictionChange");
+  });
+
+  it.each([
+    "friendly-attack-overlay",
+    "opponent-attack-overlay",
+    "secret-overlay",
+    "smart-counter-overlay"
+  ])("gives %s read-only state capabilities", (route) => {
+    window.history.replaceState({}, "", `/?${route}=1`);
+    const { api } = loadPreloadApi();
+
+    expect(api.getState).toBeTypeOf("function");
+    expect(api.start).toBeUndefined();
+    expect(api.setTrackerSettings).toBeUndefined();
+    expect(api.toggleOverlay).toBeUndefined();
   });
 });

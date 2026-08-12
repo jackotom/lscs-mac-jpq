@@ -30,6 +30,8 @@ const expectedDefaults = {
     showFriendlyAttack: false,
     showOpponentAttack: false,
     secretPrediction: true,
+    smartCardCounters: true,
+    hiddenSmartCounterIds: [],
     position: "right",
     offsetX: 20,
     offsetY: 0,

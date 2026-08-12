@@ -13,6 +13,9 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { OpponentPanel } from "./components/OpponentPanel";
 import { OpponentOverlayPanel } from "./components/OpponentOverlayPanel";
 import { BoardAttackOverlay } from "./components/BoardAttackOverlay";
+import { SecretOverlay } from "./components/SecretOverlay";
+import { SingleAttackOverlay } from "./components/SingleAttackOverlay";
+import { SmartCounterOverlay } from "./components/SmartCounterOverlay";
 import { OverlayPanel } from "./components/OverlayPanel";
 import { LadderDeckRecommendationPanel } from "./components/LadderDeckRecommendationPanel";
 import { TopBar, trackerStatusLabels } from "./components/TopBar";
@@ -53,6 +56,7 @@ import type {
   GameEvent,
   OpponentOverview,
   OpponentPlayedCard,
+  OverlaySmartCounter,
   TrackerStatus
 } from "./types";
 
@@ -192,6 +196,37 @@ const qaOpponentOverlayState: PublicTrackerState = {
   lastUpdated: "2026-07-12T12:00:00.000Z"
 };
 
+const qaDenseSecretOverlayState: PublicTrackerState = {
+  ...qaOpponentOverlayState,
+  cardTracking: {
+    ...qaOpponentOverlayState.cardTracking,
+    opponentSecretSlots: [{
+      entityId: "qa-secret-dense",
+      candidates: [
+        { cardId: "EX1_287", name: "法术反制", status: "possible" },
+        { cardId: "EX1_289", name: "寒冰护体", status: "possible" },
+        { cardId: "EX1_294", name: "镜像实体", status: "possible" },
+        { cardId: "tt_010", name: "扰咒术", status: "possible" },
+        { cardId: "EX1_295", name: "寒冰屏障", status: "possible" },
+        { cardId: "EX1_594", name: "蒸发", status: "possible" },
+        { cardId: "CFM_620", name: "变形药水", status: "possible" },
+        { cardId: "LOOT_101", name: "爆炸符文", status: "possible" },
+        { cardId: "ULD_239", name: "火焰结界", status: "possible" },
+        { cardId: "BAR_812", name: "绿洲盟军", status: "possible" }
+      ]
+    }]
+  }
+};
+
+const qaSmartCounters: readonly OverlaySmartCounter[] = [
+  { id: "qa-friendly-dragons", label: "已使用龙牌", value: 3, target: 5, side: "friendly", cardId: "TOY_385" },
+  { id: "qa-opponent-void-souls", label: "对手虚空灵魂", value: 4, side: "opponent", cardId: "JAIL_732" }
+];
+
+function smartCountersFromState(state: PublicTrackerState): readonly OverlaySmartCounter[] {
+  return state.smartCounters ?? [];
+}
+
 const qaHomeState: PublicTrackerState = {
   ...qaOpponentOverlayState,
   trackerMode: "ladder",
@@ -316,6 +351,10 @@ function App() {
 
   const isOpponentOverlay = overlaySearchParams.get("opponent-overlay") === "1";
   const isBoardAttackOverlay = overlaySearchParams.get("board-attack-overlay") === "1";
+  const isFriendlyAttackOverlay = overlaySearchParams.get("friendly-attack-overlay") === "1";
+  const isOpponentAttackOverlay = overlaySearchParams.get("opponent-attack-overlay") === "1";
+  const isSecretOverlay = overlaySearchParams.get("secret-overlay") === "1";
+  const isSmartCounterOverlay = overlaySearchParams.get("smart-counter-overlay") === "1";
   const isOverlay = overlaySearchParams.get("overlay") === "1";
   const isArenaChoiceOverlay = overlaySearchParams.get("arena-choice-overlay") === "1";
   const isQaArenaChoiceOverlay = overlaySearchParams.get("qa-arena-demo") === "1";
@@ -359,9 +398,6 @@ function App() {
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [isOpponentOverlayCollapsed, setIsOpponentOverlayCollapsed] = useState(false);
-  const [showOpponentSecrets, setShowOpponentSecrets] = useState(
-    overlaySearchParams.get("show-secret-prediction") !== "0"
-  );
   const actionLock = useRef(createSynchronousActionLock());
   const confirmedTrackerSettings = useRef<TrackerSettings>();
   const pendingTrackerSettingsSave = useRef<TrackerSettings>();
@@ -528,11 +564,6 @@ function App() {
       disposed = true;
       unsubscribe?.();
     };
-  }, [api, isOpponentOverlay]);
-
-  useEffect(() => {
-    if (!isOpponentOverlay) return;
-    return api?.onOpponentSecretPredictionChange?.(setShowOpponentSecrets);
   }, [api, isOpponentOverlay]);
 
   useEffect(() => {
@@ -1187,7 +1218,6 @@ function App() {
         {retainedStateError ? <div className="notice" role="alert">{retainedStateError}</div> : null}
         <OpponentOverlayWindow
           state={isQaOpponentOverlay ? qaOpponentOverlayState : state}
-          showSecrets={showOpponentSecrets}
           isCollapsed={isOpponentOverlayCollapsed}
           onCollapsedChange={api?.setOpponentOverlayCollapsed
             ? (collapsed) => { void api.setOpponentOverlayCollapsed!(collapsed); }
@@ -1197,6 +1227,38 @@ function App() {
         />
       </>
     );
+  }
+
+  if (isFriendlyAttackOverlay || isOpponentAttackOverlay) {
+    const boardState = overlaySearchParams.get("qa-opponent-demo") === "1" ? qaOpponentOverlayState : state;
+    const side = isFriendlyAttackOverlay ? "friendly" : "opponent";
+    return <SingleAttackOverlay side={side} value={boardState.boardAttack?.[side] ?? 0} />;
+  }
+
+  if (isSecretOverlay) {
+    const secretState = overlaySearchParams.get("qa-secret-dense") === "1"
+      ? qaDenseSecretOverlayState
+      : overlaySearchParams.get("qa-opponent-demo") === "1"
+        ? qaOpponentOverlayState
+        : state;
+    const secretView = toOverlayPanelViewModel(secretState, {
+      maxDeckRows: 0,
+      maxRecentRows: 0,
+      side: "opponent",
+      showSecretCandidates: true
+    });
+    return <SecretOverlay slots={secretView.cardTracking.secretSlots} />;
+  }
+
+  if (isSmartCounterOverlay) {
+    const smartCounterId = overlaySearchParams.get("smart-counter-id")?.trim();
+    const availableCounters = overlaySearchParams.get("qa-opponent-demo") === "1"
+      ? qaSmartCounters
+      : smartCountersFromState(state);
+    const counters = smartCounterId
+      ? availableCounters.filter((counter) => counter.id === smartCounterId)
+      : availableCounters;
+    return <SmartCounterOverlay counters={counters} />;
   }
 
   if (isBoardAttackOverlay) {
@@ -1309,6 +1371,7 @@ function App() {
         {activeView === "settings" ? (
           <SettingsPanel
             settings={trackerSettings}
+            smartCounters={state.smartCounters}
             isLoading={isSettingsLoading}
             isSaving={isSettingsSaving}
             error={settingsError}
@@ -1509,7 +1572,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.4.1</small>
+          <small>v0.4.2</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
@@ -1839,25 +1902,30 @@ function ArenaHeroWinRateRankingWindow({ searchParams }: { searchParams: URLSear
 
 function OpponentOverlayWindow({
   state,
-  showSecrets,
   isCollapsed,
   onCollapsedChange,
   isLoading,
   loadError
 }: {
   state: PublicTrackerState;
-  showSecrets: boolean;
   isCollapsed: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   isLoading: boolean;
   loadError?: string;
 }) {
-  const overlayView = toOverlayPanelViewModel(state, {
+  const rawOverlayView = toOverlayPanelViewModel(state, {
     maxDeckRows: 40,
     maxRecentRows: 40,
     side: "opponent",
-    showSecretCandidates: showSecrets
+    showSecretCandidates: false
   });
+  const overlayView = {
+    ...rawOverlayView,
+    cardTracking: {
+      ...rawOverlayView.cardTracking,
+      secretSlots: []
+    }
+  };
 
   return (
     <OpponentOverlayPanel

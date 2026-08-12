@@ -9,10 +9,15 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { TrackerModeSettings, TrackerSettings } from "../../shared/types";
+import type { SmartCardCounter, TrackerModeSettings, TrackerSettings } from "../../shared/types";
+
+type OverlaySettingsWithSmartCounterVisibility = TrackerSettings["overlay"] & {
+  readonly hiddenSmartCounterIds?: readonly string[];
+};
 
 interface SettingsPanelProps {
   settings?: TrackerSettings;
+  smartCounters?: readonly SmartCardCounter[];
   isLoading?: boolean;
   isSaving?: boolean;
   error?: string;
@@ -217,6 +222,7 @@ function ChoiceButtons<Value extends string>({
 
 export function SettingsPanel({
   settings,
+  smartCounters = [],
   isLoading = false,
   isSaving = false,
   error,
@@ -253,6 +259,21 @@ export function SettingsPanel({
       ...settings,
       ladder: { ...settings.ladder, ...patch },
       arena: { ...settings.arena, ...patch }
+    });
+  };
+
+  const updateSmartCounterVisibility = (counterId: string, visible: boolean) => {
+    if (!settings) return;
+    const overlay = settings.overlay as OverlaySettingsWithSmartCounterVisibility;
+    const hiddenIds = new Set(overlay.hiddenSmartCounterIds ?? []);
+    if (visible) hiddenIds.delete(counterId);
+    else hiddenIds.add(counterId);
+    onChange({
+      ...settings,
+      overlay: {
+        ...settings.overlay,
+        hiddenSmartCounterIds: [...hiddenIds]
+      } as TrackerSettings["overlay"]
     });
   };
 
@@ -321,9 +342,24 @@ export function SettingsPanel({
           <div className="settings-control-group">
             <ToggleControl label="我方卡牌记牌器" checked={settings.ladder.friendlyDeckTracker} disabled={controlsDisabled} onChange={(value) => updateDeckTrackers({ friendlyDeckTracker: value })} />
             <ToggleControl label="对手卡牌记牌器" checked={settings.ladder.opponentDeckTracker} disabled={controlsDisabled} onChange={(value) => updateDeckTrackers({ opponentDeckTracker: value })} />
-            <ToggleControl label="显示我方场攻" checked={settings.overlay.showFriendlyAttack} disabled={controlsDisabled} onChange={(value) => updateOverlay({ showFriendlyAttack: value })} />
-            <ToggleControl label="显示对手场攻" checked={settings.overlay.showOpponentAttack} disabled={controlsDisabled} onChange={(value) => updateOverlay({ showOpponentAttack: value })} />
-            <ToggleControl label="显示奥秘预测" checked={settings.overlay.secretPrediction} disabled={controlsDisabled} onChange={(value) => updateOverlay({ secretPrediction: value })} />
+            <ToggleControl label="我方场攻悬浮窗" description="独立打开或关闭我方场攻圆形计数窗" checked={settings.overlay.showFriendlyAttack} disabled={controlsDisabled} onChange={(value) => updateOverlay({ showFriendlyAttack: value })} />
+            <ToggleControl label="对手场攻悬浮窗" description="独立打开或关闭对手场攻圆形计数窗" checked={settings.overlay.showOpponentAttack} disabled={controlsDisabled} onChange={(value) => updateOverlay({ showOpponentAttack: value })} />
+            <ToggleControl label="奥秘预测悬浮窗" description="独立显示对手奥秘及仍可能的候选" checked={settings.overlay.secretPrediction} disabled={controlsDisabled} onChange={(value) => updateOverlay({ secretPrediction: value })} />
+            <ToggleControl label="智能卡牌计数悬浮窗" description="显示龙牌触发进度、虚空灵魂等本局关键计数" checked={settings.overlay.smartCardCounters} disabled={controlsDisabled} onChange={(value) => updateOverlay({ smartCardCounters: value })} />
+            {smartCounters.map((counter) => {
+              const hiddenIds = (settings.overlay as OverlaySettingsWithSmartCounterVisibility).hiddenSmartCounterIds ?? [];
+              const valueLabel = counter.target ? `${counter.value}/${counter.target}` : String(counter.value);
+              return (
+                <ToggleControl
+                  key={counter.id}
+                  label={counter.label}
+                  description={`当前 ${valueLabel} · 独立悬浮窗`}
+                  checked={!hiddenIds.includes(counter.id)}
+                  disabled={controlsDisabled}
+                  onChange={(value) => updateSmartCounterVisibility(counter.id, value)}
+                />
+              );
+            })}
             <ToggleControl
               label="竞技场英雄胜率排行"
               description="进入竞技场时显示当前版本英雄排行"
