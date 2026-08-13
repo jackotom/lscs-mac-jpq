@@ -375,7 +375,7 @@ run_capture() {
           body.includes("?") ||
           body.includes("—")
         ) process.exit(38);
-        if (!body.includes("重选中")) process.exit(39);
+        if (!body.includes(`${expectedCandidateCount}张候选 · 最终30`)) process.exit(39);
       }
       if (scenario === "arena-redraft-exact-replay") {
         const arena = report.trackerState.arena;

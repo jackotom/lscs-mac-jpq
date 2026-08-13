@@ -21,7 +21,12 @@ describe("independent overlay QA contract", () => {
     expect(source).toContain('"qa-secret-dense": "1"');
     expect(source).not.toContain('type: "mouseWheel"');
     expect(source).toContain("secretHeaderStayedFixed");
-    expect(source).toContain("secretSlotLabelStayedVisible");
+    expect(source).toContain("secretCompactHeaderHeight");
+    expect(source).toContain("secretCompactRowHeights");
+    expect(source).toContain("secretCostColumnCount");
+    expect(source).toContain("secretSingleColumnLayout");
+    expect(source).toContain("secretQuestionBadgeCount");
+    expect(source).toContain("secretPanelWidthMatchesReference");
     expect(source).toContain("secretAllCandidatesVisible");
     expect(source).toContain("secretLastCandidateVisible");
   });

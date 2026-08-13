@@ -26,12 +26,12 @@ describe("board attack overlay", () => {
     expect(shouldShowBoardAttackOverlay(true, "ChatGPT")).toBe(false);
   });
 
-  it("expands dense secret windows enough to show two-column candidates without interaction", () => {
+  it("sizes the secret helper as a compact one-column Firestone-style panel", () => {
     const display = { x: 0, y: 0, width: 1470, height: 956 };
 
-    expect(getSecretOverlayBounds(display, [10])).toMatchObject({ width: 240, height: 219 });
-    expect(getSecretOverlayBounds(display, [10, 10])).toMatchObject({ width: 240, height: 411 });
-    expect(getSecretOverlayBounds(display, [])).toMatchObject({ width: 240, height: 190 });
+    expect(getSecretOverlayBounds(display, [10])).toMatchObject({ x: 384, width: 144, height: 190 });
+    expect(getSecretOverlayBounds(display, [10, 10])).toMatchObject({ x: 384, width: 144, height: 388 });
+    expect(getSecretOverlayBounds(display, [])).toMatchObject({ x: 384, width: 144, height: 37 });
   });
 
   it("builds a transparent full-display window and makes it click-through", () => {

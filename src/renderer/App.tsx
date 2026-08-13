@@ -196,6 +196,28 @@ const qaOpponentOverlayState: PublicTrackerState = {
   lastUpdated: "2026-07-12T12:00:00.000Z"
 };
 
+function qaSecretCandidate(
+  cardId: string,
+  name: string,
+  dbfId: number,
+  rarity: "COMMON" | "RARE" | "EPIC"
+) {
+  return {
+    cardId,
+    name,
+    status: "possible" as const,
+    details: {
+      dbfId,
+      cardId,
+      name,
+      manaCost: 3,
+      rarity,
+      isSpell: true,
+      relatedCards: []
+    }
+  };
+}
+
 const qaDenseSecretOverlayState: PublicTrackerState = {
   ...qaOpponentOverlayState,
   cardTracking: {
@@ -203,16 +225,16 @@ const qaDenseSecretOverlayState: PublicTrackerState = {
     opponentSecretSlots: [{
       entityId: "qa-secret-dense",
       candidates: [
-        { cardId: "EX1_287", name: "法术反制", status: "possible" },
-        { cardId: "EX1_289", name: "寒冰护体", status: "possible" },
-        { cardId: "EX1_294", name: "镜像实体", status: "possible" },
-        { cardId: "tt_010", name: "扰咒术", status: "possible" },
-        { cardId: "EX1_295", name: "寒冰屏障", status: "possible" },
-        { cardId: "EX1_594", name: "蒸发", status: "possible" },
-        { cardId: "CFM_620", name: "变形药水", status: "possible" },
-        { cardId: "LOOT_101", name: "爆炸符文", status: "possible" },
-        { cardId: "ULD_239", name: "火焰结界", status: "possible" },
-        { cardId: "BAR_812", name: "绿洲盟军", status: "possible" }
+        qaSecretCandidate("EX1_287", "法术反制", 113, "RARE"),
+        qaSecretCandidate("EX1_289", "寒冰护体", 621, "COMMON"),
+        qaSecretCandidate("EX1_294", "镜像实体", 195, "COMMON"),
+        qaSecretCandidate("tt_010", "扰咒术", 366, "EPIC"),
+        qaSecretCandidate("EX1_295", "寒冰屏障", 192, "EPIC"),
+        qaSecretCandidate("EX1_594", "蒸发", 286, "RARE"),
+        qaSecretCandidate("CFM_620", "变形药水", 40373, "EPIC"),
+        qaSecretCandidate("LOOT_101", "爆炸符文", 43407, "RARE"),
+        qaSecretCandidate("ULD_239", "火焰结界", 53382, "RARE"),
+        qaSecretCandidate("BAR_812", "绿洲盟军", 63132, "RARE")
       ]
     }]
   }
@@ -1572,7 +1594,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.4.2</small>
+          <small>v0.4.6</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

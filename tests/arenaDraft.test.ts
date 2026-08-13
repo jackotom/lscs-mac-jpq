@@ -161,6 +161,27 @@ describe("arena log parsing", () => {
     expect(engine.getState()).toMatchObject({ deckId: "9466340632", draftCount: 30, unresolvedCount: 0 });
   });
 
+  it("publishes an oversized active snapshot as candidates before matchmaking", () => {
+    const engine = new ArenaDraftEngine({ cardDatabase: cardDb, ratings, preferArenaLogPicks: true });
+    engine.applyArenaText([
+      "D 12:09:34.000 DraftManager.OnChoicesAndContents - Draft Deck ID: 9485426193, Hero Card = HERO_09",
+      ...Array.from(
+        { length: 31 },
+        () => "D 12:09:34.001 DraftManager.OnChoicesAndContents - Draft deck contains card TEST_001"
+      ),
+      "D 12:09:34.999 SetDraftMode - ACTIVE_DRAFT_DECK"
+    ].join("\n"));
+
+    const state = engine.getState();
+    expect(state).toMatchObject({
+      status: "complete",
+      deckId: "9485426193",
+      deck: [],
+      awaitingExactDeck: true
+    });
+    expect(state.redraftPool?.reduce((total, card) => total + card.count, 0)).toBe(31);
+  });
+
   it("keeps restored Arena cards and accepts screen choices during redrafting", () => {
     const engine = new ArenaDraftEngine({ cardDatabase: cardDb, ratings });
 

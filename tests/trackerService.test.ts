@@ -290,7 +290,9 @@ describe("TrackerService log selection", () => {
     expect(state.trackerMode).toBe("ladder");
     expect(state.error).toContain("对局已开始");
     expect(state.error).toContain("Power.log");
-    expect(state.deck).toEqual([]);
+    expect(state.deck).toEqual([
+      expect.objectContaining({ name: "Old Card", count: 1, remaining: 1, drawn: 0 })
+    ]);
     expect(state.friendlyHand).toEqual([]);
     expect(state.friendlyOther).toEqual([]);
   });
@@ -328,7 +330,9 @@ describe("TrackerService log selection", () => {
 
     expect(state.gameActive).toBe(true);
     expect(state.deckName).toBeUndefined();
-    expect(state.deck).toEqual([]);
+    expect(state.deck).toEqual([
+      expect.objectContaining({ name: "Old Card", count: 1, remaining: 1, drawn: 0 })
+    ]);
     expect(state.friendlyHand).toEqual([]);
     expect(state.friendlyOther).toEqual([]);
   });
@@ -909,6 +913,160 @@ describe("TrackerService log selection", () => {
       deckName: "偷取牌库",
       summary: { totalCards: 2, remainingCards: 1, drawnCards: 1 }
     });
+  });
+
+  it("keeps Hearthstone's selected deck visible after the game result is read", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(
+      powerLog,
+      [
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+        "D 12:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_RANKED",
+        "D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Fireball id=64 zone=DECK zonePos=1 cardId=CS2_029 player=2] tag=ZONE value=HAND",
+        "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=本地玩家 id=3 zone=PLAY player=2] tag=PLAYSTATE value=WON"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+    const selectedDeck = {
+      id: "selected-after-result",
+      deckId: "9455681170",
+      name: "局间保留套牌",
+      cards: [{ name: "Fireball", count: 2, cardId: "CS2_029" }],
+      rawText: "2x Fireball",
+      sourcePath: join(sessionDir, "Decks.log"),
+      updatedAt: "2026-08-13T00:00:00.000Z",
+      warnings: []
+    };
+    const scanAndImportDecks = vi.fn(async () => ({
+      status: "ok" as const,
+      decks: [selectedDeck],
+      activeDeck: selectedDeck
+    }));
+
+    const service = new TrackerService({ scanAndImportDecks });
+    const state = await service.start({ logPath: powerLog });
+    await service.dispose();
+
+    expect(state).toMatchObject({
+      gameActive: false,
+      trackerMode: "ladder",
+      autoMatchedDeckId: "selected-after-result",
+      deckName: "局间保留套牌",
+      friendlyHand: [],
+      friendlyOther: [],
+      events: [],
+      summary: { totalCards: 2, remainingCards: 2, drawnCards: 0 }
+    });
+  });
+
+  it("keeps the Arena deck visible after the game result is read", async () => {
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return {
+            database: {
+              "1001": { dbfId: 1001, name: "Arena Card", cardId: "ARENA_001" }
+            },
+            warnings: []
+          };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    const arenaLog = join(sessionDir, "Arena.log");
+    await writeFile(
+      arenaLog,
+      [
+        "D 11:59:00.000 DraftManager.OnChoicesAndContents - Draft Deck ID: 1, Hero Card = HERO_08",
+        "D 11:59:00.000 DraftManager.OnChoicesAndContents - Draft deck contains card ARENA_001",
+        "D 11:59:01.000 SetDraftMode - ACTIVE_DRAFT_DECK"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+    await writeFile(
+      powerLog,
+      [
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+        "D 12:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_ARENA",
+        "D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Arena Card id=64 zone=DECK cardId=ARENA_001 player=2] tag=ZONE value=HAND",
+        "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=本地玩家 id=3 zone=PLAY player=2] tag=PLAYSTATE value=LOST"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+
+    const service = new TrackerService();
+    const state = await service.start({ logPath: powerLog });
+    await service.dispose();
+
+    expect(state).toMatchObject({
+      gameActive: false,
+      trackerMode: "arena",
+      deckName: "竞技场牌库",
+      friendlyHand: [],
+      friendlyOther: [],
+      events: [],
+      summary: { totalCards: 30, remainingCards: 30, drawnCards: 0 }
+    });
+  });
+
+  it("clears a constructed deck when a later Arena game starts without an Arena deck", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(
+      powerLog,
+      [
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+        "D 12:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_RANKED"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+    const selectedDeck = {
+      id: "constructed-before-arena",
+      deckId: "9455681170",
+      name: "旧构筑套牌",
+      cards: [{ name: "Constructed Card", count: 30, cardId: "CONSTRUCTED_001" }],
+      rawText: "",
+      sourcePath: join(sessionDir, "Decks.log"),
+      updatedAt: "2026-08-13T00:00:00.000Z",
+      warnings: []
+    };
+    const scanner = {
+      scanAndImportDecks: vi.fn(async () => ({
+        status: "ok" as const,
+        decks: [selectedDeck],
+        activeDeck: selectedDeck
+      }))
+    };
+    const service = new TrackerService(scanner, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+    await service.start({ logPath: powerLog });
+    expect(service.getState().deckName).toBe("旧构筑套牌");
+
+    await appendFile(
+      powerLog,
+      "D 12:10:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_ARENA\n",
+      "utf8"
+    );
+
+    await vi.waitFor(() => {
+      expect(service.getState()).toMatchObject({
+        gameActive: true,
+        trackerMode: "arena",
+        deckName: undefined,
+        deck: []
+      });
+    }, { timeout: 3_000, interval: 25 });
+    await service.dispose();
   });
 
   it("keeps a Decks.log-selected preview when screen capture fails before the next game", async () => {

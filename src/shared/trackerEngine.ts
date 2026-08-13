@@ -655,6 +655,13 @@ export class TrackerEngine {
   }
 
   resetForGame() {
+    if (this.autoMatchedDeckId && this.deckIdentity.source === "inferred") {
+      this.deckCards = [];
+      this.deckCode = undefined;
+      this.deckName = undefined;
+      this.autoMatchedDeckId = undefined;
+      this.resetDeckIdentity();
+    }
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.opponentRows.clear();
@@ -691,14 +698,28 @@ export class TrackerEngine {
     this.addEvent("game-start", "unknown", { cardName: "新对局开始" });
   }
 
-  resetAfterGame() {
-    this.deckCards = [];
-    this.deckCode = undefined;
-    this.deckName = undefined;
-    this.autoMatchedDeckId = undefined;
-    this.resetDeckIdentity();
-    this.deckRows.clear();
-    this.deckRowsByCardId.clear();
+  resetAfterGame(options: { clearDeck?: boolean } = {}) {
+    const clearDeck = options.clearDeck === true || this.usingUnmatchedDeckSnapshot;
+    if (clearDeck) {
+      this.deckCards = [];
+      this.deckCode = undefined;
+      this.deckName = undefined;
+      this.autoMatchedDeckId = undefined;
+      this.resetDeckIdentity();
+      this.deckRows.clear();
+      this.deckRowsByCardId.clear();
+    } else {
+      const collectionDeck = this.autoMatchedDeckId
+        ? this.collectionDecks.find((deck) => deck.id === this.autoMatchedDeckId)
+        : undefined;
+      if (collectionDeck) {
+        this.deckCards = collectionDeck.cards.map((card) => ({ ...card }));
+        this.deckCode = collectionDeck.rawDeckString;
+        this.deckName = collectionDeck.name ?? this.deckName ?? "当前套牌";
+      }
+      this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
+      this.rebuildDeckCardIdIndex();
+    }
     this.opponentRows.clear();
     this.globalEffects.clear();
     this.opponentGlobalEffects.clear();
@@ -728,6 +749,19 @@ export class TrackerEngine {
     this.usingUnmatchedDeckSnapshot = false;
     this.lastGameStartTimestamp = undefined;
     this.secretTracker.reset();
+  }
+
+  resetSession() {
+    this.resetAfterGame({ clearDeck: true });
+  }
+
+  resetForLogSession() {
+    const preserveImportedDeck =
+      this.deckCards.length > 0 &&
+      this.deckName === undefined &&
+      this.autoMatchedDeckId === undefined &&
+      !this.usingUnmatchedDeckSnapshot;
+    this.resetAfterGame({ clearDeck: !preserveImportedDeck });
   }
 
   setStatus(status: PublicTrackerState["status"], logPath?: string, error?: string) {

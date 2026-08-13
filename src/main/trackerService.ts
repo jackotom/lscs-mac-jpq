@@ -194,6 +194,7 @@ export class TrackerService {
 
   async start(options: { logPath?: string; deckText?: string } = {}) {
     let sessionContext = this.beginSession();
+    this.engine.resetForLogSession();
     if (options.deckText) {
       await this.importDeckIntoEngine(options.deckText, sessionContext);
       if (!this.isCurrentSession(sessionContext)) {
@@ -211,7 +212,7 @@ export class TrackerService {
       if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
-      this.engine.resetAfterGame();
+      this.engine.resetSession();
       this.arena.reset();
       this.engine.setStatus("missing-log", undefined, "没有找到炉石日志。请启动炉石，或手动选择 Logs 目录。");
       this.startSessionRefresh(sessionContext);
@@ -241,7 +242,7 @@ export class TrackerService {
       if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
-      this.engine.resetAfterGame();
+      this.engine.resetSession();
       this.arena.reset();
       this.waitingForFirstPowerLog = isWaitingForFirstPowerLog;
       this.engine.setStatus(
@@ -281,7 +282,7 @@ export class TrackerService {
       if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
-      this.engine.resetAfterGame();
+      this.engine.resetSession();
       this.arena.reset();
       this.engine.setStatus("error", logPath, buildPowerLogRequiredMessage(logPath));
       this.pushState();
@@ -716,6 +717,7 @@ export class TrackerService {
     this.latestExactArenaDeckObservation = undefined;
     this.latestArenaDeckEventAtMs = undefined;
     this.activeArenaGame = false;
+    this.activeTrackerMode = undefined;
     this.pendingLogBytes.clear();
     this.logFileFingerprints.clear();
     this.offsets.clear();
@@ -916,7 +918,7 @@ export class TrackerService {
             if (this.pendingArenaExitConfirmations < 2) {
               return;
             }
-            this.engine.resetAfterGame();
+            this.engine.resetSession();
           }
 
           this.resetPendingArenaExit();
@@ -1290,6 +1292,10 @@ export class TrackerService {
     );
     if (startsArenaGame) {
       this.activeArenaGame = true;
+      const trackerState = this.engine.getState();
+      if (trackerState.deck.length > 0 && trackerState.deckName !== "竞技场牌库") {
+        this.engine.resetSession();
+      }
     }
     if (hasGameStart) {
       this.activeTrackerMode = detectSupportedTrackerMode(currentText) ??
@@ -1408,7 +1414,7 @@ export class TrackerService {
   private resolveTrackerMode(state: PublicTrackerState): TrackerMode | undefined {
     if (this.arena.getState().status !== "inactive") return "arena";
     if (this.constructedScreenMode) return "ladder";
-    return state.gameActive ? this.activeTrackerMode : undefined;
+    return state.gameActive || state.deck.length > 0 ? this.activeTrackerMode : undefined;
   }
 
   private syncArenaDeckToTracker() {

@@ -259,11 +259,16 @@ async function runElectronChild() {
           "密集演示的奥秘卡图没有全部真实加载",
           record.secretLoadedImageCount === record.secretCandidateCount
         );
-        recordCheck(report, spec.id, "奥秘卡图尺寸超出允许范围", record.secretArtworkSizesValid === true);
+        recordCheck(report, spec.id, "奥秘卡图没有铺满横向候选行", record.secretArtworkSizesValid === true);
         recordCheck(report, spec.id, "奥秘卡图溢出候选行或自身容器", record.secretArtworkContained === true);
         recordCheck(report, spec.id, "奥秘内容容器存在横向溢出", record.secretBodyHasHorizontalOverflow === false);
         recordCheck(report, spec.id, "奥秘标题没有固定在窗口顶部", record.secretHeaderStayedFixed === true);
-        recordCheck(report, spec.id, "奥秘槽位标记不可见", record.secretSlotLabelStayedVisible === true);
+        recordCheck(report, spec.id, "奥秘标题高度没有贴合参考图", record.secretCompactHeaderHeight === true);
+        recordCheck(report, spec.id, "奥秘候选行高没有贴合参考图", record.secretCompactRowHeights === true);
+        recordCheck(report, spec.id, "奥秘候选缺少费用窄栏", record.secretCostColumnCount === record.secretCandidateCount);
+        recordCheck(report, spec.id, "奥秘候选没有保持单列", record.secretSingleColumnLayout === true);
+        recordCheck(report, spec.id, "奥秘窗缺少左上问号徽章", record.secretQuestionBadgeCount === 1);
+        recordCheck(report, spec.id, "奥秘牌条本体不是参考图的 124px", record.secretPanelWidthMatchesReference === true);
         recordCheck(report, spec.id, "仍有奥秘候选落在可视区域外", record.secretAllCandidatesVisible === true);
         recordCheck(report, spec.id, "最后一个奥秘候选不可见", record.secretLastCandidateVisible === true);
       }
@@ -391,17 +396,22 @@ async function inspectWindow(window, rootSelector) {
     const secretArtworkContained = secretArtwork.every((art) => {
       const artBounds = art.getBoundingClientRect();
       const rowBounds = art.closest("li")?.getBoundingClientRect();
+      const cardBounds = art.parentElement?.getBoundingClientRect();
       const image = art.querySelector("img");
       const imageBounds = image?.getBoundingClientRect();
-      const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.top >= outer.top - 0.5 &&
-        inner.right <= outer.right + 0.5 && inner.bottom <= outer.bottom + 0.5;
-      return Boolean(rowBounds) && inside(artBounds, rowBounds) && (!imageBounds || inside(imageBounds, artBounds));
+      const insideArtwork = (inner, outer) => inner.left >= outer.left - 1.5 && inner.top >= outer.top - 1.5 &&
+        inner.right <= outer.right + 1.5 && inner.bottom <= outer.bottom + 1.5;
+      return Boolean(rowBounds && cardBounds) &&
+        insideArtwork(cardBounds, rowBounds) &&
+        insideArtwork(artBounds, cardBounds) &&
+        (!imageBounds || insideArtwork(imageBounds, artBounds));
     });
     const secretBody = document.querySelector(".secret-overlay-body");
     const secretOverlay = document.querySelector(".secret-overlay");
     const secretHeader = document.querySelector(".secret-overlay-header");
     const secretSlots = Array.from(document.querySelectorAll(".secret-overlay-slot"));
-    const secretSlotLabels = secretSlots.map((slot) => slot.firstElementChild).filter(Boolean);
+    const secretCandidateLists = Array.from(document.querySelectorAll(".secret-overlay-candidates"));
+    const secretCosts = Array.from(document.querySelectorAll(".secret-overlay-cost"));
     const inside = (inner, outer) => inner.left >= outer.left - 0.5 && inner.top >= outer.top - 0.5 &&
       inner.right <= outer.right + 0.5 && inner.bottom <= outer.bottom + 0.5;
     const secretBodyBounds = secretBody?.getBoundingClientRect();
@@ -423,7 +433,7 @@ async function inspectWindow(window, rootSelector) {
       secretBodyCount: document.querySelectorAll(".secret-overlay-body").length,
       secretSlotCount: secretSlots.length,
       secretCandidateCount: secretCandidates.length,
-      secretLastCandidateText: secretCandidates.at(-1)?.textContent?.trim() ?? "",
+      secretLastCandidateText: secretCandidates.at(-1)?.querySelector(".secret-overlay-name")?.textContent?.trim() ?? "",
       secretArtworkCount: secretArtwork.length,
       secretArtworkMediaCount: secretArtworkMedia.length,
       secretImageCount: secretImages.length,
@@ -434,15 +444,23 @@ async function inspectWindow(window, rootSelector) {
       secretUnsettledImageCount: secretImages.filter((image) => !image.complete || image.naturalWidth === 0).length,
       secretArtworkSizes,
       secretArtworkSizesValid: secretArtworkSizes.length === secretCandidates.length &&
-        secretArtworkSizes.every(({ width, height }) => width >= 24 && width <= 48 && height >= 20 && height <= 40),
+        secretArtworkSizes.every(({ width, height }) => width >= 100 && width <= 106 && height >= 16 && height <= 18),
       secretArtworkContained,
       secretBodyHasHorizontalOverflow: secretBody ? secretBody.scrollWidth > secretBody.clientWidth : true,
       secretBodyHasVerticalOverflow: secretBody ? secretBody.scrollHeight > secretBody.clientHeight : true,
       secretHeaderStayedFixed: Boolean(secretHeaderBounds && secretOverlayBounds &&
         getComputedStyle(secretHeader).position === "sticky" &&
         Math.abs(secretHeaderBounds.top - secretOverlayBounds.top) <= 1.5),
-      secretSlotLabelStayedVisible: Boolean(secretBodyBounds && secretSlotLabels.length === secretSlots.length &&
-        secretSlotLabels.every((label) => inside(label.getBoundingClientRect(), secretBodyBounds))),
+      secretCompactHeaderHeight: Boolean(secretHeaderBounds && Math.abs(secretHeaderBounds.height - 18) <= 0.5),
+      secretCompactRowHeights: secretCandidates.length > 0 && secretCandidates.every((candidate) =>
+        Math.abs(candidate.getBoundingClientRect().height - 17) <= 0.5
+      ),
+      secretCostColumnCount: secretCosts.length,
+      secretQuestionBadgeCount: document.querySelectorAll(".secret-overlay-badge").length,
+      secretPanelWidthMatchesReference: Boolean(secretOverlayBounds && Math.abs(secretOverlayBounds.width - 124) <= 0.5),
+      secretSingleColumnLayout: secretCandidateLists.length > 0 && secretCandidateLists.every((list) =>
+        getComputedStyle(list).gridTemplateColumns.trim().split(/\s+/).length === 1
+      ),
       secretAllCandidatesVisible: secretCandidateVisibility.length === secretCandidates.length &&
         secretCandidateVisibility.every(Boolean),
       secretLastCandidateVisible: secretCandidateVisibility.at(-1) === true

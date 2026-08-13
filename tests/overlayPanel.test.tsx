@@ -316,7 +316,9 @@ describe("standard tracker overlay", () => {
       }
     })} />);
 
-    expect(screen.getByLabelText("竞技场卡组影响")).toHaveTextContent("竞技场牌");
+    const arena = screen.getByLabelText("竞技场卡组影响");
+    expect(arena).toHaveTextContent("竞技场牌");
+    expect(within(arena).getByLabelText("竞技场阶段")).toHaveTextContent("选牌中 · 12/30");
     expect(screen.queryByRole("button", { name: "历史" })).not.toBeInTheDocument();
   });
 
@@ -524,7 +526,9 @@ describe("standard tracker overlay", () => {
       const arena = screen.getByLabelText("竞技场卡组影响");
       expect(overlayView.arena?.deckCount).toBe(candidateCount);
       expect(within(arena).getAllByRole("listitem")).toHaveLength(candidateCount);
-      expect(within(arena).getByLabelText("竞技场阶段")).toHaveTextContent("重选中");
+      const stage = within(arena).getByLabelText("竞技场阶段");
+      expect(stage).toHaveTextContent(`${candidateCount}张候选 · 最终30`);
+      expect(stage).toHaveAttribute("title", `重选中 · ${candidateCount}张候选 · 最终30`);
       if (candidateCount > 30) {
         expect(arena).toHaveTextContent(`新选牌 ${candidateCount - 30}`);
       } else {

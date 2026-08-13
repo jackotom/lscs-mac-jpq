@@ -80,17 +80,19 @@ export function getSecretOverlayBounds(
   possibleCandidateCounts: readonly number[]
 ): IconBounds {
   const y = display.y + Math.round(display.height * 0.075);
-  const candidateRows = possibleCandidateCounts.reduce(
-    (total, count) => total + Math.max(1, Math.ceil(Math.max(0, count) / 2)),
-    0
-  );
-  const desiredHeight = 27 + possibleCandidateCounts.length * 32 + candidateRows * 32;
-  const maxHeight = Math.max(120, Math.min(640, display.y + display.height - y - 24));
+  const candidateRows = possibleCandidateCounts.reduce((total, count) => (
+    total + Math.max(1, Math.max(0, count))
+  ), 0);
+  const slotLabelHeight = possibleCandidateCounts.length > 1
+    ? possibleCandidateCounts.length * 14
+    : 0;
+  const desiredHeight = 2 + 18 + slotLabelHeight + candidateRows * 17;
+  const maxHeight = Math.max(37, Math.min(640, display.y + display.height - y - 24));
   return {
-    x: display.x + Math.round(display.width * 0.275),
+    x: display.x + Math.round(display.width * 0.275) - 20,
     y,
-    width: 240,
-    height: Math.min(Math.max(190, desiredHeight), maxHeight)
+    width: 144,
+    height: Math.min(Math.max(37, desiredHeight), maxHeight)
   };
 }
 

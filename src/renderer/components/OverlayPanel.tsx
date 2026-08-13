@@ -394,10 +394,13 @@ function asText(value: unknown): string | undefined {
 }
 
 function ArenaOverlay({ view }: { view: NonNullable<OverlayPanelProps["view"]["arena"]> }) {
+  const stageTitle = `${view.statusLabel} · ${view.progress}`;
+  const stageLabel = view.progress.includes("张候选") ? view.progress : stageTitle;
+
   return (
     <section className="overlay-arena overlay-arena-stats" aria-label="竞技场卡组影响">
-      <strong className="overlay-arena-stage" aria-label="竞技场阶段" title={view.statusLabel}>
-        {view.statusLabel}
+      <strong className="overlay-arena-stage" aria-label="竞技场阶段" title={stageTitle}>
+        {stageLabel}
       </strong>
       <div className="overlay-arena-stats-header" aria-label="竞技场牌库表头">
         <span>选取率</span>

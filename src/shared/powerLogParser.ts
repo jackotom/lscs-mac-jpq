@@ -61,16 +61,12 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
     }];
   }
 
-  if (isConstructedGameStartLine(line)) {
+  if (line.includes("CREATE_GAME")) {
     return [{ type: "game-start", timestamp: parseLogTimestamp(line), raw: line }];
   }
 
   if (isGameEndLine(line)) {
     return [{ type: "game-end", raw: line }];
-  }
-
-  if (line.includes("CREATE_GAME")) {
-    return [];
   }
 
   const deckShuffle = line.match(/\bSHUFFLE_DECK\s+PlayerID=(\d+)\b/i);

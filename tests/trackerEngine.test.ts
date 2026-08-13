@@ -149,6 +149,14 @@ describe("parseLogLine", () => {
     ).toEqual([expect.objectContaining({ type: "game-end" })]);
   });
 
+  it("recognizes Arena CREATE_GAME records as game starts after the service releases them", () => {
+    expect(
+      parseLogLine(
+        "D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_ARENA"
+      )
+    ).toEqual([expect.objectContaining({ type: "game-start" })]);
+  });
+
   it("parses player identities and public player counters without card data", () => {
     expect(
       parseLogLine(
@@ -2141,8 +2149,9 @@ D 20:28:22.0000000 GameState.DebugPrintPower() -     tag=ZONE value=DECK
     expect(engine.getState().friendlyOther).toEqual([]);
   });
 
-  it("clears the completed game when Hearthstone reports a result", () => {
+  it("keeps the current deck ready for the next game when Hearthstone reports a result", () => {
     const engine = new TrackerEngine({ deckText: "2x Fireball" });
+    engine.setFriendlyController(1);
 
     engine.applyText(`
 D 12:00:00.000 PowerTaskList.DebugPrintPower() -     CREATE_GAME
@@ -2151,12 +2160,220 @@ D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=
 `);
 
     expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      autoMatchedDeckId: undefined,
+      deck: [
+        {
+          name: "Fireball",
+          count: 2,
+          remaining: 2,
+          drawn: 0,
+          played: 0
+        }
+      ],
+      friendlyHand: [],
+      friendlyOther: [],
+      opponentPlayed: [],
+      events: [],
+      summary: { totalCards: 2, remainingCards: 2, drawnCards: 0, opponentPlayedCount: 0 }
+    });
+
+    engine.applyText(`
+D 12:10:00.000 PowerTaskList.DebugPrintPower() -     CREATE_GAME
+D 12:10:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityName=Fireball id=65 zone=DECK zonePos=1 cardId=CS2_029 player=1] tag=ZONE value=HAND
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: true,
+      deck: [{ name: "Fireball", count: 2, remaining: 1, drawn: 1, played: 0 }],
+      summary: { totalCards: 2, remainingCards: 1, drawnCards: 1 }
+    });
+  });
+
+  it("keeps the confirmed collection deck identity between games", () => {
+    const engine = new TrackerEngine({
+      collectionDecks: [
+        createCollectionDeck("selected-deck", "当前构筑套牌", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 2, cardId: "TEST_002" }
+        ])
+      ]
+    });
+
+    expect(engine.previewCollectionDeck("selected-deck", { source: "decks-log" })).toBe(true);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Singleton id=64 zone=DECK zonePos=1 cardId=TEST_001 player=1] tag=ZONE value=HAND
+D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=WON
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      deckName: "当前构筑套牌",
+      autoMatchedDeckId: "selected-deck",
+      deckIdentity: {
+        status: "confirmed",
+        source: "decks-log",
+        deckId: "selected-deck"
+      },
+      summary: { totalCards: 3, remainingCards: 3, drawnCards: 0 }
+    });
+  });
+
+  it("keeps the arena deck between arena games", () => {
+    const engine = new TrackerEngine();
+    engine.loadDeckCards(
+      [
+        { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+        { name: "Sample Pair", count: 2, cardId: "TEST_002" }
+      ],
+      "竞技场牌库"
+    );
+
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Pair id=64 zone=DECK zonePos=1 cardId=TEST_002 player=1] tag=ZONE value=HAND
+D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=LOST
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      deckName: "竞技场牌库",
+      summary: { totalCards: 3, remainingCards: 3, drawnCards: 0 }
+    });
+  });
+
+  it("drops a temporary unmatched placeholder after the game ends", () => {
+    const engine = new TrackerEngine();
+    engine.applyLine("D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME");
+    engine.setFriendlyDeckSnapshot({ initialDeckSize: 30, remainingDeckSize: 27 });
+    expect(engine.useUnmatchedDeckSnapshot()).toBe(true);
+
+    engine.applyLine(
+      "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=LOST"
+    );
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      deckName: undefined,
+      deck: [],
+      summary: { totalCards: 0, remainingCards: 0, drawnCards: 0 }
+    });
+  });
+
+  it("removes opening generated placeholders while keeping the selected base deck", () => {
+    const engine = new TrackerEngine({
+      collectionDecks: [
+        createCollectionDeck("generated-deck", "带开局生成牌的套牌", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 2, cardId: "TEST_002" }
+        ])
+      ]
+    });
+    engine.applyLine("D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME");
+    engine.setFriendlyDeckSnapshot({
+      baseDeckSize: 3,
+      initialDeckSize: 4,
+      remainingDeckSize: 4
+    });
+    expect(engine.activateCollectionDeck("generated-deck")).toBe(true);
+    expect(engine.getState().summary.totalCards).toBe(4);
+    expect(engine.getState().deck).toContainEqual(
+      expect.objectContaining({ name: "对局生成的未知牌", count: 1 })
+    );
+
+    engine.applyLine(
+      "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=WON"
+    );
+
+    expect(engine.getState()).toMatchObject({
+      deckName: "带开局生成牌的套牌",
+      autoMatchedDeckId: "generated-deck",
+      summary: { totalCards: 3, remainingCards: 3, drawnCards: 0 }
+    });
+    expect(engine.getState().deck.find((card) => card.name === "对局生成的未知牌")).toBeUndefined();
+  });
+
+  it("shows an inferred deck between games but releases it when the next game starts", () => {
+    const engine = new TrackerEngine({
+      cardDatabase: cardDb,
+      collectionDecks: [
+        createCollectionDeck("deck-a", "自动套牌 A", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Pair", count: 2, cardId: "TEST_002" }
+        ]),
+        createCollectionDeck("deck-b", "自动套牌 B", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" },
+          { name: "Sample Multi", count: 2, cardId: "TEST_003" }
+        ])
+      ]
+    });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Singleton id=64 zone=DECK cardId=TEST_001 player=1] tag=ZONE value=HAND
+D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Pair id=65 zone=DECK cardId=TEST_002 player=1] tag=ZONE value=HAND
+D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=WON
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      deckName: "自动套牌 A",
+      autoMatchedDeckId: "deck-a",
+      summary: { totalCards: 3, remainingCards: 3, drawnCards: 0 }
+    });
+
+    engine.applyText(`
+D 12:10:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:10:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Singleton id=74 zone=DECK cardId=TEST_001 player=1] tag=ZONE value=HAND
+D 12:10:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Sample Multi id=75 zone=DECK cardId=TEST_003 player=1] tag=ZONE value=HAND
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: true,
+      deckName: "自动套牌 B",
+      autoMatchedDeckId: "deck-b",
+      summary: { totalCards: 3, remainingCards: 1, drawnCards: 2 }
+    });
+  });
+
+  it("handles duplicate game results without changing the retained deck", () => {
+    const engine = new TrackerEngine({ deckText: "2x Fireball" });
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=本地玩家 tag=PLAYSTATE value=WON
+D 12:05:01.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=STEP value=FINAL_GAMEOVER
+`);
+
+    expect(engine.getState()).toMatchObject({
+      gameActive: false,
+      deck: [{ name: "Fireball", count: 2, remaining: 2, drawn: 0, played: 0 }],
+      summary: { totalCards: 2, remainingCards: 2, drawnCards: 0 }
+    });
+  });
+
+  it("keeps a manual import but clears a collection deck at a new log-session boundary", () => {
+    const imported = new TrackerEngine({ deckText: "2x Fireball" });
+    imported.resetForLogSession();
+    expect(imported.getState()).toMatchObject({
+      deck: [{ name: "Fireball", count: 2, remaining: 2, drawn: 0 }],
+      summary: { totalCards: 2, remainingCards: 2, drawnCards: 0 }
+    });
+
+    const selected = new TrackerEngine({
+      collectionDecks: [
+        createCollectionDeck("old-session-deck", "旧会话套牌", [
+          { name: "Sample Singleton", count: 1, cardId: "TEST_001" }
+        ])
+      ]
+    });
+    expect(selected.previewCollectionDeck("old-session-deck")).toBe(true);
+    selected.resetForLogSession();
+    expect(selected.getState()).toMatchObject({
       deckName: undefined,
       autoMatchedDeckId: undefined,
       deck: [],
-      opponentPlayed: [],
-      events: [],
-      summary: { totalCards: 0, remainingCards: 0, drawnCards: 0, opponentPlayedCount: 0 }
+      summary: { totalCards: 0, remainingCards: 0, drawnCards: 0 }
     });
   });
 
