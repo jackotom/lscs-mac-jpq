@@ -12,6 +12,7 @@
     "test": "cross-env CHOKIDAR_USEPOLLING=1 vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "package:mac-arm64": "npm run build:native && npm run build && bash scripts/package-mac-arm64.sh",
+    "screenshots:readme": "npm run build:native && npm run build && node scripts/generate-readme-screenshots.mjs",
     "verify:card-lifecycle-ui": "node scripts/verify-card-lifecycle-ui.mjs",
     "verify:independent-overlays-ui": "npm run build && node scripts/verify-independent-overlays-ui.mjs",
     "verify:arena-redraft-ui": "VERIFY_ARENA_REDRAFT_ONLY=1 bash scripts/verify-release.sh",

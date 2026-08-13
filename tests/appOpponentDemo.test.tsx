@@ -39,6 +39,8 @@ describe("opponent overlay QA demo", () => {
 
     render(<App />);
 
+    expect(screen.getByText("寒冰箭")).toBeInTheDocument();
+    expect(screen.getByText("火球术")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "我方公开计数" })).toBeInTheDocument();
     expect(screen.getByLabelText("我方下次疲劳伤害 2")).toBeInTheDocument();
     expect(screen.getByLabelText("我方尸体 6")).toBeInTheDocument();

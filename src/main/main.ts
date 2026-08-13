@@ -624,7 +624,8 @@ if (hasSingleInstanceLock) {
       });
       await captureQaScreenshotIfRequested(window);
     } else if (process.env.QA_OPEN_OVERLAY === "1") {
-      const window = await createOverlayWindow();
+      const friendlyOverlayQaDemo = process.env.QA_FRIENDLY_OVERLAY_DEMO === "1";
+      const window = await createOverlayWindow({ qaDemo: friendlyOverlayQaDemo });
       await captureQaScreenshotIfRequested(window);
     } else if (process.env.QA_OPEN_ARENA_CHOICE_OVERLAY === "1") {
       const window = await createArenaChoiceOverlayWindow({ qaDemo: true });
@@ -670,7 +671,8 @@ if (hasSingleInstanceLock) {
     } else if (process.env.QA_OPEN_THREE_WINDOW_LAYOUT === "1") {
       const heroWindow = await createArenaHeroRankingWindow({ qaDemo: true });
       const opponentWindow = await createOpponentOverlayWindow({ showWhenReady: false, qaDemo: true });
-      const friendlyWindow = await createOverlayWindow({ showWhenReady: false });
+      const friendlyOverlayQaDemo = process.env.QA_FRIENDLY_OVERLAY_DEMO === "1";
+      const friendlyWindow = await createOverlayWindow({ showWhenReady: false, qaDemo: friendlyOverlayQaDemo });
       heroWindow.showInactive();
       opponentWindow.showInactive();
       friendlyWindow.showInactive();
@@ -1240,7 +1242,7 @@ async function startTrackingAutomatically(options?: { logPath?: string; deckText
   return tracker.start(options);
 }
 
-async function createOverlayWindow(options: { showWhenReady?: boolean } = {}) {
+async function createOverlayWindow(options: { showWhenReady?: boolean; qaDemo?: boolean } = {}) {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     if (options.showWhenReady !== false) {
       overlayWindow.showInactive();
@@ -1256,7 +1258,7 @@ async function createOverlayWindow(options: { showWhenReady?: boolean } = {}) {
     return window;
   }
 
-  const creationPromise = createOverlayWindowInstance();
+  const creationPromise = createOverlayWindowInstance(options.qaDemo === true);
   overlayWindowCreationPromise = creationPromise;
   try {
     const window = await creationPromise;
@@ -1271,7 +1273,7 @@ async function createOverlayWindow(options: { showWhenReady?: boolean } = {}) {
   }
 }
 
-async function createOverlayWindowInstance(): Promise<BrowserWindow> {
+async function createOverlayWindowInstance(qaDemo = false): Promise<BrowserWindow> {
   const savedBounds = await loadOverlayWindowBounds();
   if (overlayWindow && !overlayWindow.isDestroyed()) return overlayWindow;
 
@@ -1313,7 +1315,10 @@ async function createOverlayWindowInstance(): Promise<BrowserWindow> {
     }
   });
 
-  await loadRendererPage(createdWindow, { overlay: "1" });
+  await loadRendererPage(createdWindow, {
+    overlay: "1",
+    ...(qaDemo ? { "qa-opponent-demo": "1" } : {})
+  });
 
   return createdWindow;
 }
@@ -2653,9 +2658,28 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
   const qaMainView = process.env.QA_MAIN_VIEW;
   if (qaMainView) {
     await window.webContents.executeJavaScript(`
-      document.querySelector(${JSON.stringify(`[aria-label="${qaMainView}"]`)})?.click();
+      (document.querySelector(${JSON.stringify(`[aria-label="${qaMainView}"]`)}) ??
+        Array.from(document.querySelectorAll("button"))
+          .find((button) => button.textContent?.trim() === ${JSON.stringify(qaMainView)}))
+        ?.click();
     `);
     await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
+  const qaClickTexts = process.env.QA_CLICK_TEXTS
+    ?.split("|")
+    .map((value) => value.trim())
+    .filter(Boolean) ?? [];
+  for (const buttonText of qaClickTexts) {
+    await window.webContents.executeJavaScript(`
+      Array.from(document.querySelectorAll("button"))
+        .find((button) => {
+          const text = button.textContent?.trim();
+          return text === ${JSON.stringify(buttonText)} || text?.startsWith(${JSON.stringify(`${buttonText} (`)});
+        })
+        ?.click();
+    `);
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
   if (process.env.QA_OPEN_IMPORT_MODAL === "1" || process.env.QA_SCAN_COLLECTION === "1") {

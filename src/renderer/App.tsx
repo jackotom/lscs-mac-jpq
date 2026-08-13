@@ -100,8 +100,71 @@ function createAppCardTracking(gameKey: string): PublicCardTracking {
 
 function createQaOpponentCardTracking(): PublicCardTracking {
   const tracking = createAppCardTracking("qa-opponent-game");
+  const qaFriendlyCards = [
+    { cardId: "CS2_024", name: "寒冰箭", manaCost: 2, isSpell: true },
+    { cardId: "CS2_029", name: "火球术", manaCost: 4, isSpell: true },
+    { cardId: "CS2_023", name: "奥术智慧", manaCost: 3, isSpell: true },
+    { cardId: "CS2_026", name: "冰霜新星", manaCost: 3, isSpell: true },
+    { cardId: "CS2_028", name: "暴风雪", manaCost: 6, isSpell: true },
+    { cardId: "CS2_032", name: "烈焰风暴", manaCost: 7, isSpell: true },
+    { cardId: "CS2_033", name: "水元素", manaCost: 4, isSpell: false },
+    { cardId: "EX1_295", name: "寒冰屏障", manaCost: 3, isSpell: true },
+    { cardId: "EX1_287", name: "法术反制", manaCost: 3, isSpell: true },
+    { cardId: "EX1_279", name: "炎爆术", manaCost: 10, isSpell: true },
+    { cardId: "EX1_608", name: "巫师学徒", manaCost: 2, isSpell: false },
+    { cardId: "EX1_612", name: "肯瑞托法师", manaCost: 3, isSpell: false },
+    { cardId: "EX1_294", name: "镜像实体", manaCost: 3, isSpell: true },
+    { cardId: "EX1_275", name: "冰锥术", manaCost: 4, isSpell: true }
+  ] as const;
+  const qaFriendlyHand = [
+    { cardId: "QA_COLD_CASE", name: "冰冷案例", manaCost: 4, isSpell: true },
+    { cardId: "QA_FIRST_FLAME", name: "初始之火", manaCost: 1, isSpell: true }
+  ] as const;
+  const friendlyDeckCards = qaFriendlyCards.map(({ cardId, name }) => ({
+    cardKey: `id:${cardId.toLowerCase()}`,
+    cardId,
+    name,
+    count: 2
+  }));
+  const detailsByCardKey = Object.fromEntries(
+    [...qaFriendlyCards, ...qaFriendlyHand].map((card, index) => [
+      `id:${card.cardId.toLowerCase()}`,
+      {
+        dbfId: 10_000 + index,
+        cardId: card.cardId,
+        name: card.name,
+        manaCost: card.manaCost,
+        isSpell: card.isSpell,
+        relatedCards: []
+      } satisfies CardDetails
+    ])
+  );
   return {
     ...tracking,
+    detailsByCardKey,
+    friendly: {
+      ...tracking.friendly,
+      current: {
+        ...tracking.friendly.current,
+        deck: {
+          status: "known",
+          knownCount: 28,
+          totalCount: 28,
+          cards: friendlyDeckCards
+        },
+        hand: {
+          status: "known",
+          knownCount: 2,
+          totalCount: 2,
+          cards: qaFriendlyHand.map(({ cardId, name }) => ({
+            cardKey: `id:${cardId.toLowerCase()}`,
+            cardId,
+            name,
+            count: 1
+          }))
+        }
+      }
+    },
     opponent: {
       ...tracking.opponent,
       current: {
@@ -251,6 +314,7 @@ function smartCountersFromState(state: PublicTrackerState): readonly OverlaySmar
 
 const qaHomeState: PublicTrackerState = {
   ...qaOpponentOverlayState,
+  logPath: "炉石日志/Power.log",
   trackerMode: "ladder",
   constructedScreenMode: "standard",
   deckName: "冰霜法",
@@ -265,6 +329,19 @@ const qaHomeState: PublicTrackerState = {
   ]
 };
 
+const qaFriendlyOverlayState: PublicTrackerState = {
+  ...qaHomeState,
+  deckIdentity: {
+    status: "confirmed",
+    source: "decks-log",
+    deckId: "qa-frost-mage",
+    observedDistinctCards: 14,
+    candidateCount: 1,
+    bestScore: 1,
+    scoreLead: 1
+  }
+};
+
 const qaHomeHistory: MatchHistoryResult = {
   status: "ok",
   matches: [
@@ -277,15 +354,32 @@ const qaHomeHistory: MatchHistoryResult = {
   summary: { total: 5, wins: 3, losses: 2, ties: 0, winRate: 0.6 }
 };
 
+function createQaNewsArtwork(accent: string, label: string): string {
+  const artwork = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#08141f"/><stop offset="1" stop-color="${accent}"/></linearGradient></defs>
+    <rect width="320" height="180" rx="18" fill="url(#g)"/>
+    <circle cx="160" cy="78" r="48" fill="none" stroke="#f6c66a" stroke-width="8" opacity=".9"/>
+    <path d="M132 82c18-34 54-28 58-4-9-10-23-8-29 3 19-3 30 13 23 26-6-9-19-11-28-5-14 9-33-5-24-20Z" fill="#f6c66a"/>
+    <text x="160" y="154" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#fff">${label}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artwork)}`;
+}
+
+const qaNewsArtwork = [
+  createQaNewsArtwork("#244f72", "版本更新"),
+  createQaNewsArtwork("#6b3c2d", "全新赛季"),
+  createQaNewsArtwork("#315b43", "活动日历")
+] as const;
+
 const qaHomeNews: HomeNewsResult = {
   status: "fresh",
   source: HOME_NEWS_SOURCE_LABEL,
   sourceUrl: OFFICIAL_HOME_NEWS_URL,
   fetchedAt: "2026-08-11T12:00:00.000Z",
   items: [
-    { id: "qa-news-1", title: "36.2 版本更新说明", summary: "查看最新平衡调整与游戏内容。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/m6/M6QUL71462F61785194758004.jpg", publishedAt: "2026-08-11T08:00:00.000Z" },
-    { id: "qa-news-2", title: "酒馆战棋全新赛季现已开启", summary: "新英雄、新饰品与赛季奖励登场。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/53/53KJ9ZUCJ5MS1784585330957.jpg", publishedAt: "2026-08-10T08:00:00.000Z" },
-    { id: "qa-news-3", title: "本周乱斗与活动日历", summary: "掌握本周游戏活动和奖励安排。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: "https://bnetcmsus-a.akamaihd.net/cms/blog_thumbnail/ig/IGRE2U8UJW8L1784323863703.jpg", publishedAt: "2026-08-09T08:00:00.000Z" },
+    { id: "qa-news-1", title: "36.2 版本更新说明", summary: "查看最新平衡调整与游戏内容。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: qaNewsArtwork[0], publishedAt: "2026-08-11T08:00:00.000Z" },
+    { id: "qa-news-2", title: "酒馆战棋全新赛季现已开启", summary: "新英雄、新饰品与赛季奖励登场。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: qaNewsArtwork[1], publishedAt: "2026-08-10T08:00:00.000Z" },
+    { id: "qa-news-3", title: "本周乱斗与活动日历", summary: "掌握本周游戏活动和奖励安排。", url: OFFICIAL_HOME_NEWS_URL, imageUrl: qaNewsArtwork[2], publishedAt: "2026-08-09T08:00:00.000Z" },
     { id: "qa-news-4", title: "竞技场轮换与卡池说明", summary: "了解当前竞技场环境变化。", url: OFFICIAL_HOME_NEWS_URL, publishedAt: "2026-08-08T08:00:00.000Z" }
   ]
 };
@@ -428,6 +522,13 @@ function App() {
   const isBusy = isInitializing || pendingAction !== undefined;
 
   useEffect(() => {
+    if (isQaHomeDemo) {
+      setHasAcceptedTrackerState(true);
+      setIsInitializing(false);
+      setInitializationError(undefined);
+      return;
+    }
+
     if (!api) {
       setIsInitializing(false);
       return;
@@ -491,7 +592,7 @@ function App() {
       disposed = true;
       unsubscribe();
     };
-  }, [api]);
+  }, [api, isQaHomeDemo]);
 
   useEffect(() => api?.onOpenSettings?.(() => { void loadTrackerSettings(); }), [api]);
 
@@ -1307,7 +1408,7 @@ function App() {
         <style>{rendererStyles}</style>
         {retainedStateError ? <div className="notice" role="alert">{retainedStateError}</div> : null}
         <OverlayWindow
-          state={isQaFriendlyOverlay ? qaOpponentOverlayState : state}
+          state={isQaFriendlyOverlay ? qaFriendlyOverlayState : state}
           onClose={api?.closeFriendlyOverlay ? closeFriendlyOverlay : undefined}
           onOpenSettings={api ? openSettingsInMainWindow : undefined}
           isLoading={isQaFriendlyOverlay ? false : isInitializing}
