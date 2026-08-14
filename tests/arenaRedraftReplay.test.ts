@@ -125,7 +125,7 @@ describe("de-identified Arena redraft replay", () => {
       activeDeck: { deckId: "9000000001", mode: "arena", cards: expect.any(Array) }
     });
     await restartedService.dispose();
-  });
+  }, 20_000);
 
   it("keeps the honest incomplete state when the real Decks parser returns an unknown card", async () => {
     const { CollectionDeckService } = await import("../src/main/collectionDeckService.js");

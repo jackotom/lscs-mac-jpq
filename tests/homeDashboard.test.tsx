@@ -83,7 +83,6 @@ describe("home dashboard", () => {
       expect(within(home).getByText(metric)).toBeInTheDocument();
     }
     expect(within(home).getAllByText("当前状态").length).toBeGreaterThan(0);
-    expect(within(home).getByRole("button", { name: "打开二级工作台" })).toBeInTheDocument();
   });
 
   it("reports a non-running tracker service as waiting to start", () => {

@@ -9,8 +9,6 @@ import {
   History,
   Image as ImageIcon,
   Layers3,
-  Minus,
-  Settings,
   ShieldCheck,
   Swords,
   Trophy,
@@ -38,8 +36,6 @@ export interface HomeDashboardProps {
   readonly onOpenTracker?: () => void;
   readonly onOpenDeckTools?: () => void;
   readonly onOpenMatchHistory?: () => void;
-  readonly onOpenSettings?: () => void;
-  readonly onMinimize?: () => void;
 }
 
 const heroImageUrl = new URL("../assets/home-emerald-hero-v1.png", import.meta.url).href;
@@ -64,9 +60,7 @@ export function HomeDashboard({
   onOpenNewsItem,
   onOpenTracker,
   onOpenDeckTools,
-  onOpenMatchHistory,
-  onOpenSettings,
-  onMinimize
+  onOpenMatchHistory
 }: HomeDashboardProps) {
   const dashboard = toDashboardViewModel(state, matchHistory, ladderRecommendation);
   const history = useMemo(
@@ -106,21 +100,13 @@ export function HomeDashboard({
       data-ladder-state={dashboard.ladder.state}
       aria-label="首页"
     >
-      <header className="home-product-header">
+      <header className="home-product-header" aria-label="产品状态栏">
         <div className="home-product-brand">
           <span className="home-product-mark" aria-hidden="true"><Crown size={24} /></span>
           <span>
             <strong>炉石记牌器</strong>
             <small className={`status-${state.status}`}><i aria-hidden="true" />{getServiceLabel(state)}</small>
           </span>
-        </div>
-        <div className="home-product-actions">
-          {onMinimize ? (
-            <button type="button" aria-label="最小化窗口" onClick={onMinimize}><Minus aria-hidden="true" size={18} /></button>
-          ) : null}
-          <button type="button" aria-label="打开二级工作台" onClick={onOpenSettings}>
-            <Settings aria-hidden="true" size={20} />
-          </button>
         </div>
       </header>
 
