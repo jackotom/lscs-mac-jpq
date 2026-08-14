@@ -32,4 +32,20 @@ describe("home tavern visual styles", () => {
       /\.home-reference-dashboard\s*\{[\s\S]*?height:\s*auto;[\s\S]*?overflow-y:\s*visible;/
     );
   });
+
+  it("gives every desktop route one draggable titlebar without stealing native or button clicks", () => {
+    expect(styles).toMatch(/--desktop-window-titlebar-height:\s*44px;/);
+    expect(styles).toMatch(
+      /\.desktop-window-titlebar\s*\{[\s\S]*?grid-template-columns:\s*88px minmax\(0, 1fr\) auto;[\s\S]*?-webkit-app-region:\s*drag;/
+    );
+    expect(styles).toMatch(
+      /\.desktop-window-controls-safe-area\s*\{[\s\S]*?min-width:\s*88px;[\s\S]*?-webkit-app-region:\s*no-drag;/
+    );
+    expect(styles).toMatch(
+      /\.desktop-window-drag-region\s*\{[\s\S]*?-webkit-app-region:\s*drag;/
+    );
+    expect(styles).toMatch(
+      /\.desktop-window-actions\s*\{[\s\S]*?-webkit-app-region:\s*no-drag;/
+    );
+  });
 });

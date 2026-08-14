@@ -22,6 +22,41 @@ afterEach(() => {
 });
 
 describe("desktop navigation shell", () => {
+  it("keeps one shared titlebar across home and workbench routes", async () => {
+    const minimizeMain = vi.fn(async () => true);
+    window.hearthstoneTracker = {
+      discoverLogs: vi.fn(async () => []),
+      getState: vi.fn(async () => trackerState),
+      onUpdate: vi.fn(() => () => undefined),
+      getTrackerSettings: vi.fn(async () => settings),
+      minimizeMain
+    } as unknown as typeof window.hearthstoneTracker;
+
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.queryByText("正在读取记牌器状态")).not.toBeInTheDocument());
+
+    const frame = container.querySelector<HTMLElement>(".desktop-frame")!;
+    expect(frame.firstElementChild).toHaveClass("desktop-window-titlebar");
+    expect(frame.querySelectorAll(":scope > .desktop-window-titlebar")).toHaveLength(1);
+    expect(frame.querySelector(".home-window-titlebar, .workbench-titlebar")).not.toBeInTheDocument();
+    expect(frame.querySelector(".desktop-window-title")).toBeEmptyDOMElement();
+    expect(frame.querySelector(".desktop-window-drag-region")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "最小化窗口" }));
+    await waitFor(() => expect(minimizeMain).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole("button", { name: "打开二级工作台" }));
+    expect(await screen.findByRole("button", { name: "关闭工作台，返回首页" })).toBeInTheDocument();
+    expect(frame.querySelectorAll(":scope > .desktop-window-titlebar")).toHaveLength(1);
+    expect(frame.querySelector(".desktop-window-title")).toHaveTextContent("实时对局");
+    expect(frame.querySelector(".home-window-titlebar, .workbench-titlebar")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭工作台，返回首页" }));
+    expect(await screen.findByRole("region", { name: "首页" })).toBeInTheDocument();
+    expect(frame.querySelectorAll(":scope > .desktop-window-titlebar")).toHaveLength(1);
+    expect(frame.querySelector(".desktop-window-title")).toBeEmptyDOMElement();
+  });
+
   it("keeps real routes in one shell and shows only live overview values", async () => {
     window.hearthstoneTracker = {
       discoverLogs: vi.fn(async () => []),

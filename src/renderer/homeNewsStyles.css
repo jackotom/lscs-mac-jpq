@@ -14,6 +14,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) *::after {
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame {
+  --desktop-window-titlebar-height: 44px;
   --light-page: #f4f7fb;
   --light-surface: #ffffff;
   --light-surface-soft: #f7f9fc;
@@ -40,9 +41,98 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
 }
 
-/* Home owns the full window and supplies its own product header. */
+/* One native-feeling titlebar spans every desktop route. */
+.desktop-window-titlebar {
+  position: relative;
+  z-index: 50;
+  display: grid;
+  width: 100%;
+  height: var(--desktop-window-titlebar-height);
+  min-width: 0;
+  min-height: var(--desktop-window-titlebar-height);
+  grid-column: 1 / -1;
+  grid-row: 1;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: stretch;
+  border-bottom: 1px solid #e7ebf1;
+  color: #5e697a;
+  background: rgba(250, 251, 253, .98);
+  box-shadow: 0 1px 0 rgba(45, 60, 81, .025);
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.desktop-window-controls-safe-area {
+  min-width: 88px;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-window-drag-region {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  -webkit-app-region: drag;
+}
+
+.desktop-window-title {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: .01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.desktop-window-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-window-actions .desktop-window-action {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #414a58;
+  background: transparent;
+  box-shadow: none;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-window-actions .desktop-window-action:hover {
+  border-color: #dfe7f2;
+  color: #176dd1;
+  background: #edf4fc;
+}
+
+.desktop-window-actions .desktop-window-action:active {
+  transform: translateY(1px);
+}
+
+.desktop-window-actions .desktop-window-action:focus-visible {
+  outline: 2px solid #2d7ff0;
+  outline-offset: 1px;
+}
+
+/* Home owns the full content row below the shared titlebar. */
 html body:has(.desktop-frame):has(.app-shell.view-home) .desktop-frame {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--desktop-window-titlebar-height) minmax(0, 1fr);
 }
 
 html body:has(.desktop-frame):has(.app-shell.view-home) .app-sidebar {
@@ -52,8 +142,11 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-sidebar {
 html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
   display: block;
   width: 100%;
-  height: 100dvh;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+  grid-column: 1;
+  grid-row: 2;
   padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -65,6 +158,7 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
 }
 
 .home-reference-dashboard {
+  --home-product-header-height: 74px;
   display: flex;
   width: 100%;
   height: auto;
@@ -91,8 +185,8 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
   z-index: 10;
   top: 0;
   display: flex;
-  min-height: 98px;
-  flex: 0 0 98px;
+  min-height: var(--home-product-header-height);
+  flex: 0 0 var(--home-product-header-height);
   align-items: center;
   justify-content: space-between;
   padding: 0 clamp(30px, 2.8vw, 42px);
@@ -104,7 +198,6 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
 
 .home-product-brand,
 .home-product-brand > span:last-child,
-.home-product-actions,
 .home-current-deck-heading,
 .home-reference-panel > header > div,
 .home-summary-metric,
@@ -179,41 +272,6 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
 .home-product-brand small.status-missing-log i { background: var(--light-red); }
 .home-product-brand small.status-paused i { background: var(--light-amber); }
 
-.home-product-actions {
-  min-width: 0;
-  gap: 10px;
-}
-
-.home-product-actions button,
-.home-window-control,
-.home-product-actions [data-window-action] {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: #414a58;
-  background: transparent;
-  box-shadow: none;
-  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
-}
-
-.home-product-actions button:hover,
-.home-window-control:hover,
-.home-product-actions [data-window-action]:hover {
-  border-color: #dfe7f2;
-  color: #176dd1;
-  background: #edf4fc;
-}
-
-.home-product-actions button:active,
-.home-window-control:active,
-.home-product-actions [data-window-action]:active { transform: translateY(1px); }
-
-.home-product-actions button:focus-visible,
 .home-reference-dashboard button:focus-visible {
   outline: 2px solid #2d7ff0;
   outline-offset: 2px;
@@ -224,7 +282,7 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
   width: 100%;
   max-width: 1540px;
   min-width: 0;
-  min-height: calc(100dvh - 98px);
+  min-height: calc(100dvh - var(--desktop-window-titlebar-height) - var(--home-product-header-height));
   flex: 0 0 auto;
   align-content: stretch;
   align-self: center;
@@ -957,6 +1015,7 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(.app-shell.view-home)) {
   display: grid;
   grid-template-columns: clamp(184px, 17.4vw, 242px) minmax(0, 1fr);
+  grid-template-rows: var(--desktop-window-titlebar-height) minmax(0, 1fr);
   background: #f4f7fb;
 }
 
@@ -966,6 +1025,8 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(
   display: flex;
   min-width: 0;
   min-height: 0;
+  grid-column: 1;
+  grid-row: 2;
   padding: 26px 18px 18px;
   overflow: hidden;
   border-right: 1px solid #e4e8ef;
@@ -1077,6 +1138,9 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(
   max-width: 100%;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  grid-column: 2;
+  grid-row: 2;
   padding: 18px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -1307,14 +1371,16 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(
 }
 
 @media (max-width: 1180px) {
+  .home-reference-dashboard {
+    --home-product-header-height: 72px;
+  }
+
   .home-product-header {
-    min-height: 88px;
-    flex-basis: 88px;
     padding-inline: 26px;
   }
 
   .home-reference-content {
-    min-height: calc(100dvh - 88px);
+    min-height: calc(100dvh - var(--desktop-window-titlebar-height) - var(--home-product-header-height));
     grid-template-rows: minmax(218px, .9fr) 102px minmax(272px, 1.1fr) minmax(220px, 1fr);
     padding: 16px 22px 22px;
   }
@@ -1395,7 +1461,7 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .desktop-frame:not(:has(.app-shell.view-home)) .app-shell {
-  height: 100dvh;
+  height: 100%;
   min-height: 0;
   color: #253044;
   background: #ffffff;
@@ -1782,9 +1848,11 @@ html[data-tracker-theme="light"] .arena-score small {
 }
 
 @media (max-width: 760px) {
+  .home-reference-dashboard {
+    --home-product-header-height: 70px;
+  }
+
   .home-product-header {
-    min-height: 76px;
-    flex-basis: 76px;
     padding-inline: 18px;
   }
 
@@ -1830,9 +1898,8 @@ html[data-tracker-theme="light"] .arena-score small {
 }
 
 @media (max-height: 760px) {
-  .home-product-header {
-    min-height: 74px;
-    flex-basis: 74px;
+  .home-reference-dashboard {
+    --home-product-header-height: 68px;
   }
 
   .home-reference-content {

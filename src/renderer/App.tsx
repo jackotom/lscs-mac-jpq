@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Puzzle, SlidersHorizontal, Swords, Upload, X } from "lucide-react";
+import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Minus, Puzzle, Settings, SlidersHorizontal, Swords, Upload, X } from "lucide-react";
 import { DeckPanel } from "./components/DeckPanel";
 import { EventFeed } from "./components/EventFeed";
 import { ArenaPanel } from "./components/ArenaPanel";
@@ -446,6 +446,43 @@ const workbenchItems = [
   ariaLabel: string;
   icon: typeof Swords;
 }>;
+
+function DesktopWindowTitlebar({
+  title,
+  isHome,
+  onMinimize,
+  onOpenWorkbench,
+  onReturnHome
+}: {
+  title: string;
+  isHome: boolean;
+  onMinimize: () => void;
+  onOpenWorkbench: () => void;
+  onReturnHome: () => void;
+}) {
+  return (
+    <header className="desktop-window-titlebar" aria-label="窗口标题栏">
+      <span className="desktop-window-controls-safe-area" aria-hidden="true" />
+      <div className="desktop-window-drag-region">
+        <span className="desktop-window-title">{title}</span>
+      </div>
+      <div className="desktop-window-actions">
+        <button type="button" className="desktop-window-action" aria-label="最小化窗口" onClick={onMinimize}>
+          <Minus aria-hidden="true" size={17} />
+        </button>
+        {isHome ? (
+          <button type="button" className="desktop-window-action" aria-label="打开二级工作台" onClick={onOpenWorkbench}>
+            <Settings aria-hidden="true" size={18} />
+          </button>
+        ) : (
+          <button type="button" className="desktop-window-action" aria-label="关闭工作台，返回首页" onClick={onReturnHome}>
+            <X aria-hidden="true" size={18} />
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
 
 function App() {
   const api = window.hearthstoneTracker;
@@ -1422,6 +1459,15 @@ function App() {
     <>
       <style>{rendererStyles}</style>
       <div className={`desktop-frame ${activeView === "home" ? "is-home-frame" : "is-workbench-frame"}`}>
+        <DesktopWindowTitlebar
+          title={activeView === "home"
+            ? ""
+            : workbenchItems.find((item) => item.id === activeWorkbenchItem)?.label ?? "工作台"}
+          isHome={activeView === "home"}
+          onMinimize={() => { void minimizeMain(); }}
+          onOpenWorkbench={() => navigateTo("tracker")}
+          onReturnHome={() => navigateTo("home")}
+        />
         {activeView === "home" ? null : (
           <DesktopSidebar
             activeItem={activeWorkbenchItem}
@@ -1430,14 +1476,6 @@ function App() {
           />
         )}
         <main className={`app-shell view-${activeView}`}>
-          {activeView === "home" ? null : (
-            <header className="top-bar workbench-titlebar" aria-label="工作台标题栏">
-              <span aria-hidden="true" />
-              <button type="button" className="home-window-control workbench-close" aria-label="关闭工作台，返回首页" onClick={() => navigateTo("home")}>
-                <X aria-hidden="true" size={19} />
-              </button>
-            </header>
-          )}
           {activeView === "home" || activeView === "settings" || activeView === "deck-tools" ? null : <TopBar
             status={trackerStatus}
             isTracking={state.status === "watching" && !logIssue}
@@ -1545,8 +1583,6 @@ function App() {
             onOpenTracker={() => navigateTo("tracker")}
             onOpenDeckTools={() => navigateTo("deck-tools")}
             onOpenMatchHistory={() => navigateTo("match-history")}
-            onOpenSettings={() => navigateTo("tracker")}
-            onMinimize={() => { void minimizeMain(); }}
           />
         ) : (
           <>
@@ -1695,7 +1731,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.4.6</small>
+          <small>v0.4.8</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
