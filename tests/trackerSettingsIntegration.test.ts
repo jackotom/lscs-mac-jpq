@@ -60,7 +60,7 @@ describe("tracker settings IPC", () => {
     expect(main).not.toContain("mainWindow.setAlwaysOnTop");
     expect(main).not.toContain("trackerSettings.general.alwaysOnTop");
     expect(main).toMatch(
-      /const focusWhenReady = options\.focusWhenReady \?\? trackerSettings\.general\.focusOnOpen/
+      /const focusWhenReady = options\.focusWhenReady \?\? shouldFocusMainWindowOnLaunch\(\s*process\.env,\s*trackerSettings\.general\.focusOnOpen\s*\)/
     );
     expect(main).toContain("presentMainWindow(window, focusWhenReady");
     expect(main).not.toContain("createWindow({ showWhenReady: true, focusWhenReady: true })");

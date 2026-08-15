@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   presentMainWindow,
+  shouldFocusMainWindowOnLaunch,
   shouldHandleAppActivate,
+  shouldPreventAutomatedCaptureClose,
   shouldShowMainWindowOnLaunch
 } from "../src/main/mainWindowVisibility";
 
@@ -16,6 +18,29 @@ describe("main window launch visibility", () => {
 
   it("shows the main window for a main-window QA screenshot", () => {
     expect(shouldShowMainWindowOnLaunch({ QA_SCREENSHOT_PATH: "/tmp/main.png", QA_EXIT_AFTER_SCREENSHOT: "1" })).toBe(true);
+  });
+
+  it("never steals focus while an automated screenshot is running", () => {
+    expect(shouldFocusMainWindowOnLaunch({}, true)).toBe(true);
+    expect(shouldFocusMainWindowOnLaunch({
+      QA_SCREENSHOT_PATH: "/tmp/main.png",
+      QA_EXIT_AFTER_SCREENSHOT: "1"
+    }, true)).toBe(false);
+    expect(shouldFocusMainWindowOnLaunch({
+      QA_INSPECT_PATH: "/tmp/main.json",
+      QA_EXIT_AFTER_SCREENSHOT: "1"
+    }, true)).toBe(false);
+  });
+
+  it("protects an automated screenshot window until application shutdown", () => {
+    const captureEnvironment = {
+      QA_SCREENSHOT_PATH: "/tmp/main.png",
+      QA_EXIT_AFTER_SCREENSHOT: "1"
+    };
+
+    expect(shouldPreventAutomatedCaptureClose(captureEnvironment, false)).toBe(true);
+    expect(shouldPreventAutomatedCaptureClose(captureEnvironment, true)).toBe(false);
+    expect(shouldPreventAutomatedCaptureClose({}, false)).toBe(false);
   });
 
   it("keeps the main window hidden when QA is capturing an overlay", () => {

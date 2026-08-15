@@ -21,7 +21,7 @@ describe("window experience configuration", () => {
     expect(main).not.toMatch(/window\.setAlwaysOnTop\(trackerSettings\.general\.(?:alwaysOnTop|focusOnOpen)\)/);
     expect(main).not.toMatch(/mainWindow\.setAlwaysOnTop\(trackerSettings\.general\.(?:alwaysOnTop|focusOnOpen)\)/);
     expect(main).toMatch(
-      /const focusWhenReady = options\.focusWhenReady \?\? trackerSettings\.general\.focusOnOpen/
+      /const focusWhenReady = options\.focusWhenReady \?\? shouldFocusMainWindowOnLaunch\(\s*process\.env,\s*trackerSettings\.general\.focusOnOpen\s*\)/
     );
     expect(main).toContain("presentMainWindow(window, focusWhenReady");
     expect(main).toMatch(

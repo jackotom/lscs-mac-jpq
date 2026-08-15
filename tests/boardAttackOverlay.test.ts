@@ -7,6 +7,7 @@ import {
   getBoardAttackOverlayQuery,
   getBoardAttackOverlayWindowOptions,
   getSecretOverlayBounds,
+  setAuxiliaryOverlayMouseInteractive,
   shouldShowBoardAttackOverlay
 } from "../src/main/boardAttackOverlay";
 
@@ -30,6 +31,7 @@ describe("board attack overlay", () => {
     const display = { x: 0, y: 0, width: 1470, height: 956 };
 
     expect(getSecretOverlayBounds(display, [10])).toMatchObject({ x: 384, width: 144, height: 190 });
+    expect(getSecretOverlayBounds(display, [1, 1])).toMatchObject({ x: 384, width: 144, height: 82 });
     expect(getSecretOverlayBounds(display, [10, 10])).toMatchObject({ x: 384, width: 144, height: 388 });
     expect(getSecretOverlayBounds(display, [])).toMatchObject({ x: 384, width: 144, height: 37 });
   });
@@ -64,6 +66,21 @@ describe("board attack overlay", () => {
       ["workspaces", true, { visibleOnFullScreen: true, skipTransformProcessType: true }],
       ["alwaysOnTop", true, "screen-saver"],
       ["ignoreMouse", true, { forward: true }]
+    ]);
+  });
+
+  it("accepts mouse input only while a compact entry is being used", () => {
+    const calls: unknown[][] = [];
+    const window = {
+      setIgnoreMouseEvents: (...args: unknown[]) => calls.push(args)
+    };
+
+    setAuxiliaryOverlayMouseInteractive(window, true);
+    setAuxiliaryOverlayMouseInteractive(window, false);
+
+    expect(calls).toEqual([
+      [false, { forward: true }],
+      [true, { forward: true }]
     ]);
   });
 

@@ -4,6 +4,7 @@ import os from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { HearthstoneLogFiles } from "../src/main/logDiscovery.js";
 
 vi.mock("electron", () => ({
   app: {
@@ -1237,23 +1238,25 @@ describe("TrackerService log selection", () => {
 
     const oldSession = { root, sessionDir: oldSessionDir, powerLogPath: oldPowerLog, modifiedAtMs: 1 };
     const newSession = { root, sessionDir: newSessionDir, powerLogPath: newPowerLog, modifiedAtMs: 2 };
+    let rootResolutionCount = 0;
     vi.resetModules();
     vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
       const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
       return {
         ...actual,
         resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
-          if (providedPath === newPowerLog) {
-            return newSession;
+          if (providedPath === root) {
+            rootResolutionCount += 1;
+            return rootResolutionCount === 1 ? oldSession : newSession;
           }
-          return providedPath ? oldSession : newSession;
+          return actual.resolveBestLogTarget(providedPath);
         })
       };
     });
 
     const { TrackerService } = await import("../src/main/trackerService.js");
     const service = new TrackerService();
-    await service.start({ logPath: oldPowerLog, deckText: "1x Fireball" });
+    await service.start({ logPath: root, deckText: "1x Fireball" });
 
     await vi.waitFor(
       () => {
@@ -1264,6 +1267,115 @@ describe("TrackerService log selection", () => {
       { timeout: 4_000, interval: 50 }
     );
     await service.dispose();
+  });
+
+  it("keeps the default discovery root while a new session waits for Power.log", async () => {
+    const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-startup-race-"));
+    tempDirs.push(root);
+    const oldSessionDir = join(root, "Hearthstone_2026_08_14_12_36_52");
+    const newSessionDir = join(root, "Hearthstone_2026_08_14_16_30_47");
+    await Promise.all([mkdir(oldSessionDir), mkdir(newSessionDir)]);
+    const oldPowerLog = join(oldSessionDir, "Power.log");
+    const newDecksLog = join(newSessionDir, "Decks.log");
+    const newLoadingScreenLog = join(newSessionDir, "LoadingScreen.log");
+    const newPowerLog = join(newSessionDir, "Power.log");
+    await writeFile(
+      oldPowerLog,
+      [
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+        "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+        "D 12:00:01.000 PowerTaskList.DebugPrintPower() -     CREATE_GAME"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(newDecksLog, "I 16:30:54.000 Deck Contents Received:\n", "utf8");
+    await writeFile(
+      newLoadingScreenLog,
+      "D 16:30:55.000 LoadingScreen.OnSceneLoaded() - currMode=LOGIN\n",
+      "utf8"
+    );
+
+    const oldSession = {
+      root,
+      sessionDir: oldSessionDir,
+      powerLogPath: oldPowerLog,
+      modifiedAtMs: 1
+    };
+    const waitingSession = {
+      root,
+      sessionDir: newSessionDir,
+      decksLogPath: newDecksLog,
+      loadingScreenLogPath: newLoadingScreenLog,
+      modifiedAtMs: 2
+    };
+    const readySession = {
+      ...waitingSession,
+      powerLogPath: newPowerLog,
+      modifiedAtMs: 3
+    };
+    let rootResolutions: HearthstoneLogFiles[] = [];
+    vi.resetModules();
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return {
+        ...actual,
+        resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
+          if (!providedPath) return oldSession;
+          if (providedPath === root) return rootResolutions.shift() ?? oldSession;
+          return actual.resolveBestLogTarget(providedPath);
+        })
+      };
+    });
+    const selectedDeck = {
+      id: "startup-race-deck",
+      deckId: "startup-race-deck",
+      name: "启动竞态套牌",
+      format: "标准",
+      cards: [{ name: "Fireball", count: 1, cardId: "CS2_029" }],
+      rawText: "",
+      sourcePath: newDecksLog,
+      updatedAt: "2026-08-14T16:30:54.000Z",
+      warnings: []
+    };
+    const scanAndImportDecks = vi.fn(async () => ({
+      status: "ok" as const,
+      decks: [selectedDeck],
+      activeDeck: selectedDeck
+    }));
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService({ scanAndImportDecks });
+    try {
+      await service.start();
+      rootResolutions = [waitingSession, waitingSession];
+      const internal = service as unknown as {
+        sessionContext: object;
+        followNewestSession(sessionContext: object): Promise<void>;
+      };
+
+      await internal.followNewestSession(internal.sessionContext);
+
+      expect(service.getState().logPath).toBe(newDecksLog);
+      expect(service.getState().error).toContain("等待开局");
+      await writeFile(
+        newPowerLog,
+        [
+          "D 16:31:24.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+          "D 16:31:24.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+          "D 16:31:25.000 PowerTaskList.DebugPrintPower() -     CREATE_GAME",
+          "D 16:31:26.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityName=Fireball id=64 zone=DECK zonePos=1 cardId=CS2_029 player=2] tag=ZONE value=HAND"
+        ].join("\n"),
+        "utf8"
+      );
+      rootResolutions = [readySession, oldSession];
+
+      await internal.followNewestSession(internal.sessionContext);
+
+      expect(service.getState().logPath).toBe(newPowerLog);
+      expect(service.getState().summary.drawnCards).toBe(1);
+    } finally {
+      await service.dispose();
+    }
   });
 
   it("does not restart and replay when the active Power.log mtime increases", async () => {
@@ -1287,7 +1399,7 @@ describe("TrackerService log selection", () => {
       return {
         ...actual,
         resolveBestLogTarget: vi.fn(async () => ({
-          root,
+          root: sessionDir,
           sessionDir,
           powerLogPath: powerLog,
           modifiedAtMs
@@ -1299,16 +1411,20 @@ describe("TrackerService log selection", () => {
     const service = new TrackerService();
     await service.start({ logPath: powerLog });
     modifiedAtMs = 2;
-    const restart = vi.spyOn(service, "start").mockResolvedValue(service.getState());
     const internal = service as unknown as {
       sessionContext: object;
       followNewestSession(sessionContext: object): Promise<void>;
     };
+    const originalSessionContext = internal.sessionContext;
+    const originalState = service.getState();
 
-    await internal.followNewestSession(internal.sessionContext);
+    await internal.followNewestSession(originalSessionContext);
 
-    expect(restart).not.toHaveBeenCalled();
-    restart.mockRestore();
+    expect(internal.sessionContext).toBe(originalSessionContext);
+    expect(service.getState()).toEqual({
+      ...originalState,
+      lastUpdated: expect.any(String)
+    });
     await service.dispose();
   });
 
@@ -1501,16 +1617,21 @@ describe("TrackerService log selection", () => {
     );
     logsAvailable = true;
 
-    await vi.waitFor(() => expect(service.getState().logPath).toBe(powerLog), {
-      timeout: 3_000,
-      interval: 50
-    });
+    await vi.waitFor(
+      () => {
+        expect(service.getState().logPath).toBe(powerLog);
+        expect(service.getState().gameActive).toBe(true);
+      },
+      {
+        timeout: 3_000,
+        interval: 50
+      }
+    );
     expect(service.getState().status, service.getState().error).toBe("watching");
-    expect(service.getState().gameActive).toBe(true);
     await service.dispose();
   });
 
-  it("automatically resumes when Power.log appears in the current session", async () => {
+  it("automatically resumes when Power.log appears after selecting a waiting-session log", async () => {
     const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-power-appears-"));
     tempDirs.push(root);
     const sessionDir = join(root, "Hearthstone_2026_07_12_10_49_37");
@@ -1527,19 +1648,23 @@ describe("TrackerService log selection", () => {
 
     let powerAvailable = false;
     const missingSession = {
-      root,
+      root: sessionDir,
       sessionDir,
       decksLogPath: decksLog,
       loadingScreenLogPath: loadingScreenLog,
       modifiedAtMs: 1
     };
     const readySession = {
-      root,
+      root: sessionDir,
       sessionDir,
       decksLogPath: decksLog,
       loadingScreenLogPath: loadingScreenLog,
       powerLogPath: powerLog,
       modifiedAtMs: 1
+    };
+    const globallyDiscoveredReadySession = {
+      ...readySession,
+      root
     };
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({
@@ -1554,36 +1679,41 @@ describe("TrackerService log selection", () => {
       return {
         ...actual,
         resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
-          if (providedPath === powerLog) {
-            return readySession;
-          }
-          return powerAvailable ? readySession : missingSession;
+          if (!providedPath) return powerAvailable ? globallyDiscoveredReadySession : { ...missingSession, root };
+          if (providedPath === powerLog || providedPath === sessionDir) return powerAvailable ? readySession : missingSession;
+          return missingSession;
         })
       };
     });
 
     const { TrackerService } = await import("../src/main/trackerService.js");
-    const service = new TrackerService();
-    const initial = await service.start({ logPath: decksLog });
-    expect(initial.status).toBe("watching");
-    expect(initial.error).toContain("等待开局");
+    for (const selectedLog of [decksLog, loadingScreenLog]) {
+      await rm(powerLog, { force: true });
+      powerAvailable = false;
+      const service = new TrackerService();
+      try {
+        const initial = await service.start({ logPath: selectedLog });
+        expect(initial.status).toBe("watching");
+        expect(initial.error).toContain("等待开局");
 
-    await writeFile(powerLog, "D 10:55:22.000 GameState.DebugPrintPower() - CREATE_GAME\nD 10:55:22.000 GameState.DebugPrintGame() - GameType=GT_RANKED\n", "utf8");
-    powerAvailable = true;
+        await writeFile(powerLog, "D 10:55:22.000 GameState.DebugPrintPower() - CREATE_GAME\nD 10:55:22.000 GameState.DebugPrintGame() - GameType=GT_RANKED\n", "utf8");
+        powerAvailable = true;
 
-    await vi.waitFor(
-      () => {
-        expect(service.getState().status).toBe("watching");
-        expect(service.getState().logPath).toBe(powerLog);
-      },
-      {
-        timeout: 3_000,
-        interval: 50
+        await vi.waitFor(
+          () => {
+            expect(service.getState().status).toBe("watching");
+            expect(service.getState().logPath).toBe(powerLog);
+            expect(service.getState().gameActive).toBe(true);
+          },
+          {
+            timeout: 3_000,
+            interval: 50
+          }
+        );
+      } finally {
+        await service.dispose();
       }
-    );
-    expect(service.getState().logPath).toBe(powerLog);
-    expect(service.getState().gameActive).toBe(true);
-    await service.dispose();
+    }
   });
 
   it("does not switch after pause when a session refresh resolves late", async () => {
@@ -1610,7 +1740,7 @@ describe("TrackerService log selection", () => {
       return {
         ...actual,
         resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
-          if (providedPath) {
+          if (providedPath === oldPowerLog) {
             return oldSession;
           }
           periodicChecks += 1;

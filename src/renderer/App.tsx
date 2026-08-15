@@ -551,11 +551,13 @@ function App() {
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [isOpponentOverlayCollapsed, setIsOpponentOverlayCollapsed] = useState(false);
+  const [isSecretOverlayCollapsed, setIsSecretOverlayCollapsed] = useState(false);
   const actionLock = useRef(createSynchronousActionLock());
   const confirmedTrackerSettings = useRef<TrackerSettings>();
   const pendingTrackerSettingsSave = useRef<TrackerSettings>();
   const settingsSaveInFlight = useRef(false);
   const lastCardLibraryRequest = useRef<CardLibraryQuery>();
+  const secretOverlayCollapseChangeVersion = useRef(0);
   const isBusy = isInitializing || pendingAction !== undefined;
 
   useEffect(() => {
@@ -725,6 +727,26 @@ function App() {
       unsubscribe?.();
     };
   }, [api, isOpponentOverlay]);
+
+  useEffect(() => {
+    if (!isSecretOverlay || !api?.getSecretOverlayCollapsed) {
+      return;
+    }
+
+    let disposed = false;
+    const queryVersion = secretOverlayCollapseChangeVersion.current;
+    void api.getSecretOverlayCollapsed()
+      .then((collapsed) => {
+        if (!disposed && secretOverlayCollapseChangeVersion.current === queryVersion) {
+          setIsSecretOverlayCollapsed(collapsed);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+    };
+  }, [api, isSecretOverlay]);
 
   useEffect(() => {
     const debounceTimer = window.setTimeout(() => {
@@ -1407,7 +1429,31 @@ function App() {
       side: "opponent",
       showSecretCandidates: true
     });
-    return <SecretOverlay slots={secretView.cardTracking.secretSlots} />;
+    return (
+      <SecretOverlay
+        slots={secretView.cardTracking.secretSlots}
+        isCollapsed={isSecretOverlayCollapsed}
+        onCollapsedChange={(collapsed) => {
+          const changeVersion = secretOverlayCollapseChangeVersion.current + 1;
+          secretOverlayCollapseChangeVersion.current = changeVersion;
+          setIsSecretOverlayCollapsed(collapsed);
+          const saveCollapsedState = api?.setSecretOverlayCollapsed?.(collapsed);
+          if (saveCollapsedState) {
+            void saveCollapsedState
+              .then((savedCollapsed) => {
+                if (secretOverlayCollapseChangeVersion.current === changeVersion) {
+                  setIsSecretOverlayCollapsed(savedCollapsed);
+                }
+              })
+              .catch(() => {
+                if (secretOverlayCollapseChangeVersion.current === changeVersion) {
+                  setIsSecretOverlayCollapsed(!collapsed);
+                }
+              });
+          }
+        }}
+      />
+    );
   }
 
   if (isSmartCounterOverlay) {
@@ -1731,7 +1777,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.4.8</small>
+          <small>v0.5.1</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

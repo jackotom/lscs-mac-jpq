@@ -21,7 +21,9 @@ import { CardPreviewVisibilityGate } from "./cardPreviewVisibility.js";
 import {
   isQaOverlayCapture,
   presentMainWindow,
+  shouldFocusMainWindowOnLaunch,
   shouldHandleAppActivate,
+  shouldPreventAutomatedCaptureClose,
   shouldShowMainWindowOnLaunch
 } from "./mainWindowVisibility.js";
 import {
@@ -50,8 +52,19 @@ import {
   getBoardAttackOverlayWindowOptions,
   getSecretOverlayBounds,
   getSmartCounterOverlayBounds,
+  setAuxiliaryOverlayMouseInteractive,
   shouldShowBoardAttackOverlay
 } from "./boardAttackOverlay.js";
+import { registerAuxiliaryOverlayIpc } from "./auxiliaryOverlayIpc.js";
+import {
+  AuxiliaryOverlayWindowStateStore,
+  getSecretOverlayVisibleBounds,
+  moveAuxiliaryOverlayBounds,
+  type AuxiliaryOverlayBounds,
+  type AuxiliaryOverlayPoint,
+  type AuxiliaryOverlayWorkArea,
+  type MovableAuxiliaryOverlayKind
+} from "./auxiliaryOverlayWindowState.js";
 import { registerFriendlyOverlayIpc } from "./friendlyOverlayIpc.js";
 import { registerOpponentOverlayIpc } from "./opponentOverlayIpc.js";
 import { OpponentOverlayWindowState } from "./opponentOverlayWindowState.js";
@@ -129,6 +142,7 @@ const arenaScreenRecognizer = process.env.QA_SKIP_ARENA_SCREEN_RECOGNITION === "
   : new ArenaScreenRecognizer(undefined, captureHearthstoneDisplay);
 const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer);
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
+const auxiliaryOverlayWindowStateStore = new AuxiliaryOverlayWindowStateStore(app.getPath("userData"));
 let trackerSettings: TrackerSettings = DEFAULT_TRACKER_SETTINGS;
 const cardLibraryData = new CardDataService();
 const homeNews = new HomeNewsService();
@@ -141,8 +155,16 @@ let opponentOverlayWindowCreationPromise: Promise<BrowserWindow> | undefined;
 let friendlyAttackOverlayWindow: BrowserWindow | undefined;
 let opponentAttackOverlayWindow: BrowserWindow | undefined;
 let secretOverlayWindow: BrowserWindow | undefined;
+let secretOverlayExpandedBounds: AuxiliaryOverlayBounds | undefined;
 const smartCounterOverlayWindows = new Map<string, BrowserWindow>();
 const trustedAuxiliaryWebContents = new Set<Electron.WebContents>();
+const auxiliaryOverlayKindsByWebContents = new Map<Electron.WebContents, AuxiliaryOverlayKind>();
+const auxiliaryOverlayDragSessions = new Map<MovableAuxiliaryOverlayKind, {
+  readonly window: BrowserWindow;
+  readonly initialBounds: AuxiliaryOverlayBounds;
+  readonly initialPointer: AuxiliaryOverlayPoint;
+  readonly workArea: AuxiliaryOverlayWorkArea;
+}>();
 const smartCounterOverlayGenerations = new Map<string, symbol>();
 let ladderDeckOverlayWindow: BrowserWindow | undefined;
 let arenaChoiceOverlayWindow: BrowserWindow | undefined;
@@ -173,6 +195,7 @@ let ladderDeckOverlayInteractionActiveUntil = 0;
 let initialBackgroundWindowReady = false;
 let initialLaunchActivateObserved = false;
 let mainWindowUserActivationAllowedAfterMs = Number.POSITIVE_INFINITY;
+let qaCaptureShutdownRequested = false;
 let screenRecordingSettingsOpened = false;
 let lastCaptureDiagnostic: string | undefined;
 let boardAttackOverlayMonitor: NodeJS.Timeout | undefined;
@@ -452,7 +475,10 @@ function getQaConsoleErrorCount(window: BrowserWindow | undefined) {
 async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?: boolean } = {}) {
   const showWhenReady = options.showWhenReady ??
     shouldShowMainWindowOnLaunch(process.env, trackerSettings.general.startMinimized);
-  const focusWhenReady = options.focusWhenReady ?? trackerSettings.general.focusOnOpen;
+  const focusWhenReady = options.focusWhenReady ?? shouldFocusMainWindowOnLaunch(
+    process.env,
+    trackerSettings.general.focusOnOpen
+  );
   const qaHomeDemo = process.env.QA_HOME_DEMO === "1";
   const window = new BrowserWindow({
     width: readQaWindowDimension(process.env.QA_MAIN_WIDTH, 1180, 640, 2400),
@@ -471,6 +497,11 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
 
   mainWindow = window;
   tracker.attachWindow(window);
+  window.on("close", (event) => {
+    if (shouldPreventAutomatedCaptureClose(process.env, qaCaptureShutdownRequested)) {
+      event.preventDefault();
+    }
+  });
   window.on("closed", () => {
     if (mainWindow === window) {
       mainWindow = undefined;
@@ -650,7 +681,10 @@ if (hasSingleInstanceLock) {
       window.showInactive();
       await captureQaScreenshotIfRequested(window);
     } else if (process.env.QA_OPEN_SECRET_OVERLAY === "1") {
-      const window = await createSecretOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+      const window = await createSecretOverlayWindow(screen.getPrimaryDisplay().bounds, {
+        qaDemo: true,
+        possibleCandidateCounts: [1, 1]
+      });
       if (!window) throw new Error("奥秘预测悬浮窗渲染验证失败");
       window.showInactive();
       await captureQaScreenshotIfRequested(window);
@@ -752,6 +786,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
+  qaCaptureShutdownRequested = true;
   appQuitController.handleBeforeQuit(event);
 });
 
@@ -770,6 +805,19 @@ function registerIpc() {
     closeFriendlyOverlay: () => releaseOverlayWindow(overlayWindow)
   });
   registerOpponentOverlayIpc(trustedIpcMain, opponentOverlayWindowController);
+  registerAuxiliaryOverlayIpc(trustedIpcMain, {
+    resolveKind: resolveMovableAuxiliaryOverlayKind,
+    getSecretCollapsed: () => auxiliaryOverlayWindowStateStore.getSecretCollapsed(),
+    setSecretCollapsed: setSecretOverlayCollapsed,
+    setMouseInteractive: (kind, interactive) => {
+      const window = getMovableAuxiliaryOverlayWindow(kind);
+      if (!window || window.isDestroyed()) return;
+      setAuxiliaryOverlayMouseInteractive(window, interactive);
+    },
+    beginDrag: beginAuxiliaryOverlayDrag,
+    moveDrag: moveAuxiliaryOverlayDrag,
+    endDrag: endAuxiliaryOverlayDrag
+  });
   const secureHandle = trustedIpcMain.handle.bind(trustedIpcMain);
   secureHandle("tracker:discover-logs", () => discoverLogCandidates());
   secureHandle("tracker:get-home-news", () => homeNews.load());
@@ -1715,7 +1763,109 @@ async function resolveHearthstoneDisplay() {
   return fallback;
 }
 
+function getMovableAuxiliaryOverlayWindow(
+  kind: MovableAuxiliaryOverlayKind
+): BrowserWindow | undefined {
+  if (kind === "friendly-attack") return friendlyAttackOverlayWindow;
+  if (kind === "opponent-attack") return opponentAttackOverlayWindow;
+  return secretOverlayWindow;
+}
+
+function resolveMovableAuxiliaryOverlayKind(sender: unknown): MovableAuxiliaryOverlayKind | undefined {
+  const registered = auxiliaryOverlayKindsByWebContents.get(sender as Electron.WebContents);
+  if (registered === "friendly-attack" || registered === "opponent-attack" || registered === "secret") {
+    return registered;
+  }
+  if (sender === friendlyAttackOverlayWindow?.webContents) return "friendly-attack";
+  if (sender === opponentAttackOverlayWindow?.webContents) return "opponent-attack";
+  if (sender === secretOverlayWindow?.webContents) return "secret";
+  return undefined;
+}
+
+async function resolveAuxiliaryOverlayBounds(
+  kind: MovableAuxiliaryOverlayKind,
+  defaultBounds: AuxiliaryOverlayBounds
+): Promise<AuxiliaryOverlayBounds> {
+  const workArea = screen.getDisplayMatching(defaultBounds).workArea;
+  const visibleBounds = kind === "secret"
+    ? getSecretOverlayVisibleBounds(
+        defaultBounds,
+        await auxiliaryOverlayWindowStateStore.getSecretCollapsed()
+      )
+    : defaultBounds;
+  return auxiliaryOverlayWindowStateStore.resolveBounds(kind, visibleBounds, workArea);
+}
+
+async function setSecretOverlayCollapsed(collapsed: boolean): Promise<boolean> {
+  const window = secretOverlayWindow;
+  const expandedBounds = secretOverlayExpandedBounds;
+  if (!window || window.isDestroyed() || !expandedBounds) {
+    await auxiliaryOverlayWindowStateStore.setSecretCollapsed(collapsed);
+    return collapsed;
+  }
+  const currentBounds = window.getBounds();
+  const workArea = screen.getDisplayMatching(currentBounds).workArea;
+  const bounds = await auxiliaryOverlayWindowStateStore.setSecretCollapsed(collapsed, {
+    currentBounds,
+    expandedBounds,
+    workArea
+  });
+  updateAuxiliaryOverlayBounds(window, bounds);
+  return collapsed;
+}
+
+function beginAuxiliaryOverlayDrag(
+  kind: MovableAuxiliaryOverlayKind,
+  point: AuxiliaryOverlayPoint
+): void {
+  const window = getMovableAuxiliaryOverlayWindow(kind);
+  if (!window || window.isDestroyed()) return;
+  const initialBounds = window.getBounds();
+  auxiliaryOverlayDragSessions.set(kind, {
+    window,
+    initialBounds,
+    initialPointer: point,
+    workArea: screen.getDisplayMatching(initialBounds).workArea
+  });
+}
+
+function moveAuxiliaryOverlayDrag(
+  kind: MovableAuxiliaryOverlayKind,
+  point: AuxiliaryOverlayPoint
+): void {
+  const session = auxiliaryOverlayDragSessions.get(kind);
+  const window = getMovableAuxiliaryOverlayWindow(kind);
+  if (!session || !window || window !== session.window || window.isDestroyed()) return;
+  window.setBounds(moveAuxiliaryOverlayBounds(
+    session.initialBounds,
+    session.initialPointer,
+    point,
+    session.workArea
+  ), false);
+}
+
+async function endAuxiliaryOverlayDrag(
+  kind: MovableAuxiliaryOverlayKind,
+  point: AuxiliaryOverlayPoint
+): Promise<void> {
+  moveAuxiliaryOverlayDrag(kind, point);
+  const session = auxiliaryOverlayDragSessions.get(kind);
+  const window = getMovableAuxiliaryOverlayWindow(kind);
+  if (!session || !window || window !== session.window || window.isDestroyed()) {
+    auxiliaryOverlayDragSessions.delete(kind);
+    return;
+  }
+  try {
+    await auxiliaryOverlayWindowStateStore.saveBounds(kind, window.getBounds(), session.workArea);
+  } finally {
+    if (auxiliaryOverlayDragSessions.get(kind) === session) {
+      auxiliaryOverlayDragSessions.delete(kind);
+    }
+  }
+}
+
 function updateAuxiliaryOverlayBounds(window: BrowserWindow, bounds: { x: number; y: number; width: number; height: number }) {
+  if ([...auxiliaryOverlayDragSessions.values()].some((session) => session.window === window)) return;
   const current = window.getBounds();
   if (current.x !== bounds.x || current.y !== bounds.y || current.width !== bounds.width || current.height !== bounds.height) {
     window.setBounds(bounds, false);
@@ -1738,13 +1888,17 @@ async function createFriendlyAttackOverlayWindow(
   displayBounds: { x: number; y: number; width: number; height: number },
   options: { qaDemo?: boolean } = {}
 ) {
-  const bounds = getAuxiliaryOverlayBounds(displayBounds, "friendly-attack");
+  const bounds = await resolveAuxiliaryOverlayBounds(
+    "friendly-attack",
+    getAuxiliaryOverlayBounds(displayBounds, "friendly-attack")
+  );
   if (friendlyAttackOverlayWindow && !friendlyAttackOverlayWindow.isDestroyed()) {
     updateAuxiliaryOverlayBounds(friendlyAttackOverlayWindow, bounds);
     return friendlyAttackOverlayWindow;
   }
   const generation = beginAuxiliaryOverlayCreation("friendly-attack");
   const createdWindow = await createAuxiliaryOverlayWindow(
+    "friendly-attack",
     bounds,
     { "friendly-attack-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
     ".single-attack-overlay"
@@ -1762,6 +1916,7 @@ async function createFriendlyAttackOverlayWindow(
 
 function releaseFriendlyAttackOverlayWindow(): void {
   cancelAuxiliaryOverlayCreation("friendly-attack");
+  auxiliaryOverlayDragSessions.delete("friendly-attack");
   friendlyAttackOverlayWindow?.close();
   friendlyAttackOverlayWindow = undefined;
 }
@@ -1770,13 +1925,17 @@ async function createOpponentAttackOverlayWindow(
   displayBounds: { x: number; y: number; width: number; height: number },
   options: { qaDemo?: boolean } = {}
 ) {
-  const bounds = getAuxiliaryOverlayBounds(displayBounds, "opponent-attack");
+  const bounds = await resolveAuxiliaryOverlayBounds(
+    "opponent-attack",
+    getAuxiliaryOverlayBounds(displayBounds, "opponent-attack")
+  );
   if (opponentAttackOverlayWindow && !opponentAttackOverlayWindow.isDestroyed()) {
     updateAuxiliaryOverlayBounds(opponentAttackOverlayWindow, bounds);
     return opponentAttackOverlayWindow;
   }
   const generation = beginAuxiliaryOverlayCreation("opponent-attack");
   const createdWindow = await createAuxiliaryOverlayWindow(
+    "opponent-attack",
     bounds,
     { "opponent-attack-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
     ".single-attack-overlay"
@@ -1794,24 +1953,27 @@ async function createOpponentAttackOverlayWindow(
 
 function releaseOpponentAttackOverlayWindow(): void {
   cancelAuxiliaryOverlayCreation("opponent-attack");
+  auxiliaryOverlayDragSessions.delete("opponent-attack");
   opponentAttackOverlayWindow?.close();
   opponentAttackOverlayWindow = undefined;
 }
 
 async function createSecretOverlayWindow(
   displayBounds: { x: number; y: number; width: number; height: number },
-  options: { qaDemo?: boolean; possibleCandidateCounts?: readonly number[] } = {}
+  options: { qaDemo?: boolean; possibleCandidateCounts: readonly number[] }
 ) {
-  const bounds = getSecretOverlayBounds(displayBounds, options.possibleCandidateCounts ?? []);
+  secretOverlayExpandedBounds = getSecretOverlayBounds(displayBounds, options.possibleCandidateCounts);
+  const bounds = await resolveAuxiliaryOverlayBounds("secret", secretOverlayExpandedBounds);
   if (secretOverlayWindow && !secretOverlayWindow.isDestroyed()) {
     updateAuxiliaryOverlayBounds(secretOverlayWindow, bounds);
     return secretOverlayWindow;
   }
   const generation = beginAuxiliaryOverlayCreation("secret");
   const createdWindow = await createAuxiliaryOverlayWindow(
+    "secret",
     bounds,
     { "secret-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
-    ".secret-overlay"
+    ".secret-overlay-shell"
   );
   if (!isAuxiliaryOverlayCreationCurrent("secret", generation)) {
     if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
@@ -1826,6 +1988,7 @@ async function createSecretOverlayWindow(
 
 function releaseSecretOverlayWindow(): void {
   cancelAuxiliaryOverlayCreation("secret");
+  auxiliaryOverlayDragSessions.delete("secret");
   secretOverlayWindow?.close();
   secretOverlayWindow = undefined;
 }
@@ -1866,6 +2029,7 @@ async function createSmartCounterOverlayWindow(
   const generation = Symbol(counterId);
   smartCounterOverlayGenerations.set(counterId, generation);
   const createdWindow = await createAuxiliaryOverlayWindow(
+    "smart-counter",
     bounds,
     {
       "smart-counter-overlay": "1",
@@ -1906,14 +2070,17 @@ function releaseAllSmartCounterOverlayWindows(): void {
 }
 
 async function createAuxiliaryOverlayWindow(
+  kind: AuxiliaryOverlayKind,
   bounds: { x: number; y: number; width: number; height: number },
   query: Readonly<Record<string, string>>,
   rootSelector: string
 ): Promise<BrowserWindow | undefined> {
   const window = new BrowserWindow(getBoardAttackOverlayWindowOptions(bounds, path.join(__dirname, "preload.cjs")));
   trustedAuxiliaryWebContents.add(window.webContents);
+  auxiliaryOverlayKindsByWebContents.set(window.webContents, kind);
   window.webContents.once("destroyed", () => {
     trustedAuxiliaryWebContents.delete(window.webContents);
+    auxiliaryOverlayKindsByWebContents.delete(window.webContents);
   });
   installQaConsoleErrorListener(window);
   configureSecureNavigation(window);
