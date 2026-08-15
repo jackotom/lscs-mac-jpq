@@ -31,5 +31,9 @@ describe("board attack floating counter styles", () => {
     expect(canvasRule).not.toMatch(/(?:border|box-shadow):/);
     expect(iconRule).not.toMatch(/width:\s*(?:4[5-9]|[5-9]\d|\d{3,})px/);
     expect(iconRule).not.toMatch(/height:\s*(?:4[5-9]|[5-9]\d|\d{3,})px/);
+    expect(iconRule).toMatch(/cursor:\s*grab;/);
+    expect(iconRule).toMatch(/pointer-events:\s*auto;/);
+    expect(iconRule).toMatch(/touch-action:\s*none;/);
+    expect(iconRule).toMatch(/-webkit-app-region:\s*no-drag;/);
   });
 });

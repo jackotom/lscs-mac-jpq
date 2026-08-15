@@ -33,6 +33,12 @@ function loadPreloadApi() {
       getState?: () => Promise<unknown>;
       start?: () => Promise<unknown>;
       setTrackerSettings?: () => Promise<unknown>;
+      getSecretOverlayCollapsed?: () => Promise<boolean>;
+      setSecretOverlayCollapsed?: (collapsed: boolean) => Promise<boolean>;
+      setAuxiliaryOverlayMouseInteractive?: (interactive: boolean) => Promise<void>;
+      beginAuxiliaryOverlayDrag?: (point: { x: number; y: number }) => Promise<void>;
+      moveAuxiliaryOverlayDrag?: (point: { x: number; y: number }) => Promise<void>;
+      endAuxiliaryOverlayDrag?: (point: { x: number; y: number }) => Promise<void>;
     },
     invoke
   };
@@ -73,5 +79,40 @@ describe("preload capabilities", () => {
     expect(api.start).toBeUndefined();
     expect(api.setTrackerSettings).toBeUndefined();
     expect(api.toggleOverlay).toBeUndefined();
+  });
+
+  it.each([
+    "friendly-attack-overlay",
+    "opponent-attack-overlay"
+  ])("gives %s a sender-scoped drag capability", async (route) => {
+    window.history.replaceState({}, "", `/?${route}=1`);
+    const { api, invoke } = loadPreloadApi();
+
+    expect(api.setAuxiliaryOverlayMouseInteractive).toBeTypeOf("function");
+    expect(api.beginAuxiliaryOverlayDrag).toBeTypeOf("function");
+    expect(api.moveAuxiliaryOverlayDrag).toBeTypeOf("function");
+    expect(api.endAuxiliaryOverlayDrag).toBeTypeOf("function");
+
+    await api.beginAuxiliaryOverlayDrag?.({ x: 400, y: 200 });
+    expect(invoke).toHaveBeenCalledWith(
+      "tracker:begin-auxiliary-overlay-drag",
+      { x: 400, y: 200 }
+    );
+  });
+
+  it("gives only the secret route persisted collapsed-state controls and drag", () => {
+    window.history.replaceState({}, "", "/?secret-overlay=1");
+    const secret = loadPreloadApi().api;
+    expect(secret.getSecretOverlayCollapsed).toBeTypeOf("function");
+    expect(secret.setSecretOverlayCollapsed).toBeTypeOf("function");
+    expect(secret.setAuxiliaryOverlayMouseInteractive).toBeTypeOf("function");
+    expect(secret.beginAuxiliaryOverlayDrag).toBeTypeOf("function");
+    expect(secret.moveAuxiliaryOverlayDrag).toBeTypeOf("function");
+    expect(secret.endAuxiliaryOverlayDrag).toBeTypeOf("function");
+
+    window.history.replaceState({}, "", "/?friendly-attack-overlay=1");
+    const attack = loadPreloadApi().api;
+    expect(attack.getSecretOverlayCollapsed).toBeUndefined();
+    expect(attack.setSecretOverlayCollapsed).toBeUndefined();
   });
 });

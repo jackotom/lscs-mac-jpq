@@ -39,6 +39,12 @@ export interface HearthstoneTrackerApi {
   getOpponentOverlayCollapsed?: () => Promise<boolean>;
   setOpponentOverlayCollapsed?: (collapsed: boolean) => Promise<boolean>;
   onOpponentOverlayCollapsedChange?: (callback: (collapsed: boolean) => void) => () => void;
+  getSecretOverlayCollapsed?: () => Promise<boolean>;
+  setSecretOverlayCollapsed?: (collapsed: boolean) => Promise<boolean>;
+  setAuxiliaryOverlayMouseInteractive?: (interactive: boolean) => Promise<void>;
+  beginAuxiliaryOverlayDrag?: (point: { readonly x: number; readonly y: number }) => Promise<void>;
+  moveAuxiliaryOverlayDrag?: (point: { readonly x: number; readonly y: number }) => Promise<void>;
+  endAuxiliaryOverlayDrag?: (point: { readonly x: number; readonly y: number }) => Promise<void>;
   minimizeMain?: () => Promise<boolean>;
   listCardLibrary?: (query: CardLibraryQuery) => Promise<CardLibraryResult>;
   showCardPreview?: (request: CardPreviewRequest) => Promise<void>;

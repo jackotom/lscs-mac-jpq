@@ -16,19 +16,30 @@ import type { CardDetails } from "../shared/cardDatabase.js";
 import type { LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation.js";
 import type { HomeNewsResult } from "../shared/homeNews.js";
 
-type PreloadCapability = "main" | "tracker-overlay" | "opponent-overlay" | "state-display" | "card-preview" | "ladder-deck" | "arena-hero-ranking";
+type PreloadCapability =
+  | "main"
+  | "tracker-overlay"
+  | "opponent-overlay"
+  | "state-display"
+  | "movable-state-display"
+  | "secret-state-display"
+  | "card-preview"
+  | "ladder-deck"
+  | "arena-hero-ranking";
 
 function getPreloadCapability(search: string): PreloadCapability {
   const params = new URLSearchParams(search);
   if (params.get("card-preview") === "1") return "card-preview";
   if (params.get("ladder-deck-overlay") === "1") return "ladder-deck";
   if (params.get("arena-hero-ranking-overlay") === "1") return "arena-hero-ranking";
+  if (params.get("secret-overlay") === "1") return "secret-state-display";
+  if (
+    params.get("friendly-attack-overlay") === "1" ||
+    params.get("opponent-attack-overlay") === "1"
+  ) return "movable-state-display";
   if (
     params.get("board-attack-overlay") === "1" ||
     params.get("arena-choice-overlay") === "1" ||
-    params.get("friendly-attack-overlay") === "1" ||
-    params.get("opponent-attack-overlay") === "1" ||
-    params.get("secret-overlay") === "1" ||
     params.get("smart-counter-overlay") === "1"
   ) return "state-display";
   if (params.get("opponent-overlay") === "1") return "opponent-overlay";
@@ -43,6 +54,27 @@ const stateDisplayApi = {
     ipcRenderer.on("tracker:update", listener);
     return () => ipcRenderer.removeListener("tracker:update", listener);
   }
+};
+
+const auxiliaryOverlayMouseApi = {
+  setAuxiliaryOverlayMouseInteractive: (interactive: boolean) =>
+    ipcRenderer.invoke("tracker:set-auxiliary-overlay-mouse-interactive", interactive) as Promise<void>
+};
+
+const auxiliaryOverlayDragApi = {
+  beginAuxiliaryOverlayDrag: (point: { x: number; y: number }) =>
+    ipcRenderer.invoke("tracker:begin-auxiliary-overlay-drag", point) as Promise<void>,
+  moveAuxiliaryOverlayDrag: (point: { x: number; y: number }) =>
+    ipcRenderer.invoke("tracker:move-auxiliary-overlay-drag", point) as Promise<void>,
+  endAuxiliaryOverlayDrag: (point: { x: number; y: number }) =>
+    ipcRenderer.invoke("tracker:end-auxiliary-overlay-drag", point) as Promise<void>
+};
+
+const secretOverlayLifecycleApi = {
+  getSecretOverlayCollapsed: () =>
+    ipcRenderer.invoke("tracker:get-secret-overlay-collapsed") as Promise<boolean>,
+  setSecretOverlayCollapsed: (collapsed: boolean) =>
+    ipcRenderer.invoke("tracker:set-secret-overlay-collapsed", collapsed) as Promise<boolean>
 };
 
 const cardPreviewSourceApi = {
@@ -156,6 +188,21 @@ const mainApi = {
 const capability = getPreloadCapability(window.location.search);
 const api = capability === "state-display"
   ? { ...stateDisplayApi, ...settingsReaderApi }
+  : capability === "movable-state-display"
+    ? {
+        ...stateDisplayApi,
+        ...settingsReaderApi,
+        ...auxiliaryOverlayMouseApi,
+        ...auxiliaryOverlayDragApi
+      }
+    : capability === "secret-state-display"
+      ? {
+          ...stateDisplayApi,
+          ...settingsReaderApi,
+          ...auxiliaryOverlayMouseApi,
+          ...auxiliaryOverlayDragApi,
+          ...secretOverlayLifecycleApi
+        }
   : capability === "arena-hero-ranking"
     ? { ...arenaHeroRankingApi, ...settingsReaderApi }
   : capability === "tracker-overlay"
@@ -194,4 +241,8 @@ const api = capability === "state-display"
 
 contextBridge.exposeInMainWorld("hearthstoneTracker", api);
 
-export type HearthstoneTrackerApi = typeof mainApi & Partial<typeof friendlyOverlayLifecycleApi>;
+export type HearthstoneTrackerApi = typeof mainApi
+  & Partial<typeof friendlyOverlayLifecycleApi>
+  & Partial<typeof auxiliaryOverlayMouseApi>
+  & Partial<typeof auxiliaryOverlayDragApi>
+  & Partial<typeof secretOverlayLifecycleApi>;

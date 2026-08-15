@@ -133,7 +133,14 @@ export function getBoardAttackOverlayWindowOptions(
 export function configureBoardAttackOverlayWindow(window: BoardAttackOverlayWindowLike): void {
   configureOverlayWorkspaceWindow(window, true);
   window.setAlwaysOnTop(true, "screen-saver");
-  window.setIgnoreMouseEvents(true, { forward: true });
+  setAuxiliaryOverlayMouseInteractive(window, false);
+}
+
+export function setAuxiliaryOverlayMouseInteractive(
+  window: Pick<BoardAttackOverlayWindowLike, "setIgnoreMouseEvents">,
+  interactive: boolean
+): void {
+  window.setIgnoreMouseEvents(!interactive, { forward: true });
 }
 
 export function getBoardAttackOverlayQuery(

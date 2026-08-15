@@ -1,12 +1,51 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SecretOverlay } from "../src/renderer/components/SecretOverlay";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  delete window.hearthstoneTracker;
+});
 
 describe("SecretOverlay candidate artwork", () => {
+  it("only makes the question badge interactive while the pointer is over it", () => {
+    const setAuxiliaryOverlayMouseInteractive = vi.fn(async () => undefined);
+    window.hearthstoneTracker = {
+      setAuxiliaryOverlayMouseInteractive
+    } as unknown as typeof window.hearthstoneTracker;
+    render(<SecretOverlay slots={[]} />);
+
+    const badge = screen.getByRole("button", { name: "收起奥秘助手" });
+    fireEvent.pointerEnter(badge);
+    fireEvent.pointerLeave(badge);
+
+    expect(setAuxiliaryOverlayMouseInteractive).toHaveBeenNthCalledWith(1, true);
+    expect(setAuxiliaryOverlayMouseInteractive).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it("lets the question badge collapse the helper while keeping a restore control", () => {
+    const onCollapsedChange = vi.fn();
+    const { rerender } = render(
+      <SecretOverlay slots={[]} isCollapsed={false} onCollapsedChange={onCollapsedChange} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "收起奥秘助手" }));
+
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
+
+    rerender(
+      <SecretOverlay slots={[]} isCollapsed onCollapsedChange={onCollapsedChange} />
+    );
+
+    expect(screen.queryByLabelText("对手奥秘预测悬浮窗")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开奥秘助手" })).toHaveTextContent("?");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开奥秘助手" }));
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("matches the compact single-slot secret helper structure", () => {
     const { container } = render(
       <SecretOverlay
@@ -36,7 +75,7 @@ describe("SecretOverlay candidate artwork", () => {
     );
 
     expect(screen.getByText("奥秘助手")).toBeInTheDocument();
-    expect(screen.getByLabelText("未知奥秘")).toHaveTextContent("?");
+    expect(screen.getByRole("button", { name: "收起奥秘助手" })).toHaveTextContent("?");
     expect(screen.queryByText(/奥秘 1/)).not.toBeInTheDocument();
     expect(screen.getByText("3")).toHaveClass("secret-overlay-cost", "secret-overlay-cost--rare");
     expect(screen.getByText("法术反制")).toHaveClass("secret-overlay-name");
@@ -49,7 +88,7 @@ describe("SecretOverlay candidate artwork", () => {
       "utf8"
     );
 
-    expect(css).toMatch(/\.secret-overlay-badge\s*\{[^}]*width:\s*22px[^}]*height:\s*22px[^}]*border-radius:\s*50%/su);
+    expect(css).toMatch(/\.secret-overlay-badge\s*\{[^}]*width:\s*24px[^}]*height:\s*24px[^}]*border-radius:\s*50%/su);
     expect(css).toMatch(/\.secret-overlay\s*\{[^}]*width:\s*calc\(100%\s*-\s*20px\)[^}]*grid-template-rows:\s*18px\s+minmax\(0,\s*1fr\)[^}]*border-radius:\s*0/su);
     expect(css).toMatch(/\.secret-overlay-candidates\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)[^}]*gap:\s*0/su);
     expect(css).toMatch(/\.secret-overlay-candidates\s*>\s*li[\s\S]*?height:\s*17px[\s\S]*?grid-template-columns:\s*18px\s+minmax\(0,\s*1fr\)/su);

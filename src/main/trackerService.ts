@@ -10,7 +10,7 @@ import type { CollectionDeck, CollectionDeckScanResult, MatchMode, MatchRecord, 
 import { CardDataService } from "./cardDataService.js";
 import { ArenaRatingService } from "./arenaRatingService.js";
 import { parsePlayerLog } from "./logParsers.js";
-import { resolveBestLogTarget } from "./logDiscovery.js";
+import { resolveBestLogTarget, type HearthstoneLogFiles } from "./logDiscovery.js";
 import { ArenaScreenRecognizer, selectArenaChoiceTexts, type ArenaScreenRecognitionOptions, type ArenaScreenRecognitionResult } from "./arenaScreenRecognition.js";
 import { inspectConstructedDeckScreen } from "./constructedScreenRecognition.js";
 import { shouldRecognizeConstructedDeckScreen } from "./constructedRecognitionPolicy.js";
@@ -193,6 +193,13 @@ export class TrackerService {
   }
 
   async start(options: { logPath?: string; deckText?: string } = {}) {
+    return this.startSession(options);
+  }
+
+  private async startSession(
+    options: { logPath?: string; deckText?: string },
+    resolvedSession?: HearthstoneLogFiles
+  ) {
     let sessionContext = this.beginSession();
     this.engine.resetForLogSession();
     if (options.deckText) {
@@ -202,7 +209,7 @@ export class TrackerService {
       }
     }
 
-    const session = await resolveBestLogTarget(options.logPath);
+    const session = resolvedSession ?? await resolveBestLogTarget(options.logPath);
     if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
@@ -998,7 +1005,7 @@ export class TrackerService {
 
     this.sessionRefreshKey = sessionContext.key;
     try {
-      const session = await resolveBestLogTarget();
+      const session = await resolveBestLogTarget(sessionContext.root);
       if (this.disposing || !this.isCurrentSession(sessionContext)) {
         return;
       }
@@ -1016,7 +1023,9 @@ export class TrackerService {
         return;
       }
 
-      await this.start({ logPath: nextLogPath });
+      // Use the exact discovery result. Resolving its root a second time can race
+      // with live mtime changes and select the current session again.
+      await this.startSession({}, session);
     } catch {
       // Keep the active watcher running if a periodic discovery pass fails.
     } finally {
