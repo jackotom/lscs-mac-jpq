@@ -54,9 +54,11 @@ const insertionFixtureText = [
 ].join("\n");
 const kelthuzadFixtureText = [
   fixtureText,
-  "D 14:00:24.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=天定之灾克尔苏加德 id=240 zone=DECK cardId=REV_514 player=2] tag=ZONE value=HAND",
-  "D 14:00:24.100 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=天定之灾克尔苏加德 id=240 zone=HAND cardId=REV_514 player=2] tag=TAG_SCRIPT_DATA_NUM_1 value=5",
-  "D 14:00:24.100 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=天定之灾克尔苏加德 id=240 zone=HAND cardId=REV_514 player=2] tag=TAG_SCRIPT_DATA_NUM_1 value=5"
+  "D 14:00:23.100 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=241 zone=PLAY cardId=REV_845 player=2] tag=ZONE value=GRAVEYARD",
+  "D 14:00:23.100 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=241 zone=PLAY cardId=REV_845 player=2] tag=ZONE value=GRAVEYARD",
+  "D 14:00:23.200 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=242 zone=PLAY cardId=CORE_REV_845 player=2] tag=ZONE value=GRAVEYARD",
+  "D 14:00:23.200 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=242 zone=PLAY cardId=CORE_REV_845 player=2] tag=ZONE value=GRAVEYARD",
+  "D 14:00:24.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=天定之灾克尔苏加德 id=240 zone=DECK cardId=REV_514 player=2] tag=ZONE value=HAND"
 ].join("\n");
 const finsFixtureText = [
   "D 15:02:59.000 GameState.DebugPrintPower() - CREATE_GAME GameType=GT_RANKED",
@@ -105,6 +107,8 @@ const cardCache = {
       cost: 8,
       text: "战吼：复活你的不稳定的骷髅。战场上放不下的骷髅会立即爆炸。（复活 个）"
     },
+    { dbfId: 79798, cardId: "REV_845", name: "不稳定的骷髅", collectible: 0, type: "MINION", cost: 2 },
+    { dbfId: 79799, cardId: "CORE_REV_845", name: "不稳定的骷髅", collectible: 0, type: "MINION", cost: 2 },
     {
       dbfId: 120774,
       cardId: "TIME_706",
@@ -431,6 +435,14 @@ async function verifyOpponentUnknownHand() {
 }
 
 async function verifyOpponentKelthuzadPreview() {
+  const overlayScreenshotPath = join(
+    projectRoot,
+    "outputs/release-verification/opponent-kelthuzad-overlay.png"
+  );
+  const previewScreenshotPath = join(
+    projectRoot,
+    "outputs/release-verification/opponent-kelthuzad-preview.png"
+  );
   const inspection = await runElectronScenario(
     "opponent-kelthuzad-preview",
     {
@@ -438,7 +450,9 @@ async function verifyOpponentKelthuzadPreview() {
       QA_OPPONENT_REAL_STATE: "1",
       QA_SHOW_CARD_PREVIEW: "1",
       QA_KELTHUZAD_CARD_PREVIEW: "1",
-      QA_OPEN_TRACKING_GROUP: "hand"
+      QA_OPEN_TRACKING_GROUP: "hand",
+      QA_SCREENSHOT_PATH: overlayScreenshotPath,
+      QA_CARD_PREVIEW_SCREENSHOT_PATH: previewScreenshotPath
     },
     {
       x: workArea?.x ?? 0,
@@ -455,8 +469,8 @@ async function verifyOpponentKelthuzadPreview() {
   assert.equal(
     inspection.trackerState?.cardTracking?.contextDetailsBySideAndCardKey?.opponent?.["id:rev_514"]
       ?.gameContextSections?.[0]?.totalCount,
-    5,
-    "真实日志状态必须记录复活数 5"
+    2,
+    "克尔苏加德尚未公开自身标签时，必须按同侧骷髅死亡记录得到 2"
   );
   assert.equal(
     inspection.preview.visible,
@@ -467,8 +481,8 @@ async function verifyOpponentKelthuzadPreview() {
       preview: inspection.preview
     })}`
   );
-  assert.match(inspection.preview.text, /复活 5 个/);
-  assert.match(inspection.preview.text, /会复活（5）/);
+  assert.match(inspection.preview.text, /复活 2 个/);
+  assert.match(inspection.preview.text, /会复活（2）/);
   assert.doesNotMatch(inspection.preview.text, /复活\s*个/);
   assert.equal(inspection.preview.consoleErrorCount, 0, "克尔苏加德详情不能有控制台错误");
 }

@@ -1080,7 +1080,112 @@ D 15:03:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=�
       .not.toHaveProperty("id:rev_514");
   });
 
-  it("reads Kel'Thuzad's resurrection count from FULL_ENTITY continuation tags and clears it next game", () => {
+  it("falls back to friendly unstable-skeleton deaths before Kel'Thuzad has a Power.log counter", () => {
+    const richDb = createCardDatabase([
+      {
+        id: 79767,
+        cardId: "CORE_REV_514",
+        name: "天定之灾克尔苏加德",
+        type: "MINION",
+        text: "战吼：复活你的不稳定的骷髅。战场上放不下的骷髅会立即爆炸。（复活 个）"
+      },
+      { id: 79798, cardId: "REV_845", name: "不稳定的骷髅", type: "MINION" },
+      { id: 79799, cardId: "CORE_REV_845", name: "不稳定的骷髅", type: "MINION" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.loadDeckCards([{ name: "天定之灾克尔苏加德", count: 1, cardId: "CORE_REV_514" }], "测试牌库");
+    engine.setFriendlyController(2);
+    engine.applyText(`
+D 18:09:00.000 GameState.DebugPrintPower() - CREATE_GAME
+D 18:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=71 zone=PLAY cardId=REV_845 player=2] tag=ZONE value=GRAVEYARD
+D 18:10:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=71 zone=PLAY cardId=REV_845 player=2] tag=ZONE value=GRAVEYARD
+D 18:11:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=72 zone=PLAY cardId=REV_845 player=1] tag=ZONE value=GRAVEYARD
+D 18:12:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=73 zone=PLAY cardId=CORE_REV_845 player=2] tag=ZONE value=GRAVEYARD
+D 18:12:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=73 zone=PLAY cardId=CORE_REV_845 player=2] tag=ZONE value=GRAVEYARD
+`);
+
+    expect(engine.getState().deck).toContainEqual(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          cardId: "CORE_REV_514",
+          gameContextSections: [expect.objectContaining({
+            key: "kelthuzad-resurrection-count",
+            totalCount: 2
+          })]
+        })
+      })
+    );
+
+  });
+
+  it("shows a derived zero only while a game is active", () => {
+    const richDb = createCardDatabase([
+      {
+        id: 79767,
+        cardId: "REV_514",
+        name: "天定之灾克尔苏加德",
+        type: "MINION",
+        text: "战吼：复活你的不稳定的骷髅。战场上放不下的骷髅会立即爆炸。（复活 个）"
+      }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.loadDeckCards([{ name: "天定之灾克尔苏加德", count: 1, cardId: "REV_514" }], "测试牌库");
+    engine.setFriendlyController(1);
+
+    expect(engine.getState().deck[0]?.details?.gameContextSections).toBeUndefined();
+
+    engine.applyLine("D 18:09:00.000 GameState.DebugPrintPower() - CREATE_GAME");
+    expect(engine.getState().deck[0]?.details?.gameContextSections).toEqual([
+      expect.objectContaining({ key: "kelthuzad-resurrection-count", totalCount: 0 })
+    ]);
+
+    engine.resetAfterGame();
+    expect(engine.getState().deck[0]?.details?.gameContextSections).toBeUndefined();
+  });
+
+  it("uses the real SHOW_ENTITY continuation counter over the unstable-skeleton fallback", () => {
+    const richDb = createCardDatabase([
+      { id: 79767, cardId: "REV_514", name: "天定之灾克尔苏加德", type: "MINION" },
+      { id: 79798, cardId: "REV_845", name: "不稳定的骷髅", type: "MINION" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.loadDeckCards([{ name: "天定之灾克尔苏加德", count: 1, cardId: "REV_514" }], "测试牌库");
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 18:09:00.000 GameState.DebugPrintPower() - CREATE_GAME
+D 18:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=71 zone=PLAY cardId=REV_845 player=1] tag=ZONE value=GRAVEYARD
+D 18:11:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=不稳定的骷髅 id=72 zone=PLAY cardId=REV_845 player=1] tag=ZONE value=GRAVEYARD
+D 18:19:00.000 GameState.DebugPrintPower() - SHOW_ENTITY - Updating Entity=[entityName=天定之灾克尔苏加德 id=90 zone=DECK cardId= player=1] CardID=REV_514
+D 18:19:00.100 GameState.DebugPrintPower() -     tag=CONTROLLER value=1
+D 18:19:00.200 GameState.DebugPrintPower() -     tag=TAG_SCRIPT_DATA_NUM_1 value=6
+`);
+
+    expect(engine.getState().deck).toContainEqual(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          cardId: "REV_514",
+          gameContextSections: [expect.objectContaining({
+            key: "kelthuzad-resurrection-count",
+            totalCount: 6
+          })]
+        })
+      })
+    );
+
+    engine.applyLine("D 18:20:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=天定之灾克尔苏加德 id=90 zone=HAND cardId=REV_514 player=1] tag=TAG_SCRIPT_DATA_NUM_1 value=0");
+    expect(engine.getState().deck).toContainEqual(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          gameContextSections: [expect.objectContaining({
+            key: "kelthuzad-resurrection-count",
+            totalCount: 0
+          })]
+        })
+      })
+    );
+  });
+
+  it("reads Kel'Thuzad's resurrection count from FULL_ENTITY continuation tags and clears it to zero next game", () => {
     const richDb = createCardDatabase([
       { id: 79767, cardId: "REV_514", name: "天定之灾克尔苏加德", type: "MINION" },
       { id: 79768, cardId: "CORE_REV_514", name: "天定之灾克尔苏加德", type: "MINION" }
@@ -1112,7 +1217,12 @@ D 16:10:00.000 GameState.DebugPrintPower() - CREATE_GAME
 D 16:10:01.000 GameState.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=天定之灾克尔苏加德 id=140 zone=HAND cardId=REV_514 player=1] CardID=REV_514
 `);
     expect(engine.getState().cardTracking?.contextDetailsBySideAndCardKey.opponent["id:rev_514"])
-      .toBeUndefined();
+      .toMatchObject({
+        gameContextSections: [expect.objectContaining({
+          key: "kelthuzad-resurrection-count",
+          totalCount: 0
+        })]
+      });
   });
 
   it("reports known opponent cards in deck, hand, and other current zones", () => {

@@ -201,6 +201,23 @@ describe("card lifecycle Electron QA verification", () => {
     expect(script.match(/assertPreviewScrollContract\(name, preview\)/g)).toHaveLength(3);
   });
 
+  it("renders the Kel'Thuzad QA preview from the real pre-reveal tracker count", () => {
+    const script = read("scripts/verify-card-lifecycle-ui.mjs");
+    const main = read("src/main/main.ts");
+    const kelthuzadPreviewBlock = main.slice(
+      main.indexOf('process.env.QA_KELTHUZAD_CARD_PREVIEW === "1"'),
+      main.indexOf('process.env.QA_TIME_FINS_CARD_PREVIEW === "1"')
+    );
+
+    expect(script).toContain("cardId=REV_845 player=2");
+    expect(script).toContain("cardId=CORE_REV_845 player=2");
+    expect(script).toContain("/复活 2 个/");
+    expect(script).toContain("/会复活（2）/");
+    expect(kelthuzadPreviewBlock).toContain("tracker.getState().opponentHand?.find");
+    expect(kelthuzadPreviewBlock).toContain("details: qaKelthuzadDetails");
+    expect(kelthuzadPreviewBlock).not.toContain("totalCount: 5");
+  });
+
   it("reports the tallest available real-window case as verified", () => {
     const report = read(".superpowers/sdd/task-9-report.md");
     expect(report).toContain("验收已完成");

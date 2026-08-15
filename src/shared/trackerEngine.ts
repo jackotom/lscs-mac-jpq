@@ -146,6 +146,7 @@ const INSERTED_UNKNOWN_DECK_ROW_NAME = "被塞入的未知牌";
 const UNRESOLVED_HAND_CARD_NAME = "未识别手牌";
 const GALACTIC_PROJECTION_ORB_CARD_ID = "toy_378";
 const KELTHUZAD_CARD_IDS = new Set(["rev_514", "core_rev_514"]);
+const KELTHUZAD_UNSTABLE_SKELETON_CARD_IDS = new Set(["rev_845", "core_rev_845"]);
 const THE_FINS_BEYOND_TIME_CARD_IDS = new Set(["time_706"]);
 const FRIENDLY_HAND_ZONES = new Set<Zone>(["HAND"]);
 const FRIENDLY_OTHER_ZONES = new Set<Zone>(["PLAY", "GRAVEYARD", "REMOVEDFROMGAME", "SECRET"]);
@@ -2821,8 +2822,17 @@ export class TrackerEngine {
                   : [];
               }))
       : undefined;
-    const resurrectionCount = KELTHUZAD_CARD_IDS.has(cardId) && counterPlayerId !== undefined
-      ? this.kelthuzadResurrectionCountByController.get(counterPlayerId)
+    const fallbackResurrectionCount = this.gameActive && KELTHUZAD_CARD_IDS.has(cardId)
+      ? (side === "friendly" ? this.friendlyDeadMinionsThisGame : this.opponentDeadMinionsThisGame)
+          .filter((deadMinion) => KELTHUZAD_UNSTABLE_SKELETON_CARD_IDS.has(
+            normalizeCardId(deadMinion.cardId ?? deadMinion.id ?? "")
+          ))
+          .length
+      : undefined;
+    const resurrectionCount = KELTHUZAD_CARD_IDS.has(cardId)
+      ? (counterPlayerId === undefined
+          ? undefined
+          : this.kelthuzadResurrectionCountByController.get(counterPlayerId)) ?? fallbackResurrectionCount
       : undefined;
     const gameContextSections = [
       ...relationSections,

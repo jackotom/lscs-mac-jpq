@@ -448,6 +448,28 @@ describe("CardDetailBody related cards", () => {
       .toHaveTextContent("本次尚未确认施放结果");
   });
 
+  it("shows that Kel'Thuzad's resurrection count is unknown instead of keeping a blank placeholder", () => {
+    render(
+      <CardDetailBody
+        mode="interactive"
+        details={{
+          dbfId: 79767,
+          cardId: "REV_514",
+          name: "天定之灾克尔苏加德",
+          manaCost: 8,
+          cardType: "随从",
+          text: "战吼：复活你的不稳定的骷髅。\n战场上放不下的骷髅会立即爆炸。（ 复活   个 ）",
+          isSpell: false,
+          relatedCards: []
+        }}
+      />
+    );
+
+    expect(screen.getByText(/复活数量未知/)).toBeInTheDocument();
+    expect(screen.queryByText(/复活\s*个/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /会复活/ })).not.toBeInTheDocument();
+  });
+
   it("shows Kel'Thuzad's logged resurrection count and fills the blank card-text placeholder", () => {
     render(
       <CardDetailBody
@@ -476,6 +498,34 @@ describe("CardDetailBody related cards", () => {
     expect(screen.queryByText(/复活\s*个/)).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "会复活，共 5 张" }))
       .toHaveTextContent("会复活（5）");
+  });
+
+  it("keeps Kel'Thuzad's known zero resurrection count", () => {
+    render(
+      <CardDetailBody
+        mode="interactive"
+        details={{
+          dbfId: 79767,
+          cardId: "REV_514",
+          name: "天定之灾克尔苏加德",
+          manaCost: 8,
+          cardType: "随从",
+          text: "战吼：复活你的不稳定的骷髅。（复活 个）",
+          isSpell: false,
+          relatedCards: [],
+          gameContextSections: [{
+            key: "kelthuzad-resurrection-count",
+            title: "会复活",
+            emptyText: "本局还没有不稳定的骷髅死亡",
+            cards: [],
+            totalCount: 0
+          }]
+        }}
+      />
+    );
+
+    expect(screen.getByText(/复活 0 个/)).toBeInTheDocument();
+    expect(screen.queryByText(/复活数量未知/)).not.toBeInTheDocument();
   });
 
   it("shows the friendly opening hand without a misleading empty related-card section", () => {

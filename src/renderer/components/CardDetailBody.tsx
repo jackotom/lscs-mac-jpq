@@ -43,7 +43,7 @@ export function CardDetailBody({ details, className, mode }: CardDetailBodyProps
     (section) => section.key === "kelthuzad-resurrection-count"
   )?.totalCount;
   const displayText = resurrectionCount === undefined
-    ? details.text
+    ? details.text?.replace(/（\s*复活\s*个\s*）/u, "（复活数量未知）")
     : details.text?.replace(/（\s*复活\s*个\s*）/u, `（复活 ${resurrectionCount} 个）`);
 
   return (

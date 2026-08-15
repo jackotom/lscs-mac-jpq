@@ -2967,25 +2967,15 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
   if (process.env.QA_SHOW_CARD_PREVIEW === "1") {
     const anchorRect = { left: 16, top: 72, right: 196, bottom: 112, width: 180, height: 40 };
     if (process.env.QA_KELTHUZAD_CARD_PREVIEW === "1") {
+      const qaKelthuzadDetails = tracker.getState().opponentHand?.find(
+        (card) => card.cardId?.toUpperCase() === "REV_514"
+      )?.details;
+      if (!qaKelthuzadDetails) {
+        throw new Error("QA 克尔苏加德详情未从真实记牌状态生成");
+      }
       await window.webContents.executeJavaScript(`
         window.hearthstoneTracker?.showCardPreview?.(${JSON.stringify({
-          details: {
-            dbfId: 79767,
-            cardId: "REV_514",
-            name: "天定之灾克尔苏加德",
-            manaCost: 8,
-            cardType: "随从",
-            text: "战吼：复活你的不稳定的骷髅。战场上放不下的骷髅会立即爆炸。（复活 个）",
-            isSpell: false,
-            relatedCards: [],
-            gameContextSections: [{
-              key: "kelthuzad-resurrection-count",
-              title: "会复活",
-              emptyText: "数量来自对局日志",
-              cards: [],
-              totalCount: 5
-            }]
-          },
+          details: qaKelthuzadDetails,
           anchorRect
         })});
       `);
