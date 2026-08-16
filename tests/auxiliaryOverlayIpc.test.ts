@@ -83,4 +83,46 @@ describe("auxiliary overlay IPC", () => {
       { x: Number.NaN, y: 2 }
     )).rejects.toThrow("拖动坐标无效");
   });
+
+  it("keeps two smart-counter senders isolated without trusting renderer arguments", async () => {
+    const handlers = new Map<string, IpcHandler>();
+    const firstSender = {};
+    const secondSender = {};
+    const host: AuxiliaryOverlayIpcHost = {
+      resolveKind: (sender) => {
+        if (sender === firstSender) return "smart-counter:first";
+        if (sender === secondSender) return "smart-counter:second";
+        return undefined;
+      },
+      getSecretCollapsed: vi.fn(async () => false),
+      setSecretCollapsed: vi.fn(async (collapsed) => collapsed),
+      setMouseInteractive: vi.fn(),
+      beginDrag: vi.fn(),
+      moveDrag: vi.fn(),
+      endDrag: vi.fn(async () => undefined)
+    };
+    registerAuxiliaryOverlayIpc({
+      handle(channel, handler) {
+        handlers.set(channel, handler);
+      }
+    }, host);
+
+    await handlers.get("tracker:begin-auxiliary-overlay-drag")?.(
+      { sender: firstSender },
+      { x: 100, y: 200 },
+      "smart-counter:second"
+    );
+    await handlers.get("tracker:move-auxiliary-overlay-drag")?.(
+      { sender: secondSender },
+      { x: 300, y: 400 },
+      "smart-counter:first"
+    );
+
+    expect(host.beginDrag).toHaveBeenCalledWith("smart-counter:first", { x: 100, y: 200 });
+    expect(host.moveDrag).toHaveBeenCalledWith("smart-counter:second", { x: 300, y: 400 });
+    await expect(handlers.get("tracker:end-auxiliary-overlay-drag")?.(
+      { sender: {} },
+      { x: 1, y: 2 }
+    )).rejects.toThrow("无权移动辅助悬浮窗");
+  });
 });

@@ -14,6 +14,13 @@ export function isQaOverlayCapture(environment: Readonly<Record<string, string |
   );
 }
 
+export function shouldRunBoardAttackOverlayMonitor(
+  environment: Readonly<Record<string, string | undefined>>,
+  showAnyAuxiliaryOverlay: boolean
+) {
+  return showAnyAuxiliaryOverlay && !isQaOverlayCapture(environment);
+}
+
 export function shouldShowMainWindowOnLaunch(
   environment: Readonly<Record<string, string | undefined>>,
   startMinimized = false

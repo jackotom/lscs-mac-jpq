@@ -1,7 +1,15 @@
 import path from "node:path";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 
-export type MovableAuxiliaryOverlayKind = "friendly-attack" | "opponent-attack" | "secret";
+export type SmartCounterAuxiliaryOverlayKind = `smart-counter:${string}`;
+export type MovableAuxiliaryOverlayKind =
+  | "friendly-attack"
+  | "opponent-attack"
+  | "secret"
+  | SmartCounterAuxiliaryOverlayKind;
+
+const smartCounterOverlayKindPrefix = "smart-counter:";
+const smartCounterIdPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 
 export interface AuxiliaryOverlayPoint {
   readonly x: number;
@@ -140,12 +148,24 @@ export function parseAuxiliaryOverlayWindowState(value: unknown): AuxiliaryOverl
   if (!record.positions || typeof record.positions !== "object") return undefined;
   const savedPositions = record.positions as Record<string, unknown>;
   const positions: Partial<Record<MovableAuxiliaryOverlayKind, RelativeAuxiliaryOverlayPosition>> = {};
-  for (const kind of ["friendly-attack", "opponent-attack", "secret"] as const) {
+  for (const kind of Object.keys(savedPositions)) {
+    if (!isMovableAuxiliaryOverlayKind(kind)) continue;
     const position = savedPositions[kind];
     if (position !== undefined && !isRelativePosition(position)) return undefined;
     if (isRelativePosition(position)) positions[kind] = { ...position };
   }
   return { positions, secretCollapsed: record.secretCollapsed };
+}
+
+export function getSmartCounterOverlayKind(counterId: string): SmartCounterAuxiliaryOverlayKind {
+  if (!smartCounterIdPattern.test(counterId)) throw new Error("智能计数器标识无效");
+  return `${smartCounterOverlayKindPrefix}${counterId}`;
+}
+
+export function getSmartCounterIdFromOverlayKind(kind: string): string | undefined {
+  if (!kind.startsWith(smartCounterOverlayKindPrefix)) return undefined;
+  const counterId = kind.slice(smartCounterOverlayKindPrefix.length);
+  return smartCounterIdPattern.test(counterId) ? counterId : undefined;
 }
 
 export function getSecretOverlayVisibleBounds(
@@ -259,6 +279,13 @@ function isRelativePosition(value: unknown): value is RelativeAuxiliaryOverlayPo
     && Number.isFinite(position.yRatio)
     && position.yRatio >= 0
     && position.yRatio <= 1;
+}
+
+function isMovableAuxiliaryOverlayKind(value: string): value is MovableAuxiliaryOverlayKind {
+  return value === "friendly-attack"
+    || value === "opponent-attack"
+    || value === "secret"
+    || getSmartCounterIdFromOverlayKind(value) !== undefined;
 }
 
 function cloneState(state: AuxiliaryOverlayWindowState): AuxiliaryOverlayWindowState {

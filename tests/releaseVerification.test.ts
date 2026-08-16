@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.5.2");
+    expect(packageJson.version).toBe("0.5.3");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');
@@ -156,6 +156,19 @@ describe("release verification entrypoint", () => {
 
     expect(script).toContain('"board-attack-overlay": "friendly-attack-overlay=1"');
     expect(script).not.toContain('"board-attack-overlay": "board-attack-overlay=1"');
+  });
+
+  it("captures the packaged smart-counter overlay through its dedicated QA route", () => {
+    const script = read("scripts/verify-release.sh");
+    const mainSource = read("src/main/main.ts");
+
+    expect(script).toContain("run_capture smart-counter-overlay fixtures/logs/session-2026-07-10 QA_OPEN_SMART_COUNTER_OVERLAY");
+    expect(script).toContain('"smart-counter-overlay": "smart-counter-overlay=1"');
+    expect(script).toContain('if [[ "$name" == "smart-counter-overlay" ]]');
+    expect(script).toContain('QA_APPLY_TRACKER_SETTINGS_EFFECTS="$qa_apply_tracker_settings_effects"');
+    expect(mainSource).toContain("loginItemVerified: shouldSkipLaunchAtLoginUpdateDuringQaCapture(process.env)");
+    expect(script).toContain('require_file "$screenshots_dir/smart-counter-overlay.png"');
+    expect(script).toContain('require_file "$inspections_dir/smart-counter-overlay.json"');
   });
 
   it("requires Arena choice evidence with all four card metrics", () => {

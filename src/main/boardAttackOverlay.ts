@@ -51,6 +51,12 @@ const iconSize = 44;
 const horizontalRatio = 0.255;
 const opponentVerticalRatio = 0.2239;
 const friendlyVerticalRatio = 0.6762;
+const smartCounterWidth = 60;
+const smartCounterHeight = 62;
+const smartCounterStartGap = 8;
+const smartCounterRightInset = 8;
+const smartCounterHorizontalStep = 64;
+const smartCounterVerticalStep = 66;
 
 export type AuxiliaryOverlayKind = "friendly-attack" | "opponent-attack" | "secret" | "smart-counter";
 
@@ -67,11 +73,13 @@ export function getAuxiliaryOverlayBounds(display: DisplayBounds, kind: Auxiliar
   if (kind === "friendly-attack") return attack.friendly;
   if (kind === "opponent-attack") return attack.opponent;
   if (kind === "secret") return getSecretOverlayBounds(display, []);
+  const preferredX = attack.friendly.x + attack.friendly.width + smartCounterStartGap;
+  const maximumX = display.x + Math.max(0, display.width - smartCounterRightInset - smartCounterWidth);
   return {
-    x: display.x + Math.round(display.width * 0.245),
+    x: Math.min(preferredX, maximumX),
     y: display.y + Math.round(display.height * 0.62),
-    width: 60,
-    height: 62
+    width: smartCounterWidth,
+    height: smartCounterHeight
   };
 }
 
@@ -96,11 +104,49 @@ export function getSecretOverlayBounds(
   };
 }
 
-export function getSmartCounterOverlayBounds(display: DisplayBounds, index: number): IconBounds {
+export function getSmartCounterOverlayBounds(
+  display: DisplayBounds,
+  index: number,
+  workArea: DisplayBounds = display
+): IconBounds {
   const base = getAuxiliaryOverlayBounds(display, "smart-counter");
+  const safeIndex = Number.isFinite(index) ? Math.max(0, Math.floor(index)) : 0;
+  const friendly = getBoardAttackIconBounds(display).friendly;
+  const preferredX = friendly.x + friendly.width + smartCounterStartGap;
+  const availableHorizontalSpace = Math.max(0, workArea.width - smartCounterWidth);
+  const horizontalInset = availableHorizontalSpace >= smartCounterRightInset * 2
+    ? smartCounterRightInset
+    : 0;
+  const minimumX = workArea.x + horizontalInset;
+  const maximumX = Math.max(
+    minimumX,
+    workArea.x + availableHorizontalSpace - horizontalInset
+  );
+  const startX = Math.min(Math.max(preferredX, minimumX), maximumX);
+  const availableVerticalSpace = Math.max(0, workArea.height - smartCounterHeight);
+  const verticalInset = availableVerticalSpace >= smartCounterRightInset * 2
+    ? smartCounterRightInset
+    : 0;
+  const minimumY = workArea.y + verticalInset;
+  const maximumY = Math.max(
+    minimumY,
+    workArea.y + availableVerticalSpace - verticalInset
+  );
+  const startY = Math.min(Math.max(base.y, minimumY), maximumY);
+  const columns = Math.max(
+    1,
+    Math.floor((maximumX - startX) / smartCounterHorizontalStep) + 1
+  );
+  const column = safeIndex % columns;
+  const row = Math.floor(safeIndex / columns);
+  const upwardRows = Math.floor((startY - minimumY) / smartCounterVerticalStep) + 1;
+  const y = row < upwardRows
+    ? startY - row * smartCounterVerticalStep
+    : startY + (row - upwardRows + 1) * smartCounterVerticalStep;
   return {
     ...base,
-    x: base.x + Math.max(0, index) * 58
+    x: startX + column * smartCounterHorizontalStep,
+    y
   };
 }
 

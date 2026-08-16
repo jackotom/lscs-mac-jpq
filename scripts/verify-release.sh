@@ -194,6 +194,10 @@ run_capture() {
   local inspection="$inspections_dir/$name.json"
   local qa_user_data="$evidence_dir/user-data/$name"
   local qa_log_path="$root_dir/$fixture/Power.log"
+  local qa_apply_tracker_settings_effects=0
+  if [[ "$name" == "smart-counter-overlay" ]]; then
+    qa_apply_tracker_settings_effects=1
+  fi
   if [[ "$name" == arena-* ]]; then
     qa_log_path="$root_dir/$fixture/Arena.log"
   fi
@@ -225,6 +229,7 @@ run_capture() {
       QA_EXIT_AFTER_SCREENSHOT=1 \
       QA_SCREENSHOT_PATH="$screenshot" \
       QA_INSPECT_PATH="$inspection" \
+      QA_APPLY_TRACKER_SETTINGS_EFFECTS="$qa_apply_tracker_settings_effects" \
       "$qa_flag"=1 \
       "$app_executable" &
   else
@@ -404,7 +409,7 @@ run_capture() {
         if (["选取率", "卡牌", "影响"].every((label) => body.includes(label))) process.exit(24);
       }
     }
-    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "friendly-attack-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
+    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "friendly-attack-overlay=1", "smart-counter-overlay": "smart-counter-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
     if (candidateMatch) routeByScenario[scenario] = "overlay=1";
     if (routeByScenario[scenario] && !report.location.includes(routeByScenario[scenario])) process.exit(7);
     if (routeByScenario[scenario] && report.qaMainWindowVisible !== false) process.exit(36);
@@ -495,18 +500,21 @@ run_capture opponent-overlay fixtures/logs/session-2026-07-10 QA_OPEN_OPPONENT_O
 run_capture arena-choice-overlay fixtures/logs/arena-session QA_OPEN_ARENA_CHOICE_OVERLAY
 run_capture ladder-deck-overlay fixtures/logs/session-2026-07-10 QA_OPEN_LADDER_DECK_OVERLAY
 run_capture board-attack-overlay fixtures/logs/session-2026-07-10 QA_OPEN_BOARD_ATTACK_OVERLAY
+run_capture smart-counter-overlay fixtures/logs/session-2026-07-10 QA_OPEN_SMART_COUNTER_OVERLAY
 run_capture arena-hero-ranking-overlay fixtures/logs/arena-session QA_OPEN_ARENA_HERO_RANKING_OVERLAY
 run_capture three-window-layout fixtures/logs/arena-session QA_OPEN_THREE_WINDOW_LAYOUT
 require_file "$screenshots_dir/arena-redraft-partial-replay.png"
 require_file "$screenshots_dir/arena-redraft-exact-replay.png"
 require_file "$screenshots_dir/arena-playing-replay.png"
 require_file "$screenshots_dir/arena-choice-overlay.png"
+require_file "$screenshots_dir/smart-counter-overlay.png"
 require_file "$screenshots_dir/arena-hero-ranking-overlay.png"
 require_file "$screenshots_dir/three-window-layout.png"
 require_file "$inspections_dir/arena-redraft-partial-replay.json"
 require_file "$inspections_dir/arena-redraft-exact-replay.json"
 require_file "$inspections_dir/arena-playing-replay.json"
 require_file "$inspections_dir/arena-choice-overlay.json"
+require_file "$inspections_dir/smart-counter-overlay.json"
 require_file "$inspections_dir/arena-hero-ranking-overlay.json"
 require_file "$inspections_dir/three-window-layout.json"
 

@@ -5,6 +5,21 @@ export interface QaDockController {
   hide(): void;
 }
 
+export function shouldApplyTrackerSettingsEffectsDuringQaCapture(
+  environment: Readonly<Record<string, string | undefined>>
+): boolean {
+  const automatedCapture = environment.QA_EXIT_AFTER_SCREENSHOT === "1" && Boolean(
+    environment.QA_SCREENSHOT_PATH || environment.QA_INSPECT_PATH
+  );
+  return !automatedCapture || environment.QA_APPLY_TRACKER_SETTINGS_EFFECTS === "1";
+}
+
+export function shouldSkipLaunchAtLoginUpdateDuringQaCapture(
+  environment: Readonly<Record<string, string | undefined>>
+): boolean {
+  return environment.QA_APPLY_TRACKER_SETTINGS_EFFECTS === "1";
+}
+
 export function shouldUseQaAccessoryActivationPolicy(
   environment: Readonly<Partial<Pick<NodeJS.ProcessEnv, "QA_ALLOW_MULTIPLE_INSTANCES" | "QA_USER_DATA_DIR">>>,
   platform: NodeJS.Platform
