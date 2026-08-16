@@ -31,6 +31,14 @@ html.smart-counter-overlay-document #root {
   place-items: start center;
   overflow: visible;
   background: transparent;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+
+.smart-counter-item:active {
+  cursor: grabbing;
 }
 
 .smart-counter-art {
@@ -94,10 +102,6 @@ html.smart-counter-overlay-document #root {
   height: 100%;
   border-radius: inherit;
   background: #73a9f5;
-}
-
-.smart-counter-item[title] {
-  cursor: default;
 }
 
 @media (max-height: 52px) {

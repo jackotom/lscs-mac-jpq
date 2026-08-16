@@ -7,9 +7,35 @@ import {
   getBoardAttackOverlayQuery,
   getBoardAttackOverlayWindowOptions,
   getSecretOverlayBounds,
+  getSmartCounterOverlayBounds,
   setAuxiliaryOverlayMouseInteractive,
   shouldShowBoardAttackOverlay
 } from "../src/main/boardAttackOverlay";
+import { clampBoundsToWorkArea } from "../src/main/auxiliaryOverlayWindowState";
+
+type Bounds = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+
+function overlaps(left: Bounds, right: Bounds): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
+}
+
+function expectInsideDisplay(bounds: Bounds, display: Bounds): void {
+  expect(bounds.x).toBeGreaterThanOrEqual(display.x);
+  expect(bounds.y).toBeGreaterThanOrEqual(display.y);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(display.x + display.width);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(display.y + display.height);
+}
+
+function expectPairwiseSeparate(bounds: readonly Bounds[]): void {
+  for (let left = 0; left < bounds.length; left += 1) {
+    for (let right = left + 1; right < bounds.length; right += 1) {
+      expect(overlaps(bounds[left], bounds[right])).toBe(false);
+    }
+  }
+}
 
 describe("board attack overlay", () => {
   it("places compact 44px icons at the confirmed HDT percentages", () => {
@@ -34,6 +60,96 @@ describe("board attack overlay", () => {
     expect(getSecretOverlayBounds(display, [1, 1])).toMatchObject({ x: 384, width: 144, height: 82 });
     expect(getSecretOverlayBounds(display, [10, 10])).toMatchObject({ x: 384, width: 144, height: 388 });
     expect(getSecretOverlayBounds(display, [])).toMatchObject({ x: 384, width: 144, height: 37 });
+  });
+
+  it("keeps eleven smart counters separate from the default friendly attack icon at 1470x956", () => {
+    const display = { x: 0, y: 0, width: 1470, height: 956 };
+    const friendly = getBoardAttackIconBounds(display).friendly;
+    const counters = Array.from({ length: 11 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index)
+    );
+
+    expect(counters[0].x).toBe(friendly.x + friendly.width + 8);
+    expectPairwiseSeparate([friendly, ...counters]);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, display));
+  });
+
+  it("fits eleven smart counters on one non-overlapping row at 1024x640", () => {
+    const display = { x: 0, y: 0, width: 1024, height: 640 };
+    const counters = Array.from({ length: 11 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index)
+    );
+
+    expect(new Set(counters.map(({ y }) => y)).size).toBe(1);
+    expectPairwiseSeparate(counters);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, display));
+  });
+
+  it.each([
+    { x: 0, y: 0, width: 800, height: 600 },
+    { x: 0, y: 0, width: 640, height: 480 }
+  ])("wraps eleven smart counters upward inside $width x $height", (display) => {
+    const counters = Array.from({ length: 11 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index)
+    );
+    const coordinates = counters.map(({ x, y }) => `${x},${y}`);
+
+    expect(new Set(counters.map(({ y }) => y)).size).toBeGreaterThan(1);
+    expect(Math.min(...counters.map(({ y }) => y))).toBeLessThan(counters[0].y);
+    expect(new Set(coordinates)).toHaveLength(counters.length);
+    expectPairwiseSeparate(counters);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, display));
+  });
+
+  it("uses display-relative wrapping correctly on a negative-origin monitor", () => {
+    const display = { x: -1024, y: -640, width: 1024, height: 640 };
+    const friendly = getBoardAttackIconBounds(display).friendly;
+    const counters = Array.from({ length: 11 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index)
+    );
+
+    expect(counters[0].x).toBe(friendly.x + friendly.width + 8);
+    expectPairwiseSeparate([friendly, ...counters]);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, display));
+  });
+
+  it.each([
+    {
+      name: "right Dock",
+      display: { x: 0, y: 0, width: 1024, height: 640 },
+      workArea: { x: 0, y: 24, width: 944, height: 616 }
+    },
+    {
+      name: "left Dock",
+      display: { x: 0, y: 0, width: 1024, height: 640 },
+      workArea: { x: 80, y: 24, width: 944, height: 616 }
+    }
+  ])("lays out eleven smart counters inside the $name work area before clamping", ({ display, workArea }) => {
+    const friendly = getBoardAttackIconBounds(display).friendly;
+    const counters = Array.from({ length: 11 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index, workArea)
+    );
+    const clamped = counters.map((bounds) => clampBoundsToWorkArea(bounds, workArea));
+
+    expectPairwiseSeparate([friendly, ...counters]);
+    expectPairwiseSeparate(clamped);
+    expect(new Set(clamped.map(({ x, y }) => `${x},${y}`))).toHaveLength(clamped.length);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, workArea));
+  });
+
+  it.each([
+    { x: 0, y: 0, width: 640, height: 480 },
+    { x: -640, y: -480, width: 640, height: 480 }
+  ])("uses free rows below the anchor before 31 counters can collide on a $x,$y display", (display) => {
+    const counters = Array.from({ length: 31 }, (_, index) =>
+      getSmartCounterOverlayBounds(display, index, display)
+    );
+    const clamped = counters.map((bounds) => clampBoundsToWorkArea(bounds, display));
+
+    expectPairwiseSeparate(counters);
+    expectPairwiseSeparate(clamped);
+    expect(new Set(clamped.map(({ x, y }) => `${x},${y}`))).toHaveLength(clamped.length);
+    counters.forEach((bounds) => expectInsideDisplay(bounds, display));
   });
 
   it("builds a transparent full-display window and makes it click-through", () => {

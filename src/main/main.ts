@@ -24,11 +24,14 @@ import {
   shouldFocusMainWindowOnLaunch,
   shouldHandleAppActivate,
   shouldPreventAutomatedCaptureClose,
+  shouldRunBoardAttackOverlayMonitor,
   shouldShowMainWindowOnLaunch
 } from "./mainWindowVisibility.js";
 import {
   hideQaDockAfterLaunch,
   requestQaQuit,
+  shouldApplyTrackerSettingsEffectsDuringQaCapture,
+  shouldSkipLaunchAtLoginUpdateDuringQaCapture,
   shouldUseQaAccessoryActivationPolicy,
   waitForQaRendererSettled
 } from "./qaCaptureTiming.js";
@@ -58,6 +61,8 @@ import {
 import { registerAuxiliaryOverlayIpc } from "./auxiliaryOverlayIpc.js";
 import {
   AuxiliaryOverlayWindowStateStore,
+  getSmartCounterIdFromOverlayKind,
+  getSmartCounterOverlayKind,
   getSecretOverlayVisibleBounds,
   moveAuxiliaryOverlayBounds,
   type AuxiliaryOverlayBounds,
@@ -158,7 +163,7 @@ let secretOverlayWindow: BrowserWindow | undefined;
 let secretOverlayExpandedBounds: AuxiliaryOverlayBounds | undefined;
 const smartCounterOverlayWindows = new Map<string, BrowserWindow>();
 const trustedAuxiliaryWebContents = new Set<Electron.WebContents>();
-const auxiliaryOverlayKindsByWebContents = new Map<Electron.WebContents, AuxiliaryOverlayKind>();
+const auxiliaryOverlayKindsByWebContents = new Map<Electron.WebContents, MovableAuxiliaryOverlayKind>();
 const auxiliaryOverlayDragSessions = new Map<MovableAuxiliaryOverlayKind, {
   readonly window: BrowserWindow;
   readonly initialBounds: AuxiliaryOverlayBounds;
@@ -637,11 +642,10 @@ if (hasSingleInstanceLock) {
     await appRunState.markPhase("ready").catch((error) => {
       diagnosticLogger.warn("保存启动完成阶段失败", error);
     });
-    const isQaScreenshotRun = process.env.QA_EXIT_AFTER_SCREENSHOT === "1" && Boolean(
-      process.env.QA_SCREENSHOT_PATH || process.env.QA_INSPECT_PATH
-    );
-    if (!isQaScreenshotRun) {
-      await applyTrackerSettingsEffects().catch(async (error) => {
+    if (shouldApplyTrackerSettingsEffectsDuringQaCapture(process.env)) {
+      await applyTrackerSettingsEffects(undefined, {
+        loginItemVerified: shouldSkipLaunchAtLoginUpdateDuringQaCapture(process.env)
+      }).catch(async (error) => {
         reportDiagnosticError("应用开机启动设置失败，将继续启动。", error);
         await applyTrackerSettingsEffects(undefined, { loginItemVerified: true });
       });
@@ -1147,7 +1151,7 @@ async function applyTrackerSettingsEffects(
     trackerSettings.overlay.secretPrediction ||
     trackerSettings.overlay.smartCardCounters
   );
-  if (showAnyAuxiliaryOverlay) startBoardAttackOverlayMonitor();
+  if (shouldRunBoardAttackOverlayMonitor(process.env, showAnyAuxiliaryOverlay)) startBoardAttackOverlayMonitor();
   else stopBoardAttackOverlayMonitor();
 
   if (!isDeckTrackerEnabled("friendlyDeckTracker")) {
@@ -1713,7 +1717,11 @@ async function refreshBoardAttackOverlayWindow() {
       }),
       releaseSecretOverlayWindow
     );
-    await refreshSmartCounterOverlayWindows(state.smartCounters ?? [], display.bounds);
+    await refreshSmartCounterOverlayWindows(
+      state.smartCounters ?? [],
+      display.bounds,
+      display.workArea
+    );
   } finally {
     boardAttackOverlayRefreshInFlight = false;
   }
@@ -1768,14 +1776,14 @@ function getMovableAuxiliaryOverlayWindow(
 ): BrowserWindow | undefined {
   if (kind === "friendly-attack") return friendlyAttackOverlayWindow;
   if (kind === "opponent-attack") return opponentAttackOverlayWindow;
-  return secretOverlayWindow;
+  if (kind === "secret") return secretOverlayWindow;
+  const counterId = getSmartCounterIdFromOverlayKind(kind);
+  return counterId ? smartCounterOverlayWindows.get(counterId) : undefined;
 }
 
 function resolveMovableAuxiliaryOverlayKind(sender: unknown): MovableAuxiliaryOverlayKind | undefined {
   const registered = auxiliaryOverlayKindsByWebContents.get(sender as Electron.WebContents);
-  if (registered === "friendly-attack" || registered === "opponent-attack" || registered === "secret") {
-    return registered;
-  }
+  if (registered) return registered;
   if (sender === friendlyAttackOverlayWindow?.webContents) return "friendly-attack";
   if (sender === opponentAttackOverlayWindow?.webContents) return "opponent-attack";
   if (sender === secretOverlayWindow?.webContents) return "secret";
@@ -1995,7 +2003,8 @@ function releaseSecretOverlayWindow(): void {
 
 async function refreshSmartCounterOverlayWindows(
   counters: readonly { readonly id: string }[],
-  displayBounds: { x: number; y: number; width: number; height: number }
+  displayBounds: { x: number; y: number; width: number; height: number },
+  workArea: AuxiliaryOverlayWorkArea
 ): Promise<void> {
   const hidden = new Set(trackerSettings.overlay.hiddenSmartCounterIds ?? []);
   const visibleCounters = trackerSettings.overlay.smartCardCounters
@@ -2008,7 +2017,7 @@ async function refreshSmartCounterOverlayWindows(
   }
 
   await Promise.all(visibleCounters.map(async (counter, index) => {
-    const window = await createSmartCounterOverlayWindow(counter.id, displayBounds, index);
+    const window = await createSmartCounterOverlayWindow(counter.id, displayBounds, index, { workArea });
     if (window && !window.isDestroyed()) window.showInactive();
   }));
 }
@@ -2017,19 +2026,25 @@ async function createSmartCounterOverlayWindow(
   counterId: string,
   displayBounds: { x: number; y: number; width: number; height: number },
   index = 0,
-  options: { qaDemo?: boolean } = {}
+  options: { qaDemo?: boolean; workArea?: AuxiliaryOverlayWorkArea } = {}
 ) {
-  const bounds = getSmartCounterOverlayBounds(displayBounds, index);
+  const kind = getSmartCounterOverlayKind(counterId);
+  const bounds = await resolveAuxiliaryOverlayBounds(
+    kind,
+    getSmartCounterOverlayBounds(displayBounds, index, options.workArea ?? displayBounds)
+  );
   const existing = smartCounterOverlayWindows.get(counterId);
   if (existing && !existing.isDestroyed()) {
-    updateAuxiliaryOverlayBounds(existing, bounds);
+    if (!auxiliaryOverlayDragSessions.has(kind)) {
+      updateAuxiliaryOverlayBounds(existing, bounds);
+    }
     return existing;
   }
 
   const generation = Symbol(counterId);
   smartCounterOverlayGenerations.set(counterId, generation);
   const createdWindow = await createAuxiliaryOverlayWindow(
-    "smart-counter",
+    kind,
     bounds,
     {
       "smart-counter-overlay": "1",
@@ -2047,6 +2062,9 @@ async function createSmartCounterOverlayWindow(
   if (!createdWindow) return undefined;
   smartCounterOverlayWindows.set(counterId, createdWindow);
   createdWindow.on("closed", () => {
+    if (auxiliaryOverlayDragSessions.get(kind)?.window === createdWindow) {
+      auxiliaryOverlayDragSessions.delete(kind);
+    }
     if (smartCounterOverlayWindows.get(counterId) === createdWindow) {
       smartCounterOverlayWindows.delete(counterId);
     }
@@ -2056,6 +2074,8 @@ async function createSmartCounterOverlayWindow(
 
 function releaseSmartCounterOverlayWindow(counterId: string): void {
   smartCounterOverlayGenerations.delete(counterId);
+  const kind = getSmartCounterOverlayKind(counterId);
+  auxiliaryOverlayDragSessions.delete(kind);
   const window = smartCounterOverlayWindows.get(counterId);
   if (window && !window.isDestroyed()) window.close();
   smartCounterOverlayWindows.delete(counterId);
@@ -2070,17 +2090,18 @@ function releaseAllSmartCounterOverlayWindows(): void {
 }
 
 async function createAuxiliaryOverlayWindow(
-  kind: AuxiliaryOverlayKind,
+  kind: MovableAuxiliaryOverlayKind,
   bounds: { x: number; y: number; width: number; height: number },
   query: Readonly<Record<string, string>>,
   rootSelector: string
 ): Promise<BrowserWindow | undefined> {
   const window = new BrowserWindow(getBoardAttackOverlayWindowOptions(bounds, path.join(__dirname, "preload.cjs")));
-  trustedAuxiliaryWebContents.add(window.webContents);
-  auxiliaryOverlayKindsByWebContents.set(window.webContents, kind);
-  window.webContents.once("destroyed", () => {
-    trustedAuxiliaryWebContents.delete(window.webContents);
-    auxiliaryOverlayKindsByWebContents.delete(window.webContents);
+  const webContents = window.webContents;
+  trustedAuxiliaryWebContents.add(webContents);
+  auxiliaryOverlayKindsByWebContents.set(webContents, kind);
+  webContents.once("destroyed", () => {
+    trustedAuxiliaryWebContents.delete(webContents);
+    auxiliaryOverlayKindsByWebContents.delete(webContents);
   });
   installQaConsoleErrorListener(window);
   configureSecureNavigation(window);

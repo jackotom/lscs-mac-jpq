@@ -35,12 +35,12 @@ function getPreloadCapability(search: string): PreloadCapability {
   if (params.get("secret-overlay") === "1") return "secret-state-display";
   if (
     params.get("friendly-attack-overlay") === "1" ||
-    params.get("opponent-attack-overlay") === "1"
+    params.get("opponent-attack-overlay") === "1" ||
+    params.get("smart-counter-overlay") === "1"
   ) return "movable-state-display";
   if (
     params.get("board-attack-overlay") === "1" ||
-    params.get("arena-choice-overlay") === "1" ||
-    params.get("smart-counter-overlay") === "1"
+    params.get("arena-choice-overlay") === "1"
   ) return "state-display";
   if (params.get("opponent-overlay") === "1") return "opponent-overlay";
   if (params.get("overlay") === "1") return "tracker-overlay";

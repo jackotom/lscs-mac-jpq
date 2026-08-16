@@ -45,4 +45,59 @@ describe("auxiliary overlay main integration", () => {
     expect(functionSource("moveAuxiliaryOverlayDrag")).toContain("moveAuxiliaryOverlayBounds");
     expect(functionSource("endAuxiliaryOverlayDrag")).toContain("saveBounds");
   });
+
+  it("binds each smart counter sender to its own persisted drag target", () => {
+    const createSource = functionSource("createSmartCounterOverlayWindow");
+    const releaseSource = functionSource("releaseSmartCounterOverlayWindow");
+    const resolveSource = functionSource("resolveMovableAuxiliaryOverlayKind");
+    const windowSource = functionSource("getMovableAuxiliaryOverlayWindow");
+
+    expect(createSource).toContain("getSmartCounterOverlayKind(counterId)");
+    expect(createSource).toMatch(/resolveAuxiliaryOverlayBounds\(\s*kind/u);
+    expect(createSource).toMatch(/createAuxiliaryOverlayWindow\(\s*kind/u);
+    expect(releaseSource).toContain("auxiliaryOverlayDragSessions.delete(kind)");
+    expect(resolveSource).toContain("return registered");
+    expect(windowSource).toContain("getSmartCounterIdFromOverlayKind(kind)");
+    expect(windowSource).toContain("smartCounterOverlayWindows.get(counterId)");
+    expect(windowSource).toContain('if (kind === "secret") return secretOverlayWindow;');
+  });
+
+  it("resolves saved smart-counter placement before every refresh update", () => {
+    const createSource = functionSource("createSmartCounterOverlayWindow");
+    const resolveIndex = createSource.indexOf("resolveAuxiliaryOverlayBounds");
+    const updateIndex = createSource.indexOf("updateAuxiliaryOverlayBounds");
+
+    expect(resolveIndex).toBeGreaterThanOrEqual(0);
+    expect(updateIndex).toBeGreaterThan(resolveIndex);
+  });
+
+  it("does not refresh an existing smart-counter window while that counter is being dragged", () => {
+    const createSource = functionSource("createSmartCounterOverlayWindow");
+    const existingBranch = createSource.slice(
+      createSource.indexOf("if (existing && !existing.isDestroyed())"),
+      createSource.indexOf("const generation")
+    );
+
+    expect(existingBranch).toContain("if (!auxiliaryOverlayDragSessions.has(kind))");
+    expect(existingBranch).toContain("updateAuxiliaryOverlayBounds(existing, bounds)");
+  });
+
+  it("clears only the matching smart-counter drag session after an unexpected close", () => {
+    const createSource = functionSource("createSmartCounterOverlayWindow");
+
+    expect(createSource).toContain("auxiliaryOverlayDragSessions.get(kind)?.window === createdWindow");
+    expect(createSource).toContain("auxiliaryOverlayDragSessions.delete(kind)");
+  });
+
+  it("passes the matched display work area into smart-counter default layout", () => {
+    const refreshVisibilitySource = functionSource("refreshBoardAttackOverlayWindow");
+    const refreshSmartSource = functionSource("refreshSmartCounterOverlayWindows");
+    const createSource = functionSource("createSmartCounterOverlayWindow");
+
+    expect(refreshVisibilitySource).toMatch(
+      /refreshSmartCounterOverlayWindows\(\s*state\.smartCounters \?\? \[\],\s*display\.bounds,\s*display\.workArea\s*\)/u
+    );
+    expect(refreshSmartSource).toContain("workArea");
+    expect(createSource).toContain("options.workArea ?? displayBounds");
+  });
 });

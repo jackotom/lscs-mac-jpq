@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { cardArtworkSources } from "../../shared/cardDatabase";
 import type { OverlaySmartCounter } from "../types";
+import { useAuxiliaryOverlayDrag } from "./useAuxiliaryOverlayDrag";
 
 export function SmartCounterOverlay({ counters }: { readonly counters: readonly OverlaySmartCounter[] }) {
   return (
@@ -13,6 +14,7 @@ export function SmartCounterOverlay({ counters }: { readonly counters: readonly 
 function SmartCounter({ counter }: { readonly counter: OverlaySmartCounter }) {
   const artwork = artworkSources(counter);
   const [sourceIndex, setSourceIndex] = useState(0);
+  const dragHandlers = useAuxiliaryOverlayDrag<HTMLElement>();
   const source = artwork[sourceIndex];
   const progress = counter.target && counter.target > 0
     ? Math.min(100, Math.round((counter.value / counter.target) * 100))
@@ -24,6 +26,7 @@ function SmartCounter({ counter }: { readonly counter: OverlaySmartCounter }) {
       className={`smart-counter-item smart-counter-item-${counter.side ?? "friendly"}`}
       aria-label={`${counter.label} ${valueLabel}`}
       title={`${counter.label} ${valueLabel}`}
+      {...dragHandlers}
     >
       <span className="smart-counter-art" aria-hidden="true">
         {source ? (

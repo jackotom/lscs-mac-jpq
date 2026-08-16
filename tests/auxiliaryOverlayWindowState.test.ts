@@ -4,8 +4,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   AuxiliaryOverlayWindowStateStore,
+  getSmartCounterIdFromOverlayKind,
+  getSmartCounterOverlayKind,
   getSecretOverlayVisibleBounds,
-  moveAuxiliaryOverlayBounds
+  moveAuxiliaryOverlayBounds,
+  parseAuxiliaryOverlayWindowState
 } from "../src/main/auxiliaryOverlayWindowState";
 
 const tempDirs: string[] = [];
@@ -121,6 +124,55 @@ describe("AuxiliaryOverlayWindowStateStore", () => {
       currentWorkArea
     )).resolves.toEqual({ x: 2978, y: 578, width: 44, height: 44 });
     await expect(restored.getSecretCollapsed()).resolves.toBe(true);
+  });
+
+  it("saves and restores every smart counter independently across restart and display changes", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "auxiliary-overlay-smart-counters-"));
+    tempDirs.push(root);
+    const originalWorkArea = { x: 0, y: 0, width: 1000, height: 500 };
+    const first = getSmartCounterOverlayKind("friendly-dragons-played");
+    const second = getSmartCounterOverlayKind("friendly-spells-played");
+    const store = new AuxiliaryOverlayWindowStateStore(root);
+
+    await store.saveBounds(first, { x: 8, y: 8, width: 160, height: 48 }, originalWorkArea);
+    await store.saveBounds(second, { x: 832, y: 444, width: 160, height: 48 }, originalWorkArea);
+
+    const restarted = new AuxiliaryOverlayWindowStateStore(root);
+    const currentWorkArea = { x: 2000, y: 100, width: 2000, height: 1000 };
+    await expect(restarted.resolveBounds(
+      first,
+      { x: 2100, y: 200, width: 160, height: 48 },
+      currentWorkArea
+    )).resolves.toEqual({ x: 2008, y: 108, width: 160, height: 48 });
+    await expect(restarted.resolveBounds(
+      second,
+      { x: 2100, y: 200, width: 160, height: 48 },
+      currentWorkArea
+    )).resolves.toEqual({ x: 3832, y: 1044, width: 160, height: 48 });
+  });
+
+  it("keeps valid legacy and smart positions while ignoring malformed smart targets", () => {
+    expect(parseAuxiliaryOverlayWindowState({
+      positions: {
+        "friendly-attack": { xRatio: 0.1, yRatio: 0.2 },
+        "smart-counter:friendly-dragons-played": { xRatio: 0.3, yRatio: 0.4 },
+        "smart-counter:../secret": { xRatio: 0.9, yRatio: 0.9 }
+      },
+      secretCollapsed: false
+    })).toEqual({
+      positions: {
+        "friendly-attack": { xRatio: 0.1, yRatio: 0.2 },
+        "smart-counter:friendly-dragons-played": { xRatio: 0.3, yRatio: 0.4 }
+      },
+      secretCollapsed: false
+    });
+  });
+
+  it("keeps future slug-style counter ids stable without lowercasing or collisions", () => {
+    const kind = getSmartCounterOverlayKind("Future_RULE-2");
+
+    expect(kind).toBe("smart-counter:Future_RULE-2");
+    expect(getSmartCounterIdFromOverlayKind(kind)).toBe("Future_RULE-2");
   });
 
   it("shrinks a collapsed secret window to its 44px entry without moving its anchor", () => {

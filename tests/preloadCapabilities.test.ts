@@ -83,7 +83,8 @@ describe("preload capabilities", () => {
 
   it.each([
     "friendly-attack-overlay",
-    "opponent-attack-overlay"
+    "opponent-attack-overlay",
+    "smart-counter-overlay"
   ])("gives %s a sender-scoped drag capability", async (route) => {
     window.history.replaceState({}, "", `/?${route}=1`);
     const { api, invoke } = loadPreloadApi();
@@ -98,6 +99,10 @@ describe("preload capabilities", () => {
       "tracker:begin-auxiliary-overlay-drag",
       { x: 400, y: 200 }
     );
+    expect(api.start).toBeUndefined();
+    expect(api.setTrackerSettings).toBeUndefined();
+    expect(api.getSecretOverlayCollapsed).toBeUndefined();
+    expect(api.setSecretOverlayCollapsed).toBeUndefined();
   });
 
   it("gives only the secret route persisted collapsed-state controls and drag", () => {

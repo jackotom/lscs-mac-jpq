@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   hideQaDockAfterLaunch,
   requestQaQuit,
+  shouldApplyTrackerSettingsEffectsDuringQaCapture,
+  shouldSkipLaunchAtLoginUpdateDuringQaCapture,
   shouldUseQaAccessoryActivationPolicy,
   waitForQaRendererSettled
 } from "../src/main/qaCaptureTiming";
@@ -50,6 +52,26 @@ describe("QA capture timing", () => {
     expect(shouldUseQaAccessoryActivationPolicy(isolatedQa, "linux")).toBe(false);
     expect(shouldUseQaAccessoryActivationPolicy({ QA_USER_DATA_DIR: "/tmp/hearthstone-qa" }, "darwin")).toBe(false);
     expect(shouldUseQaAccessoryActivationPolicy({ QA_ALLOW_MULTIPLE_INSTANCES: "1" }, "darwin")).toBe(false);
+  });
+
+  it("can exercise startup settings effects in the packaged smart-counter capture", () => {
+    const automatedCapture = {
+      QA_EXIT_AFTER_SCREENSHOT: "1",
+      QA_SCREENSHOT_PATH: "/tmp/smart-counter.png",
+      QA_INSPECT_PATH: "/tmp/smart-counter.json"
+    };
+
+    expect(shouldApplyTrackerSettingsEffectsDuringQaCapture({})).toBe(true);
+    expect(shouldApplyTrackerSettingsEffectsDuringQaCapture(automatedCapture)).toBe(false);
+    expect(shouldApplyTrackerSettingsEffectsDuringQaCapture({
+      ...automatedCapture,
+      QA_APPLY_TRACKER_SETTINGS_EFFECTS: "1"
+    })).toBe(true);
+    expect(shouldSkipLaunchAtLoginUpdateDuringQaCapture(automatedCapture)).toBe(false);
+    expect(shouldSkipLaunchAtLoginUpdateDuringQaCapture({
+      ...automatedCapture,
+      QA_APPLY_TRACKER_SETTINGS_EFFECTS: "1"
+    })).toBe(true);
   });
 
   it("hides a visible QA Dock icon immediately", async () => {

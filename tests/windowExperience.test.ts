@@ -177,7 +177,7 @@ describe("window experience configuration", () => {
   it("does not abort startup when macOS rejects a saved login-item preference", () => {
     const main = source("src/main/main.ts");
     expect(main).toMatch(
-      /await applyTrackerSettingsEffects\(\)\.catch\(async \(error\) =>[\s\S]*?reportDiagnosticError\("应用开机启动设置失败[^"]*"/
+      /await applyTrackerSettingsEffects\(\s*undefined,\s*\{\s*loginItemVerified:\s*shouldSkipLaunchAtLoginUpdateDuringQaCapture\(process\.env\)\s*\}\s*\)\.catch\(async \(error\) =>[\s\S]*?reportDiagnosticError\("应用开机启动设置失败[^"]*"/
     );
   });
 

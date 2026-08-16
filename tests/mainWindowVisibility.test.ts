@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  shouldRunBoardAttackOverlayMonitor,
   presentMainWindow,
   shouldFocusMainWindowOnLaunch,
   shouldHandleAppActivate,
@@ -7,7 +8,30 @@ import {
   shouldShowMainWindowOnLaunch
 } from "../src/main/mainWindowVisibility";
 
+const qaOverlayCaptureFlags = [
+  "QA_OPEN_OVERLAY",
+  "QA_OPEN_OPPONENT_OVERLAY",
+  "QA_OPEN_ARENA_CHOICE_OVERLAY",
+  "QA_OPEN_LADDER_DECK_OVERLAY",
+  "QA_OPEN_BOARD_ATTACK_OVERLAY",
+  "QA_OPEN_FRIENDLY_ATTACK_OVERLAY",
+  "QA_OPEN_OPPONENT_ATTACK_OVERLAY",
+  "QA_OPEN_SECRET_OVERLAY",
+  "QA_OPEN_SMART_COUNTER_OVERLAY",
+  "QA_OPEN_ARENA_HERO_RANKING_OVERLAY",
+  "QA_OPEN_THREE_WINDOW_LAYOUT"
+] as const;
+
 describe("main window launch visibility", () => {
+  it.each(qaOverlayCaptureFlags)("does not run the production auxiliary-overlay monitor during %s", (flag) => {
+    expect(shouldRunBoardAttackOverlayMonitor({ [flag]: "1" }, true)).toBe(false);
+  });
+
+  it("runs the production auxiliary-overlay monitor only when a normal launch enables one", () => {
+    expect(shouldRunBoardAttackOverlayMonitor({}, true)).toBe(true);
+    expect(shouldRunBoardAttackOverlayMonitor({}, false)).toBe(false);
+  });
+
   it("shows a normal launch for a new user", () => {
     expect(shouldShowMainWindowOnLaunch({})).toBe(true);
   });

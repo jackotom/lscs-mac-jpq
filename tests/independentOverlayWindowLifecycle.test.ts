@@ -88,13 +88,35 @@ describe("independent auxiliary-overlay window lifecycle", () => {
   it("trusts an auxiliary renderer before its initial page load starts IPC", () => {
     const createAuxiliary = functionSource("createAuxiliaryOverlayWindow");
     const trustedContents = functionSource("getTrustedWebContents");
-    const registration = createAuxiliary.indexOf("trustedAuxiliaryWebContents.add(window.webContents)");
+    const registration = createAuxiliary.indexOf("trustedAuxiliaryWebContents.add(webContents)");
     const initialLoad = createAuxiliary.indexOf("await loadRendererPage(window, query)");
 
     expect(registration).toBeGreaterThanOrEqual(0);
     expect(initialLoad).toBeGreaterThan(registration);
-    expect(createAuxiliary).toContain('window.webContents.once("destroyed"');
+    expect(createAuxiliary).toContain('webContents.once("destroyed"');
     expect(trustedContents).toContain("...trustedAuxiliaryWebContents");
+  });
+
+  it("does not read BrowserWindow.webContents again after that WebContents is destroyed", () => {
+    const createAuxiliary = functionSource("createAuxiliaryOverlayWindow");
+    const destroyedListenerStart = createAuxiliary.indexOf('webContents.once("destroyed"');
+    const destroyedListenerEnd = createAuxiliary.indexOf("installQaConsoleErrorListener", destroyedListenerStart);
+    const destroyedListener = createAuxiliary.slice(destroyedListenerStart, destroyedListenerEnd);
+
+    expect(createAuxiliary).toContain("const webContents = window.webContents");
+    expect(destroyedListenerStart).toBeGreaterThanOrEqual(0);
+    expect(destroyedListener).toContain("trustedAuxiliaryWebContents.delete(webContents)");
+    expect(destroyedListener).toContain("auxiliaryOverlayKindsByWebContents.delete(webContents)");
+    expect(destroyedListener).not.toContain("window.webContents");
+  });
+
+  it("gates the production auxiliary monitor behind the shared QA-overlay capture policy", () => {
+    const settingsEffects = functionSource("applyTrackerSettingsEffects");
+
+    expect(settingsEffects).toContain("shouldRunBoardAttackOverlayMonitor(process.env, showAnyAuxiliaryOverlay)");
+    expect(settingsEffects).toContain(
+      "if (shouldRunBoardAttackOverlayMonitor(process.env, showAnyAuxiliaryOverlay)) startBoardAttackOverlayMonitor()"
+    );
   });
 
   it("owns one BrowserWindow per smart-counter id", () => {
