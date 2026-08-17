@@ -76,6 +76,16 @@ _当前桌面版的隔离演示界面；不会读取或展示你的真实对局�
 
 更多实现和数据来源见 [docs/technical-notes.md](docs/technical-notes.md)。
 
+## 许可与商业授权
+
+本项目采用 [PolyForm Noncommercial License 1.0.0](LICENSE)：允许个人学习、研究、测试及其他许可中规定的非商业用途。
+
+任何商业使用，包括销售、收费服务、企业内部业务使用、商业产品集成或以营利为目的的修改与分发，都必须事先取得项目版权所有者单独签发的书面商业授权。版权所有者及商业授权方为 GitHub 用户 [@jackotom](https://github.com/jackotom)，请通过该账号联系。
+
+这是一份“源码可见、非商业使用”的许可，不属于允许商业使用的开源许可。
+
+本许可只覆盖项目版权所有者有权许可的内容。第三方依赖、炉石传说名称、卡牌图片及其他暴雪或网易资产不在本许可范围内；第三方组件继续遵循各自许可，详见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)。
+
 <details>
 <summary>源码运行与验证</summary>
 

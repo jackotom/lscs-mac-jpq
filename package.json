@@ -2,6 +2,7 @@
   "name": "hearthstone-mac-tracker",
   "version": "0.5.3",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "main": "dist-electron/main/main.js",
   "scripts": {

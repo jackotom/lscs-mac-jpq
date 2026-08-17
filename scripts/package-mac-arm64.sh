@@ -13,7 +13,7 @@ target_app="$output_dir/炉石记牌器.app"
 target_zip="$output_dir/炉石记牌器-mac-arm64.zip"
 target_checksum="$output_dir/炉石记牌器-mac-arm64.zip.sha256"
 package_listing="$stage_dir/package-contents.txt"
-runtime_root_pattern='^/(?!(dist|dist-electron|node_modules)(/|$)|package\.json$)'
+runtime_root_pattern='^/(?!(dist|dist-electron|node_modules)(/|$)|package\.json$|LICENSE$|THIRD_PARTY_NOTICES$)'
 
 cleanup() {
   rm -rf "$runtime_source" "$stage_dir" "$publish_dir"
@@ -46,7 +46,7 @@ fi
 
 npm audit --omit=dev
 mkdir -p "$runtime_source"
-cp "$root_dir/package.json" "$root_dir/package-lock.json" "$runtime_source/"
+cp "$root_dir/package.json" "$root_dir/package-lock.json" "$root_dir/LICENSE" "$root_dir/THIRD_PARTY_NOTICES" "$runtime_source/"
 ditto "$root_dir/dist" "$runtime_source/dist"
 ditto "$root_dir/dist-electron" "$runtime_source/dist-electron"
 (
@@ -91,8 +91,16 @@ assert_minimal_package() {
     echo "安装包内容过多：${package_entry_count} 项" >&2
     exit 1
   fi
-  if grep -Ev '^/(dist|dist-electron|node_modules)(/|$)|^/package\.json$' "$package_listing" | grep -q .; then
+  if grep -Ev '^/(dist|dist-electron|node_modules)(/|$)|^/package\.json$|^/LICENSE$|^/THIRD_PARTY_NOTICES$' "$package_listing" | grep -q .; then
     echo "安装包混入非运行文件" >&2
+    exit 1
+  fi
+  if ! grep -Fxq '/LICENSE' "$package_listing"; then
+    echo "安装包缺少许可证" >&2
+    exit 1
+  fi
+  if ! grep -Fxq '/THIRD_PARTY_NOTICES' "$package_listing"; then
+    echo "安装包缺少第三方许可说明" >&2
     exit 1
   fi
   for forbidden_path in /src/ /tests/ /docs/ /fixtures/ /screenshots/ /.superpowers/ /node_modules/.vite/; do
