@@ -1631,6 +1631,71 @@ describe("TrackerService log selection", () => {
     await service.dispose();
   });
 
+  it("keeps polling from a root-level Player.log and connects when the game creates Power.log", async () => {
+    const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-player-first-"));
+    tempDirs.push(root);
+    const playerLog = join(root, "Player.log");
+    const sessionDir = join(root, "Hearthstone_2026_08_17_19_36_19");
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(playerLog, "[Hearthstone] waiting for game startup\n", "utf8");
+
+    const playerOnlySession = {
+      root,
+      sessionDir: root,
+      playerLogPath: playerLog,
+      modifiedAtMs: 1
+    };
+    const readySession = {
+      root,
+      sessionDir,
+      powerLogPath: powerLog,
+      playerLogPath: playerLog,
+      modifiedAtMs: 2
+    };
+    let gameStarted = false;
+
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return { warnings: [] };
+        }
+      }
+    }));
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return {
+        ...actual,
+        resolveBestLogTarget: vi.fn(async () => gameStarted ? readySession : playerOnlySession)
+      };
+    });
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start({ logPath: root });
+      expect(initial.logPath).toBe(playerLog);
+
+      await mkdir(sessionDir);
+      await writeFile(
+        powerLog,
+        "D 19:36:22.000 GameState.DebugPrintPower() - CREATE_GAME\nD 19:36:22.000 GameState.DebugPrintGame() - GameType=GT_RANKED\n",
+        "utf8"
+      );
+      gameStarted = true;
+
+      await vi.waitFor(
+        () => {
+          expect(service.getState().logPath).toBe(powerLog);
+          expect(service.getState().gameActive).toBe(true);
+        },
+        { timeout: 3_000, interval: 50 }
+      );
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it("automatically resumes when Power.log appears after selecting a waiting-session log", async () => {
     const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-power-appears-"));
     tempDirs.push(root);
