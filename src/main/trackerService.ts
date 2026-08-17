@@ -292,6 +292,7 @@ export class TrackerService {
       this.engine.resetSession();
       this.arena.reset();
       this.engine.setStatus("error", logPath, buildPowerLogRequiredMessage(logPath));
+      this.startSessionRefresh(sessionContext);
       this.pushState();
       return this.getState();
     }
