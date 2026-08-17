@@ -70,6 +70,7 @@ describe("software settings", () => {
     expect(screen.queryByRole("navigation", { name: "设置分区" })).not.toBeInTheDocument();
     expect(container.querySelector(".settings-window, .settings-window-titlebar")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "关闭设置" })).not.toBeInTheDocument();
+    expect(screen.getByText(/任何商业使用必须事先取得版权所有者 @jackotom 的书面授权/)).toBeInTheDocument();
   });
 
   it("uses global deck-tracker switches without ladder or arena tabs", () => {

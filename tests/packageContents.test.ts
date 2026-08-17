@@ -11,6 +11,10 @@ describe("minimal macOS package", () => {
     expect(script).toContain("runtime_root_pattern");
     expect(script).toContain("dist|dist-electron|node_modules");
     expect(script).toContain("package\\.json");
+    expect(script).toContain('"$root_dir/LICENSE"');
+    expect(script).toContain('"$root_dir/THIRD_PARTY_NOTICES"');
+    expect(script).toContain("grep -Fxq '/LICENSE'");
+    expect(script).toContain("grep -Fxq '/THIRD_PARTY_NOTICES'");
     expect(script).toContain('assert_minimal_package "$publish_app"');
   });
 
