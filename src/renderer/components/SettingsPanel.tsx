@@ -455,7 +455,7 @@ export function SettingsPanel({
         <div><strong>炉石盒子 · 桌面伴侣</strong><p>帮助 Mac 玩家查看真实牌库、对局事件与对手公开信息。</p></div>
       </div>
       <p className="settings-inline-note">没有可靠日志时明确等待，不展示虚构对局数据。</p>
-      <p className="settings-inline-note">个人及非商业使用遵循项目许可；任何商业使用必须事先取得版权所有者 @jackotom 的书面授权。</p>
+      <p className="settings-inline-note">个人及非商业使用遵循项目许可；任何商业使用必须事先取得版权所有者 @jackotom 的书面授权。联系邮箱：admin@acyg.me。</p>
     </section>
   );
 
