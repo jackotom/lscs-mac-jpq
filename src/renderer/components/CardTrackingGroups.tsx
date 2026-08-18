@@ -190,6 +190,7 @@ export function CardTrackingGroups({
             view={view}
             expanded={expanded.has(key)}
             onToggle={() => handleGroupToggle(key)}
+            showHistoryArtwork={opponent && key === "used"}
             unknownDeck={unknownDeck}
             activeCard={activeCard}
             onActiveCardChange={(card) => setActiveCardId(card?.id)}
@@ -223,6 +224,7 @@ function TrackingGroup({
   view,
   expanded,
   onToggle,
+  showHistoryArtwork,
   unknownDeck,
   activeCard,
   onActiveCardChange
@@ -231,6 +233,7 @@ function TrackingGroup({
   readonly view: OverlayCardTrackingView;
   readonly expanded: boolean;
   readonly onToggle: () => void;
+  readonly showHistoryArtwork: boolean;
   readonly unknownDeck?: {
     readonly label: "待识别" | "识别中" | "不可用";
     readonly emptyLabel: string;
@@ -268,7 +271,10 @@ function TrackingGroup({
       {expanded ? (
         <div id={contentId} className="overlay-card-group-content">
           {groupKey === "burned" || groupKey === "used"
-            ? <HistoryItems group={group as OverlayCardHistoryView} />
+            ? <HistoryItems
+                group={group as OverlayCardHistoryView}
+                showArtwork={showHistoryArtwork}
+              />
             : <CurrentItems
                 group={group as OverlayCardZoneView}
                 secretSlots={groupKey === "secret" ? view.secretSlots : []}
@@ -454,7 +460,13 @@ function DeckInsertionSummary({
   );
 }
 
-function HistoryItems({ group }: { readonly group: OverlayCardHistoryView }) {
+function HistoryItems({
+  group,
+  showArtwork
+}: {
+  readonly group: OverlayCardHistoryView;
+  readonly showArtwork: boolean;
+}) {
   if (group.items.length === 0) {
     return <p className="overlay-card-group-empty">暂无记录</p>;
   }
@@ -465,6 +477,7 @@ function HistoryItems({ group }: { readonly group: OverlayCardHistoryView }) {
           <CardHoverPreview details={item.details} className="overlay-compact-card-row overlay-history-card-row">
             <span className="overlay-card-cost" aria-label="顺序">{item.sequence}</span>
             <span className="overlay-card-art">
+              {showArtwork ? <HistoryArtwork item={item} /> : null}
               <strong>{item.hidden ? "未公开记录" : item.displayName}</strong>
             </span>
             {item.turn === undefined ? null : (
@@ -478,6 +491,44 @@ function HistoryItems({ group }: { readonly group: OverlayCardHistoryView }) {
       ))}
     </ul>
   );
+}
+
+function HistoryArtwork({
+  item
+}: {
+  readonly item: OverlayCardHistoryView["items"][number];
+}) {
+  const sources = item.hidden
+    ? []
+    : cardArtworkSources({
+        cardId: item.cardId ?? item.details?.cardId,
+        cropImageUrl: item.details?.cropImageUrl,
+        imageUrl: item.details?.imageUrl
+      });
+  const sourcesKey = sources.join("\n");
+  const [sourceState, setSourceState] = useState({ key: sourcesKey, index: 0 });
+  const sourceIndex = sourceState.key === sourcesKey ? sourceState.index : 0;
+  const source = sources[sourceIndex];
+
+  useEffect(() => {
+    setSourceState((current) => current.key === sourcesKey
+      ? current
+      : { key: sourcesKey, index: 0 });
+  }, [sourcesKey]);
+
+  return source ? (
+    <img
+      aria-hidden="true"
+      className="overlay-card-art-image"
+      src={source}
+      alt=""
+      loading="lazy"
+      onError={() => setSourceState((current) => ({
+        key: sourcesKey,
+        index: (current.key === sourcesKey ? current.index : 0) + 1
+      }))}
+    />
+  ) : null;
 }
 
 function CardRows({

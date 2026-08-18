@@ -126,8 +126,8 @@ function createQaOpponentCardTracking(): PublicCardTracking {
     name,
     count: 2
   }));
-  const detailsByCardKey = Object.fromEntries(
-    [...qaFriendlyCards, ...qaFriendlyHand].map((card, index) => [
+  const detailsByCardKey = Object.fromEntries([
+    ...[...qaFriendlyCards, ...qaFriendlyHand].map((card, index) => [
       `id:${card.cardId.toLowerCase()}`,
       {
         dbfId: 10_000 + index,
@@ -137,8 +137,20 @@ function createQaOpponentCardTracking(): PublicCardTracking {
         isSpell: card.isSpell,
         relatedCards: []
       } satisfies CardDetails
-    ])
-  );
+    ]),
+    [
+      "id:ex1_145",
+      {
+        dbfId: 391,
+        cardId: "EX1_145",
+        name: "伺机待发",
+        manaCost: 0,
+        cropImageUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48' viewBox='0 0 160 48'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop stop-color='%23354861'/%3E%3Cstop offset='1' stop-color='%237c96aa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='160' height='48' fill='url(%23g)'/%3E%3Cpath d='M88 4l25 20-25 20-35-20z' fill='%23c8d8e5' opacity='.7'/%3E%3C/svg%3E",
+        isSpell: true,
+        relatedCards: []
+      } satisfies CardDetails
+    ]
+  ]);
   return {
     ...tracking,
     detailsByCardKey,
@@ -1777,7 +1789,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.5.6</small>
+          <small>v0.5.7</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

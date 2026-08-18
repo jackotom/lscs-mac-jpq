@@ -18,6 +18,7 @@ const scenarioNames = [
   "friendly-insertions",
   "opponent-secret",
   "opponent-unknown-hand",
+  "opponent-used-artwork",
   "opponent-kelthuzad-preview",
   "friendly-fins-preview",
   "inline-normal",
@@ -434,6 +435,31 @@ async function verifyOpponentUnknownHand() {
   assert.deepEqual(inspection.unknownHandRows, ["未公开 ×1"]);
 }
 
+async function verifyOpponentUsedArtwork() {
+  const inspection = await runElectronScenario(
+    "opponent-used-artwork",
+    {
+      QA_OPEN_OPPONENT_OVERLAY: "1",
+      QA_CLICK_TEXTS: "历史|已使用"
+    },
+    {
+      x: workArea?.x ?? 0,
+      y: workArea?.y ?? 0,
+      width: 250,
+      height: 300
+    },
+    true
+  );
+  assertExactWindow("opponent-used-artwork", inspection, 250, 300);
+  assertCommon("opponent-used-artwork", inspection);
+  assert.equal(inspection.page, "history");
+  assert.deepEqual(inspection.expandedKeys, ["used"]);
+  assert.ok(
+    inspection.visibleOpponentUsedArtworkRects.length >= 1,
+    "opponent-used-artwork: 对手已使用历史必须显示卡图"
+  );
+}
+
 async function verifyOpponentKelthuzadPreview() {
   const overlayScreenshotPath = join(
     projectRoot,
@@ -610,6 +636,7 @@ const verifications = [
   ["friendly-insertions", verifyFriendlyInsertions],
   ["opponent-secret", verifyOpponentSecret],
   ["opponent-unknown-hand", verifyOpponentUnknownHand],
+  ["opponent-used-artwork", verifyOpponentUsedArtwork],
   ["opponent-kelthuzad-preview", verifyOpponentKelthuzadPreview],
   ["friendly-fins-preview", verifyFriendlyFinsPreview],
   ["inline-normal", () => verifyInline("inline-normal", false)],

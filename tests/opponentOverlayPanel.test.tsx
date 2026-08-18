@@ -225,6 +225,82 @@ describe("opponent overlay", () => {
     expect(screen.getByText("未公开 ×1")).toBeInTheDocument();
   });
 
+  it("shows artwork for every revealed used-card row and keeps names when artwork is unavailable", () => {
+    const base = opponentTracking();
+    const cardTracking = {
+      ...base,
+      used: {
+        key: "used" as const,
+        totalCount: 3,
+        countLabel: "3",
+        truncated: false,
+        items: [
+          {
+            id: "used-first",
+            sequence: 3,
+            displayName: "重复卡牌",
+            hidden: false,
+            confidence: "confirmed" as const,
+            details: {
+              dbfId: 1001,
+              name: "重复卡牌",
+              cropImageUrl: "https://example.test/repeated-card.jpg",
+              isSpell: false,
+              relatedCards: []
+            }
+          },
+          {
+            id: "used-second",
+            sequence: 2,
+            displayName: "重复卡牌",
+            hidden: false,
+            confidence: "confirmed" as const,
+            details: {
+              dbfId: 1001,
+              name: "重复卡牌",
+              cropImageUrl: "https://example.test/repeated-card.jpg",
+              isSpell: false,
+              relatedCards: []
+            }
+          },
+          {
+            id: "used-no-art",
+            sequence: 1,
+            displayName: "无图卡牌",
+            hidden: false,
+            confidence: "confirmed" as const,
+            details: {
+              dbfId: 1002,
+              name: "无图卡牌",
+              isSpell: false,
+              relatedCards: []
+            }
+          }
+        ]
+      }
+    } satisfies OverlayCardTrackingView;
+    const preview = render(<OpponentOverlayPanel view={view(cardTracking)} isCollapsed={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "历史" }));
+    fireEvent.click(screen.getByRole("button", { name: /已使用.*3/ }));
+
+    const repeatedRows = screen.getAllByText("重复卡牌").map((name) =>
+      name.closest(".overlay-history-card-row") as HTMLElement
+    );
+    expect(repeatedRows).toHaveLength(2);
+    expect(repeatedRows.every((row) => row.querySelector(".overlay-card-art-image"))).toBe(true);
+    expect(screen.getByText("无图卡牌")).toBeVisible();
+
+    const firstArtwork = repeatedRows[0]!.querySelector(".overlay-card-art-image") as HTMLImageElement;
+    fireEvent.error(firstArtwork);
+    expect(repeatedRows[0]).not.toContainElement(firstArtwork);
+    expect(repeatedRows[0]).toHaveTextContent("重复卡牌");
+    expect(preview.container.querySelector(".card-tracking-main")).toHaveAttribute(
+      "data-scroll-owner",
+      "card-tracking-main"
+    );
+  });
+
   it("short-circuits lifecycle groups for loading, errors, and missing logs", () => {
     const preview = render(<OpponentOverlayPanel view={view()} isCollapsed={false} isLoading />);
     expect(screen.getByRole("status")).toHaveTextContent("正在读取对局状态");

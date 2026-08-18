@@ -37,6 +37,13 @@ describe("README screenshot generation", () => {
     expect(main).toContain("createOverlayWindow({ qaDemo: friendlyOverlayQaDemo })");
   });
 
+  it("requires visible artwork in the opponent used-history screenshot", () => {
+    const source = read("scripts/generate-readme-screenshots.mjs");
+
+    expect(source).toContain("visibleOpponentUsedArtworkRects");
+    expect(source).toContain("对手已使用历史应显示卡图");
+  });
+
   it("keeps the complete public screenshot set linked from the README", () => {
     const readme = read("README.md");
     const screenshots = [

@@ -3319,6 +3319,13 @@ async function inspectQaRenderer(window: BrowserWindow): Promise<Record<string, 
       const value = element.getBoundingClientRect();
       return style.display !== "none" && style.visibility !== "hidden" && value.width > 0 && value.height > 0;
     });
+    const visibleOpponentUsedArtwork = Array.from(document.querySelectorAll(
+      '[data-group-key="used"] .overlay-history-card-row .overlay-card-art-image'
+    )).filter((element) => {
+      const style = getComputedStyle(element);
+      const value = element.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && value.width > 0 && value.height > 0;
+    });
     const arenaChoiceMetrics = Array.from(document.querySelectorAll(".arena-choice-overlay-metrics"))
       .map((element) => ({
         rect: rect(element),
@@ -3366,6 +3373,7 @@ async function inspectQaRenderer(window: BrowserWindow): Promise<Record<string, 
       mainRect: rect(main),
       footerRect: rect(footer),
       visibleCardRowRects: visibleRows.map(rect),
+      visibleOpponentUsedArtworkRects: visibleOpponentUsedArtwork.map(rect),
       arenaChoiceMetrics,
       shellScrollSize: size(shell),
       mainScrollSize: size(main),
