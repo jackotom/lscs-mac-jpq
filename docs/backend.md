@@ -285,7 +285,7 @@ First-run placement is left-two/right-one: the Arena hero ranking is at the left
 - used and suspected-burn histories come only from logged actions, never by reinterpreting graveyard contents;
 - a burn is inferred only from a deck-to-graveyard transition while ten countable cards occupy the friendly hand;
 - random-spell captures bind to a concrete `usageId`; completed captures are deduplicated by usage, source, and ordered outcome-tree content;
-- opponent secret slot count is independent from the number of candidates in each slot.
+- opponent secret slot count is independent from the number of candidates in each slot. Each slot keeps its own explicit `CLASS` evidence from the entity log and uses it ahead of the opponent hero class when rebuilding candidates; missing evidence falls back to the hero class. Match reset clears the fallback class so a new game cannot inherit the previous opponent.
 
 Legacy shared fields remain for one compatibility version, but renderer state is validated with required `cardTracking` and no longer falls back to those fields.
 
