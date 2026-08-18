@@ -1033,6 +1033,14 @@ export class TrackerEngine {
       return;
     }
 
+    if (event.type === "entity-class") {
+      const merged = this.mergeEntity({ id: event.entityId, cardClass: event.cardClass });
+      if (merged?.id && merged.zone === "SECRET" && this.isKnownOpponentController(merged.controller)) {
+        this.secretTracker.setSecretClass(merged.id, merged.cardClass);
+      }
+      return;
+    }
+
     if (event.type === "action-boundary") {
       if (event.phase === "start") {
         const existing = event.entity?.id ? this.entities.get(event.entity.id) : undefined;
@@ -1163,7 +1171,7 @@ export class TrackerEngine {
 
     if (event.entityId && isOpponent) {
       if (event.toZone === "SECRET") {
-        this.secretTracker.enterSecret(event.entityId);
+        this.secretTracker.enterSecret(event.entityId, existing?.cardClass);
         if (cardId) this.secretTracker.revealSecret(event.entityId, cardId);
       } else if (fromZone === "SECRET") {
         if (cardId) this.secretTracker.revealSecret(event.entityId, cardId);
@@ -1427,6 +1435,18 @@ export class TrackerEngine {
 
     if (tagName === "CARDTYPE") {
       this.pendingEntityDetail = this.mergeEntity({ ...this.pendingEntityDetail, cardType: tagValue });
+      return;
+    }
+
+    if (tagName === "CLASS") {
+      this.pendingEntityDetail = this.mergeEntity({ ...this.pendingEntityDetail, cardClass: tagValue });
+      if (
+        this.pendingEntityDetail?.id &&
+        this.pendingEntityDetail.zone === "SECRET" &&
+        this.isKnownOpponentController(this.pendingEntityDetail.controller)
+      ) {
+        this.secretTracker.setSecretClass(this.pendingEntityDetail.id, tagValue);
+      }
       return;
     }
 

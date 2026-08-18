@@ -237,6 +237,16 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
     });
   }
 
+  const cardClass = parseTagValue(line, "CLASS");
+  if (cardClass) {
+    events.push({
+      type: "entity-class",
+      entityId: entity.id,
+      cardClass,
+      raw: line
+    });
+  }
+
   const zone = parseTagValue(line, "ZONE");
   if (zone) {
     events.push({

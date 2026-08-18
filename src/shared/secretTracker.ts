@@ -86,7 +86,11 @@ const SUPPORTED_NON_TRIGGER_RULES: Readonly<Record<string, SecretNonTriggerRule>
 };
 
 export class SecretTracker {
-  private readonly slots = new Map<string, { candidates: SecretCandidate[]; revealedCardId?: string }>();
+  private readonly slots = new Map<string, {
+    candidates: SecretCandidate[];
+    revealedCardId?: string;
+    cardClass?: string;
+  }>();
   private opponentClass?: string;
   private readonly actions: Array<{
     observation: SecretActionObservation;
@@ -99,22 +103,32 @@ export class SecretTracker {
   setOpponentClass(heroClass?: string) {
     this.opponentClass = normalizeHeroClass(heroClass);
     for (const slot of this.slots.values()) {
-      const previous = new Map(slot.candidates.map((candidate) => [canonicalSecretCardId(candidate.cardId), candidate]));
-      slot.candidates = this.buildCandidates().map((candidate) => {
-        const prior = previous.get(canonicalSecretCardId(candidate.cardId));
-        return prior
-          ? {
-              ...candidate,
-              status: prior.status,
-              ...(prior.exclusionReason ? { exclusionReason: prior.exclusionReason } : {})
-            }
-          : candidate;
-      });
+      this.rebuildCandidates(slot);
     }
   }
 
-  enterSecret(entityId: string) {
-    if (!this.slots.has(entityId)) this.slots.set(entityId, { candidates: this.buildCandidates() });
+  enterSecret(entityId: string, cardClass?: string) {
+    const normalizedClass = normalizeHeroClass(cardClass);
+    const slot = this.slots.get(entityId);
+    if (!slot) {
+      this.slots.set(entityId, {
+        candidates: this.buildCandidates(normalizedClass),
+        ...(normalizedClass ? { cardClass: normalizedClass } : {})
+      });
+      return;
+    }
+    if (normalizedClass && slot.cardClass !== normalizedClass) {
+      slot.cardClass = normalizedClass;
+      this.rebuildCandidates(slot);
+    }
+  }
+
+  setSecretClass(entityId: string, cardClass?: string) {
+    const slot = this.slots.get(entityId);
+    const normalizedClass = normalizeHeroClass(cardClass);
+    if (!slot || !normalizedClass || slot.cardClass === normalizedClass) return;
+    slot.cardClass = normalizedClass;
+    this.rebuildCandidates(slot);
   }
 
   revealSecret(entityId: string, cardId: string) {
@@ -177,18 +191,19 @@ export class SecretTracker {
   reset() {
     this.slots.clear();
     this.actions.length = 0;
+    this.opponentClass = undefined;
   }
 
   getSlots(): OpponentSecretSlot[] {
     return [...this.slots].map(([entityId, slot]) => ({ entityId, candidates: slot.candidates, revealedCardId: slot.revealedCardId }));
   }
 
-  private buildCandidates(): SecretCandidate[] {
+  private buildCandidates(cardClass = this.opponentClass): SecretCandidate[] {
     if (!this.database) return [];
     const cardsByCanonicalId = new Map<string, ReturnType<typeof listCardInfos>[number]>();
     for (const card of listCardInfos(this.database)
       .filter((candidate) => candidate.collectible === true && isSecretCard(candidate) && Boolean(candidate.cardId))
-      .filter((card) => !this.opponentClass || !card.heroClasses?.length || card.heroClasses.includes(this.opponentClass!))
+      .filter((card) => !cardClass || !card.heroClasses?.length || card.heroClasses.includes(cardClass))
     ) {
       const canonicalId = canonicalSecretCardId(card.cardId!);
       const previous = cardsByCanonicalId.get(canonicalId);
@@ -202,6 +217,23 @@ export class SecretTracker {
       status: "possible",
       details: toCardDetails(this.database!, card)
     }));
+  }
+
+  private rebuildCandidates(slot: {
+    candidates: SecretCandidate[];
+    cardClass?: string;
+  }) {
+    const previous = new Map(slot.candidates.map((candidate) => [canonicalSecretCardId(candidate.cardId), candidate]));
+    slot.candidates = this.buildCandidates(slot.cardClass).map((candidate) => {
+      const prior = previous.get(canonicalSecretCardId(candidate.cardId));
+      return prior
+        ? {
+            ...candidate,
+            status: prior.status,
+            ...(prior.exclusionReason ? { exclusionReason: prior.exclusionReason } : {})
+          }
+        : candidate;
+    });
   }
 
   private markSecretActivity(entityId: string) {

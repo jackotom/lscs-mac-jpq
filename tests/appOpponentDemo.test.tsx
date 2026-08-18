@@ -22,6 +22,9 @@ describe("opponent overlay QA demo", () => {
     fireEvent.click(screen.getByRole("button", { name: "历史" }));
     fireEvent.click(screen.getByRole("button", { name: /已使用 \(1\)/ }));
     expect(screen.getByText("伺机待发")).toBeInTheDocument();
+    expect(document.querySelector(
+      '[data-group-key="used"] .overlay-history-card-row .overlay-card-art-image'
+    )).toHaveAttribute("loading", "lazy");
   });
 
   it("renders both attack icons in the explicit board overlay QA route", () => {

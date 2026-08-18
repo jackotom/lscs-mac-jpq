@@ -10,7 +10,7 @@ import type { CollectionDeck, CollectionDeckScanResult, MatchMode, MatchRecord, 
 import { CardDataService } from "./cardDataService.js";
 import { ArenaRatingService } from "./arenaRatingService.js";
 import { parsePlayerLog } from "./logParsers.js";
-import { resolveBestLogTarget, type HearthstoneLogFiles } from "./logDiscovery.js";
+import { isRootLevelPlayerOnlySession, resolveBestLogTarget, type HearthstoneLogFiles } from "./logDiscovery.js";
 import { ArenaScreenRecognizer, selectArenaChoiceTexts, type ArenaScreenRecognitionOptions, type ArenaScreenRecognitionResult } from "./arenaScreenRecognition.js";
 import { inspectConstructedDeckScreen } from "./constructedScreenRecognition.js";
 import { shouldRecognizeConstructedDeckScreen } from "./constructedRecognitionPolicy.js";
@@ -89,6 +89,7 @@ export class TrackerService {
   private waitingForFirstPowerLog = false;
   private sessionRefreshTimer: NodeJS.Timeout | undefined;
   private sessionRefreshKey: SessionKey | undefined;
+  private sessionRefreshPath: string | undefined;
   private arenaScreenRecognitionTimer: NodeJS.Timeout | undefined;
   private arenaScreenRecognitionInFlight = false;
   private arenaScreenRecognitionSettled: Promise<void> = Promise.resolve();
@@ -99,6 +100,7 @@ export class TrackerService {
   private constructedScreenMode: "standard" | "wild" | undefined;
   private collectionDeckPreviewSource: "decks-log" | "screen" | undefined;
   private activeTrackerMode: TrackerMode | undefined;
+  private activeSessionUsesUsableArenaLog = false;
   private pendingPowerGameText = "";
   private activeArenaGame = false;
   private pendingArenaExitDeckKey: string | undefined;
@@ -198,9 +200,11 @@ export class TrackerService {
 
   private async startSession(
     options: { logPath?: string; deckText?: string },
-    resolvedSession?: HearthstoneLogFiles
+    resolvedSession?: HearthstoneLogFiles,
+    sessionRefreshPath = options.logPath ? path.resolve(options.logPath) : undefined
   ) {
     let sessionContext = this.beginSession();
+    this.sessionRefreshPath = sessionRefreshPath;
     this.engine.resetForLogSession();
     if (options.deckText) {
       await this.importDeckIntoEngine(options.deckText, sessionContext);
@@ -213,7 +217,10 @@ export class TrackerService {
     if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
-    const logPath = session?.powerLogPath ?? session?.playerLogPath ?? session?.arenaLogPath ?? session?.decksLogPath ?? session?.loadingScreenLogPath;
+    const { logPath, usableArenaLog } = await resolvePrimaryLogTarget(session);
+    if (!this.isCurrentSession(sessionContext)) {
+      return this.getState();
+    }
     if (!session || !logPath) {
       await this.stopWatcherOnly();
       if (!this.isCurrentSession(sessionContext)) {
@@ -226,8 +233,12 @@ export class TrackerService {
       this.pushState();
       return this.getState();
     }
-
-    const usableArenaLog = await hasUsableArenaLog(session?.arenaLogPath);
+    this.sessionRefreshPath = resolveSessionRefreshPath(sessionRefreshPath, session);
+    this.activeSessionUsesUsableArenaLog = Boolean(
+      usableArenaLog &&
+      session.arenaLogPath &&
+      path.resolve(logPath) === path.resolve(session.arenaLogPath)
+    );
     const loadingScreenMode = !session?.powerLogPath && !usableArenaLog
       ? await readLatestLoadingScreenMode(session?.loadingScreenLogPath)
       : undefined;
@@ -726,6 +737,7 @@ export class TrackerService {
     this.latestArenaDeckEventAtMs = undefined;
     this.activeArenaGame = false;
     this.activeTrackerMode = undefined;
+    this.activeSessionUsesUsableArenaLog = false;
     this.pendingLogBytes.clear();
     this.logFileFingerprints.clear();
     this.offsets.clear();
@@ -1006,27 +1018,40 @@ export class TrackerService {
 
     this.sessionRefreshKey = sessionContext.key;
     try {
-      const session = await resolveBestLogTarget(sessionContext.root);
+      const sessionRefreshPath = this.sessionRefreshPath;
+      const session = await resolveBestLogTarget(sessionRefreshPath);
       if (this.disposing || !this.isCurrentSession(sessionContext)) {
         return;
       }
 
-      const nextLogPath = session?.powerLogPath ?? session?.playerLogPath ?? session?.arenaLogPath ?? session?.decksLogPath ?? session?.loadingScreenLogPath;
+      const { logPath: nextLogPath, usableArenaLog } = await resolvePrimaryLogTarget(session);
+      if (this.disposing || !this.isCurrentSession(sessionContext)) {
+        return;
+      }
+      const sameActiveLogPath = Boolean(
+        nextLogPath &&
+        this.activeLogPath &&
+        path.resolve(nextLogPath) === path.resolve(this.activeLogPath)
+      );
+      const sameArenaLogBecameUsable = Boolean(
+        sameActiveLogPath &&
+        !this.activeSessionUsesUsableArenaLog &&
+        usableArenaLog &&
+        session?.arenaLogPath &&
+        path.resolve(nextLogPath!) === path.resolve(session.arenaLogPath)
+      );
       if (
         !session ||
         !nextLogPath ||
-        (sessionContext.root && path.resolve(session.root) !== sessionContext.root) ||
-        (
-          this.activeLogPath &&
-          path.resolve(nextLogPath) === path.resolve(this.activeLogPath)
-        )
+        (sessionRefreshPath && path.resolve(session.root) !== path.resolve(sessionRefreshPath)) ||
+        (sameActiveLogPath && !sameArenaLogBecameUsable)
       ) {
         return;
       }
 
       // Use the exact discovery result. Resolving its root a second time can race
       // with live mtime changes and select the current session again.
-      await this.startSession({}, session);
+      await this.startSession({}, session, sessionRefreshPath);
     } catch {
       // Keep the active watcher running if a periodic discovery pass fails.
     } finally {
@@ -1793,6 +1818,16 @@ function buildWaitingForGameMessage() {
   return "已识别炉石，正在等待开局；开始对局后会自动连接 Power.log。";
 }
 
+function resolveSessionRefreshPath(
+  currentPath: string | undefined,
+  session: HearthstoneLogFiles
+): string | undefined {
+  if (currentPath === undefined && isRootLevelPlayerOnlySession(session)) {
+    return undefined;
+  }
+  return path.resolve(session.root);
+}
+
 async function readLatestLoadingScreenMode(logPath: string | undefined) {
   if (!logPath) {
     return undefined;
@@ -1921,6 +1956,26 @@ async function hasUsableArenaLog(arenaLogPath?: string) {
 
   const content = await fs.readFile(arenaLogPath, "utf8").catch(() => "");
   return /SetDraftMode\s*-\s*(?:DRAFTING|ACTIVE_DRAFT_DECK|REDRAFTING|IN_REWARDS)\b/i.test(selectCurrentArenaLogText(content));
+}
+
+async function resolvePrimaryLogTarget(session: HearthstoneLogFiles | undefined): Promise<{
+  readonly logPath?: string;
+  readonly usableArenaLog: boolean;
+}> {
+  if (!session) {
+    return { usableArenaLog: false };
+  }
+  if (session.powerLogPath) {
+    return { logPath: session.powerLogPath, usableArenaLog: false };
+  }
+
+  const usableArenaLog = await hasUsableArenaLog(session.arenaLogPath);
+  return {
+    logPath: usableArenaLog
+      ? session.arenaLogPath
+      : session.playerLogPath ?? session.arenaLogPath ?? session.decksLogPath ?? session.loadingScreenLogPath,
+    usableArenaLog
+  };
 }
 
 function findFriendlyPlayerId(content: string): number | undefined {

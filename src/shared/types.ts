@@ -475,6 +475,7 @@ export interface EntitySnapshot {
   controller?: number;
   attack?: number;
   cardType?: string;
+  cardClass?: string;
   attachedToEntityId?: string;
   storedEntityId?: string;
   displayedCreatorEntityId?: string;
@@ -598,6 +599,13 @@ export interface ControllerLogEvent {
   raw: string;
 }
 
+export interface EntityClassLogEvent {
+  type: "entity-class";
+  entityId?: string;
+  cardClass: string;
+  raw: string;
+}
+
 export interface GameStartLogEvent {
   type: "game-start";
   timestamp?: string;
@@ -660,6 +668,7 @@ export type ParsedLogEvent =
   | DeckShuffleLogEvent
   | ZonePositionLogEvent
   | ControllerLogEvent
+  | EntityClassLogEvent
   | AttackLogEvent
   | ActionBoundaryLogEvent
   | BlockBoundaryLogEvent

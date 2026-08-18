@@ -57,6 +57,67 @@ describe("SecretTracker", () => {
     expect(tracker.getSlots()[0].candidates.some((candidate) => candidate.cardId === "PAL_SECRET")).toBe(false);
   });
 
+  it("keeps explicit classes isolated across simultaneous secret slots", () => {
+    const tracker = new SecretTracker(database);
+    tracker.setOpponentClass("法师");
+    tracker.enterSecret("mage-slot", "MAGE");
+    tracker.enterSecret("paladin-slot", "PALADIN");
+
+    const slots = new Map(tracker.getSlots().map((slot) => [slot.entityId, slot]));
+    expect(slots.get("mage-slot")?.candidates.map((candidate) => candidate.cardId)).toContain("EX1_287");
+    expect(slots.get("mage-slot")?.candidates.map((candidate) => candidate.cardId)).not.toContain("PAL_SECRET");
+    expect(slots.get("paladin-slot")?.candidates.map((candidate) => candidate.cardId)).toContain("PAL_SECRET");
+    expect(slots.get("paladin-slot")?.candidates.map((candidate) => candidate.cardId)).not.toContain("EX1_287");
+  });
+
+  it("preserves exclusions only for intersecting candidates when a slot gains an explicit class", () => {
+    const classSwitchDatabase = createCardDatabase([
+      { id: 101, cardId: "MAGE_ONLY", name: "法师专属", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 102, cardId: "PAL_ONLY", name: "圣骑士专属", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] },
+      { id: 103, cardId: "EX1_287", name: "共享法术反制", collectible: true, type: "SPELL", classes: ["MAGE", "PALADIN"], mechanics: ["SECRET"] }
+    ]);
+    const tracker = new SecretTracker(classSwitchDatabase);
+    tracker.setOpponentClass("MAGE");
+    tracker.enterSecret("10");
+    tracker.beginAction("friendly-spell");
+    tracker.endAction();
+
+    tracker.setSecretClass("10", "PALADIN");
+
+    expect(tracker.getSlots()[0].candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "EX1_287", status: "excluded" }),
+      expect.objectContaining({ cardId: "PAL_ONLY", status: "possible" })
+    ]));
+    expect(tracker.getSlots()[0].candidates.map((candidate) => candidate.cardId)).not.toContain("MAGE_ONLY");
+  });
+
+  it("falls back to the opponent hero class when a secret has no explicit class", () => {
+    const tracker = new SecretTracker(database);
+    tracker.setOpponentClass("MAGE");
+    tracker.enterSecret("10");
+
+    expect(tracker.getSlots()[0].candidates.map((candidate) => candidate.cardId)).toContain("EX1_287");
+    expect(tracker.getSlots()[0].candidates.map((candidate) => candidate.cardId)).not.toContain("PAL_SECRET");
+  });
+
+  it("does not retain removed slot class or exclusion state when entities enter again", () => {
+    const tracker = new SecretTracker(database);
+    tracker.setOpponentClass("MAGE");
+    tracker.enterSecret("same-entity", "PALADIN");
+    tracker.beginAction("friendly-spell");
+    tracker.endAction();
+    tracker.leaveSecret("same-entity");
+
+    tracker.enterSecret("same-entity");
+    tracker.enterSecret("new-entity");
+
+    for (const slot of tracker.getSlots()) {
+      expect(slot.candidates.map((candidate) => candidate.cardId)).toContain("EX1_287");
+      expect(slot.candidates.map((candidate) => candidate.cardId)).not.toContain("PAL_SECRET");
+      expect(slot.candidates.every((candidate) => candidate.status === "possible")).toBe(true);
+    }
+  });
+
   it("excludes only supported spell-trigger secrets after a friendly spell", () => {
     const tracker = new SecretTracker(database);
     tracker.enterSecret("10");

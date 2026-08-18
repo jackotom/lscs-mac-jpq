@@ -265,6 +265,10 @@ function assertScenarioContent(name, inspection) {
     assert.equal(inspection.page, "history");
     assert.deepEqual(inspection.expandedKeys, ["used"]);
     assert.ok(inspection.visibleCardRowRects.length >= 1, "对手悬浮窗应显示已使用卡牌");
+    assert.ok(
+      inspection.visibleOpponentUsedArtworkRects.length >= 1,
+      "对手已使用历史应显示卡图"
+    );
     assert.match(bodyText, /伺机待发/);
   }
 }

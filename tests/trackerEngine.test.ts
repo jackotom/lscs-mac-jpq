@@ -1518,6 +1518,98 @@ D 12:00:04.100 PowerTaskList.DebugPrintPower() - tag=ATK value=9
     expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual(["MAGE_SECRET"]);
   });
 
+  it("uses the hidden secret entity class when it differs from the opponent hero", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "MAGE_SECRET", name: "法师奥秘", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "PAL_SECRET", name: "骑士奥秘", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] },
+      { id: 3, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:24:27.000 GameState.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=法师英雄 id=2 zone=PLAY cardId=HERO_MAGE player=2] CardID=HERO_MAGE
+D 12:24:28.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=HAND zonePos=6 cardId= player=2] tag=SECRET value=1
+D 12:24:28.100 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=HAND zonePos=6 cardId= player=2] tag=CLASS value=PALADIN
+D 12:24:28.200 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=HAND zonePos=6 cardId= player=2] tag=ZONE value=SECRET
+`);
+
+    expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual(["PAL_SECRET"]);
+  });
+
+  it("updates a secret slot when its explicit class arrives after entering the secret zone", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "MAGE_SECRET", name: "法师奥秘", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "PAL_SECRET", name: "骑士奥秘", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] },
+      { id: 3, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:24:27.000 GameState.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=法师英雄 id=2 zone=PLAY cardId=HERO_MAGE player=2] CardID=HERO_MAGE
+D 12:24:28.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=HAND zonePos=6 cardId= player=2] tag=ZONE value=SECRET
+D 12:24:28.100 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=SECRET zonePos=1 cardId= player=2] tag=CLASS value=PALADIN
+`);
+
+    expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual(["PAL_SECRET"]);
+  });
+
+  it("does not reuse the previous opponent class for a classless secret in the next game", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "MAGE_SECRET", name: "法师奥秘", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "PAL_SECRET", name: "骑士奥秘", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] },
+      { id: 3, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=法师英雄 id=2 zone=PLAY cardId=HERO_MAGE player=2] CardID=HERO_MAGE
+D 13:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 13:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=70 zone=HAND cardId= player=2] tag=ZONE value=SECRET
+`);
+
+    expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual([
+      "MAGE_SECRET",
+      "PAL_SECRET"
+    ]);
+  });
+
+  it("uses a CLASS tag from an entity detail continuation for the secret slot", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "MAGE_SECRET", name: "法师奥秘", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "PAL_SECRET", name: "骑士奥秘", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] },
+      { id: 3, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:24:27.000 GameState.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=法师英雄 id=2 zone=PLAY cardId=HERO_MAGE player=2] CardID=HERO_MAGE
+D 12:24:28.000 GameState.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=151 zone=HAND zonePos=6 cardId= player=2] CardID=
+D 12:24:28.100 GameState.DebugPrintPower() -     tag=CLASS value=PALADIN
+D 12:24:28.200 GameState.DebugPrintPower() -     tag=ZONE value=SECRET
+`);
+
+    expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual(["PAL_SECRET"]);
+  });
+
+  it("keeps duplicate CLASS and ZONE secret logs idempotent", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "MAGE_SECRET", name: "法师奥秘", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "PAL_SECRET", name: "骑士奥秘", collectible: true, type: "SPELL", playerClass: "PALADIN", mechanics: ["SECRET"] }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:24:28.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=151 zone=HAND cardId= player=2] tag=CLASS value=PALADIN
+D 12:24:28.100 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=151 zone=HAND cardId= player=2] tag=ZONE value=SECRET
+D 12:24:28.200 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=151 zone=HAND cardId= player=2] tag=CLASS value=PALADIN
+D 12:24:28.300 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=151 zone=HAND cardId= player=2] tag=ZONE value=SECRET
+`);
+
+    expect(engine.getState().opponentSecrets).toHaveLength(1);
+    expect(engine.getState().opponentSecrets?.[0].candidates.map((candidate) => candidate.cardId)).toEqual(["PAL_SECRET"]);
+  });
+
   it("does not treat a revealed questline in the SECRET zone as an opponent secret", () => {
     const richDb = createCardDatabase([
       { id: 64375, cardId: "SW_039", name: "一决胜负", collectible: true, type: "SPELL", playerClass: "DEMONHUNTER" }
