@@ -221,10 +221,11 @@ async function selectBestLogTarget(sessions: readonly HearthstoneLogFiles[]): Pr
   return bestScoredSession;
 }
 
-function isRootLevelPlayerOnlySession(session: HearthstoneLogFiles): boolean {
+export function isRootLevelPlayerOnlySession(session: HearthstoneLogFiles): boolean {
   return Boolean(
     path.resolve(session.sessionDir) === path.resolve(session.root) &&
     session.playerLogPath &&
+    !session.powerLogPath &&
     !session.decksLogPath &&
     !session.arenaLogPath &&
     !session.loadingScreenLogPath

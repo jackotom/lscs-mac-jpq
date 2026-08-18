@@ -1631,6 +1631,107 @@ describe("TrackerService log selection", () => {
     await service.dispose();
   });
 
+  it("keeps an explicitly selected empty log root scoped during periodic refresh", async () => {
+    const selectedRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-selected-empty-root-"));
+    const foreignRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-foreign-root-"));
+    tempDirs.push(selectedRoot, foreignRoot);
+    const foreignSessionDir = join(foreignRoot, "Hearthstone_2026_08_18_12_00_00");
+    const foreignPowerLog = join(foreignSessionDir, "Power.log");
+    await mkdir(foreignSessionDir);
+    await writeFile(foreignPowerLog, "D 12:00:01.000 GameState.DebugPrintPower() - CREATE_GAME\n", "utf8");
+
+    const foreignSession = {
+      root: foreignRoot,
+      sessionDir: foreignSessionDir,
+      powerLogPath: foreignPowerLog,
+      modifiedAtMs: 2
+    };
+    const resolveBestLogTarget = vi.fn(async (providedPath?: string) =>
+      providedPath === selectedRoot ? undefined : foreignSession
+    );
+
+    vi.resetModules();
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return { ...actual, resolveBestLogTarget };
+    });
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start({ logPath: selectedRoot });
+      expect(initial.status).toBe("missing-log");
+
+      await vi.waitFor(
+        () => expect(resolveBestLogTarget.mock.calls.length).toBeGreaterThan(1),
+        { timeout: 2_500, interval: 50 }
+      );
+
+      expect(resolveBestLogTarget.mock.calls.every(([providedPath]) => providedPath === selectedRoot)).toBe(true);
+      expect(service.getState()).toMatchObject({ status: "missing-log", logPath: undefined });
+    } finally {
+      await service.dispose();
+    }
+  });
+
+  it("keeps a root-level Player and Power session scoped after automatic discovery", async () => {
+    const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-root-player-power-"));
+    const foreignRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-foreign-power-"));
+    tempDirs.push(root, foreignRoot);
+    const playerLog = join(root, "Player.log");
+    const powerLog = join(root, "Power.log");
+    const foreignSessionDir = join(foreignRoot, "Hearthstone_2026_08_18_12_00_00");
+    const foreignPowerLog = join(foreignSessionDir, "Power.log");
+    await writeFile(playerLog, "[Hearthstone] local player\n", "utf8");
+    await writeFile(powerLog, "D 12:00:01.000 GameState.DebugPrintPower() - CREATE_GAME\n", "utf8");
+    await mkdir(foreignSessionDir);
+    await writeFile(foreignPowerLog, "D 12:01:01.000 GameState.DebugPrintPower() - CREATE_GAME\n", "utf8");
+
+    const rootSession = {
+      root,
+      sessionDir: root,
+      playerLogPath: playerLog,
+      powerLogPath: powerLog,
+      modifiedAtMs: 1
+    };
+    const foreignSession = {
+      root: foreignRoot,
+      sessionDir: foreignSessionDir,
+      powerLogPath: foreignPowerLog,
+      modifiedAtMs: 2
+    };
+    let globalResolutions = 0;
+    const resolveBestLogTarget = vi.fn(async (providedPath?: string) => {
+      if (providedPath === root) return rootSession;
+      globalResolutions += 1;
+      return globalResolutions === 1 ? rootSession : foreignSession;
+    });
+
+    vi.resetModules();
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return { ...actual, resolveBestLogTarget };
+    });
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start();
+      expect(initial.logPath).toBe(powerLog);
+
+      await vi.waitFor(
+        () => expect(resolveBestLogTarget.mock.calls.length).toBeGreaterThan(1),
+        { timeout: 2_500, interval: 50 }
+      );
+
+      expect(globalResolutions).toBe(1);
+      expect(resolveBestLogTarget.mock.calls.slice(1).every(([providedPath]) => providedPath === root)).toBe(true);
+      expect(service.getState().logPath).toBe(powerLog);
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it("keeps polling from a root-level Player.log and connects when the game creates Power.log", async () => {
     const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-player-first-"));
     tempDirs.push(root);
@@ -1690,6 +1791,177 @@ describe("TrackerService log selection", () => {
           expect(service.getState().gameActive).toBe(true);
         },
         { timeout: 3_000, interval: 50 }
+      );
+    } finally {
+      await service.dispose();
+    }
+  });
+
+  it("follows a new default-root Arena session after auto-starting from a root-level Player.log", async () => {
+    const playerRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-player-root-"));
+    const gameRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-game-root-"));
+    tempDirs.push(playerRoot, gameRoot);
+    const playerLog = join(playerRoot, "Player.log");
+    const sessionDir = join(gameRoot, "Hearthstone_2026_08_18_12_00_00");
+    const arenaLog = join(sessionDir, "Arena.log");
+    const loadingScreenLog = join(sessionDir, "LoadingScreen.log");
+    await writeFile(playerLog, "[Hearthstone] waiting for game startup\n", "utf8");
+    await mkdir(sessionDir);
+    await writeFile(arenaLog, "D 12:00:01.000 Arena.SetDraftMode - DRAFTING\n", "utf8");
+    await writeFile(
+      loadingScreenLog,
+      "D 12:00:01.000 LoadingScreen.OnSceneLoaded() - currMode=DRAFT\n",
+      "utf8"
+    );
+
+    const playerOnlySession = {
+      root: playerRoot,
+      sessionDir: playerRoot,
+      playerLogPath: playerLog,
+      modifiedAtMs: 1
+    };
+    const arenaSession = {
+      root: gameRoot,
+      sessionDir,
+      arenaLogPath: arenaLog,
+      loadingScreenLogPath: loadingScreenLog,
+      modifiedAtMs: 2
+    };
+    let gameStarted = false;
+
+    vi.resetModules();
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return {
+        ...actual,
+        resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
+          if (providedPath === playerRoot) return playerOnlySession;
+          if (!providedPath) return gameStarted ? arenaSession : playerOnlySession;
+          return actual.resolveBestLogTarget(providedPath);
+        })
+      };
+    });
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start();
+      expect(initial.logPath).toBe(playerLog);
+      gameStarted = true;
+
+      await vi.waitFor(
+        () => {
+          const state = service.getState();
+          expect(state).toMatchObject({ logPath: arenaLog, status: "watching" });
+          expect(state.arena?.status).toBe("drafting");
+        },
+        { timeout: 2_500, interval: 50 }
+      );
+    } finally {
+      await service.dispose();
+    }
+  });
+
+  it("activates an Arena session when DRAFTING appears after the same log path was adopted", async () => {
+    const playerRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-player-root-"));
+    const gameRoot = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-game-root-"));
+    tempDirs.push(playerRoot, gameRoot);
+    const playerLog = join(playerRoot, "Player.log");
+    const sessionDir = join(gameRoot, "Hearthstone_2026_08_18_12_00_00");
+    const arenaLog = join(sessionDir, "Arena.log");
+    const loadingScreenLog = join(sessionDir, "LoadingScreen.log");
+    await writeFile(playerLog, "[Hearthstone] waiting for game startup\n", "utf8");
+    await mkdir(sessionDir);
+    await writeFile(arenaLog, "D 12:00:01.000 Arena booting\n", "utf8");
+    await writeFile(
+      loadingScreenLog,
+      "D 12:00:01.000 LoadingScreen.OnSceneLoaded() - currMode=DRAFT\n",
+      "utf8"
+    );
+
+    const playerOnlySession = {
+      root: playerRoot,
+      sessionDir: playerRoot,
+      playerLogPath: playerLog,
+      modifiedAtMs: 1
+    };
+    const waitingArenaSession = {
+      root: gameRoot,
+      sessionDir,
+      arenaLogPath: arenaLog,
+      loadingScreenLogPath: loadingScreenLog,
+      modifiedAtMs: 2
+    };
+    let gameSessionAvailable = false;
+
+    vi.resetModules();
+    vi.doMock("../src/main/logDiscovery.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/main/logDiscovery.js")>();
+      return {
+        ...actual,
+        resolveBestLogTarget: vi.fn(async (providedPath?: string) => {
+          if (providedPath === playerRoot) return playerOnlySession;
+          if (providedPath === gameRoot) return waitingArenaSession;
+          if (!providedPath) return gameSessionAvailable ? waitingArenaSession : playerOnlySession;
+          return actual.resolveBestLogTarget(providedPath);
+        })
+      };
+    });
+
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start();
+      expect(initial.logPath).toBe(playerLog);
+      gameSessionAvailable = true;
+      await vi.waitFor(
+        () => expect(service.getState()).toMatchObject({ logPath: arenaLog, status: "watching" }),
+        { timeout: 2_500, interval: 50 }
+      );
+
+      await appendFile(arenaLog, "D 12:00:02.000 Arena.SetDraftMode - DRAFTING\n", "utf8");
+
+      await vi.waitFor(
+        () => expect(service.getState().arena?.status).toBe("drafting"),
+        { timeout: 2_500, interval: 50 }
+      );
+    } finally {
+      await service.dispose();
+    }
+  });
+
+  it("prefers Arena after DRAFTING appears beside Player.log even when LoadingScreen says GAMEPLAY", async () => {
+    const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-player-arena-upgrade-"));
+    tempDirs.push(root);
+    const sessionDir = join(root, "Hearthstone_2026_08_18_12_00_00");
+    const playerLog = join(sessionDir, "Player.log");
+    const arenaLog = join(sessionDir, "Arena.log");
+    const loadingScreenLog = join(sessionDir, "LoadingScreen.log");
+    await mkdir(sessionDir);
+    await writeFile(playerLog, "[Hearthstone] game process ready\n", "utf8");
+    await writeFile(arenaLog, "D 12:00:01.000 Arena booting\n", "utf8");
+    await writeFile(
+      loadingScreenLog,
+      "D 12:00:01.000 LoadingScreen.OnSceneLoaded() - currMode=GAMEPLAY\n",
+      "utf8"
+    );
+
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    try {
+      const initial = await service.start({ logPath: root });
+      expect(initial).toMatchObject({ logPath: playerLog, status: "missing-log" });
+
+      await appendFile(arenaLog, "D 12:00:02.000 Arena.SetDraftMode - DRAFTING\n", "utf8");
+
+      await vi.waitFor(
+        () => {
+          const state = service.getState();
+          expect(state).toMatchObject({ logPath: arenaLog, status: "watching" });
+          expect(state.arena?.status).toBe("drafting");
+        },
+        { timeout: 2_500, interval: 50 }
       );
     } finally {
       await service.dispose();
@@ -1828,6 +2100,62 @@ describe("TrackerService log selection", () => {
     expect(state.status).toBe("paused");
     expect(state.logPath).toBe(oldPowerLog);
     await service.dispose();
+  });
+
+  it("does not revive a paused session after Arena usability reading resolves late", async () => {
+    const root = await mkdtemp(join(os.tmpdir(), "hearthstone-tracker-service-arena-read-pause-"));
+    tempDirs.push(root);
+    const sessionDir = join(root, "Hearthstone_2026_08_18_12_00_00");
+    const arenaLog = join(sessionDir, "Arena.log");
+    const loadingScreenLog = join(sessionDir, "LoadingScreen.log");
+    await mkdir(sessionDir);
+    await writeFile(arenaLog, "D 12:00:01.000 Arena booting\n", "utf8");
+    await writeFile(
+      loadingScreenLog,
+      "D 12:00:01.000 LoadingScreen.OnSceneLoaded() - currMode=DRAFT\n",
+      "utf8"
+    );
+
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const service = new TrackerService();
+    const originalReadFile = nodeFs.readFile.bind(nodeFs);
+    let releaseArenaRead: () => void = () => undefined;
+    let markArenaReadStarted: () => void = () => undefined;
+    const arenaReadStarted = new Promise<void>((resolve) => {
+      markArenaReadStarted = resolve;
+    });
+    const delayedArenaRead = new Promise<void>((resolve) => {
+      releaseArenaRead = resolve;
+    });
+    let delayNextArenaRead = false;
+    const readFileSpy = vi.spyOn(nodeFs, "readFile").mockImplementation(async (...args) => {
+      if (delayNextArenaRead && String(args[0]) === arenaLog) {
+        delayNextArenaRead = false;
+        markArenaReadStarted();
+        await delayedArenaRead;
+      }
+      return originalReadFile(...args as Parameters<typeof originalReadFile>);
+    });
+
+    try {
+      const initial = await service.start({ logPath: root });
+      expect(initial).toMatchObject({ logPath: arenaLog, status: "watching" });
+      delayNextArenaRead = true;
+      await appendFile(arenaLog, "D 12:00:02.000 Arena.SetDraftMode - DRAFTING\n", "utf8");
+      await arenaReadStarted;
+
+      const pause = service.pause();
+      releaseArenaRead();
+      await pause;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(service.getState()).toMatchObject({ status: "paused", logPath: arenaLog });
+    } finally {
+      readFileSpy.mockRestore();
+      releaseArenaRead();
+      await service.dispose();
+    }
   });
 
   it("starts screen recognition for a current Arena draft session without Power.log", async () => {

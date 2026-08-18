@@ -4,7 +4,13 @@ import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { discoverHearthstoneLogs, findBestLogFile, getHearthstoneLogCandidates, resolveBestLogTarget } from "../src/main/logDiscovery.js";
+import {
+  discoverHearthstoneLogs,
+  findBestLogFile,
+  getHearthstoneLogCandidates,
+  isRootLevelPlayerOnlySession,
+  resolveBestLogTarget
+} from "../src/main/logDiscovery.js";
 
 const tempDirs: string[] = [];
 
@@ -13,6 +19,16 @@ afterEach(async () => {
 });
 
 describe("log discovery", () => {
+  it("does not classify a root-level Player.log session with Power.log as player-only", () => {
+    expect(isRootLevelPlayerOnlySession({
+      root: "/logs",
+      sessionDir: "/logs",
+      playerLogPath: "/logs/Player.log",
+      powerLogPath: "/logs/Power.log",
+      modifiedAtMs: 1
+    })).toBe(false);
+  });
+
   it("finds a readable Hearthstone session under candidate roots", async () => {
     const logs = await discoverHearthstoneLogs({
       extraCandidates: [resolve("fixtures/logs/session-2026-07-10")],
