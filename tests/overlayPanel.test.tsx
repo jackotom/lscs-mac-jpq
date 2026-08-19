@@ -351,6 +351,39 @@ describe("standard tracker overlay", () => {
     expect(within(arena).getByLabelText("数量 2")).toHaveTextContent("2");
   });
 
+  it("shows persistent global effects above Arena deck stats during a live match", () => {
+    render(<OverlayPanel view={view({
+      globalEffects: [{
+        id: "global-jail-122",
+        name: "米尔牢斯·法力风暴",
+        count: 1,
+        details: {
+          dbfId: 126353,
+          cardId: "JAIL_122",
+          name: "米尔牢斯·法力风暴",
+          isSpell: false,
+          relatedCards: []
+        }
+      }],
+      arena: {
+        isChoosing: false,
+        showDeckStats: true,
+        statusLabel: "牌库已生成",
+        progress: "30/30",
+        confirmedCount: 30,
+        unresolvedCount: 0,
+        hero: "牧师",
+        choices: [],
+        deck: [{ id: "arena-1", name: "竞技场牌", count: 1, cost: 3 }],
+        deckCount: 30
+      }
+    })} />);
+
+    const effect = screen.getByRole("region", { name: "影响全局 1 张" });
+    expect(effect).toHaveTextContent("米尔牢斯·法力风暴");
+    expect(screen.getByLabelText("竞技场卡组影响")).toBeInTheDocument();
+  });
+
   it("renders lowercase-token Arena cards as localized rows without leaking internal ids", () => {
     const state = createPublicTrackerState({
       status: "watching",

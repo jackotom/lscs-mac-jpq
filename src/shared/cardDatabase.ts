@@ -184,6 +184,7 @@ export function toCardDetails(cardDb: CardDatabase, card: CardInfo): CardDetails
 
 const RANDOM_SPELL_POOL_PATTERN = /随机施放[^。；\n]{0,48}?(?:法术|奥秘)/;
 const RANDOM_SPELL_MIN_COST_PATTERN = /这些法术的法力值消耗(?:大于或等于|不低于)[（(]?\s*(\d+)\s*[）)]?点?/;
+const RANDOM_EXACT_COST_MINION_POOL_PATTERN = /随机[^。；\n]{0,80}?法力值消耗为[（(]?\s*\$?(\d+)\s*[）)]?[^。；\n]{0,40}?随从/u;
 const SPELL_SCHOOL_IDS: Readonly<Record<string, number>> = {
   奥术: 1,
   火焰: 2,
@@ -208,6 +209,7 @@ const RANDOM_SPELL_CLASS_NAMES = [
 ] as const;
 const cardPoolSectionCache = new WeakMap<CardDatabase, Map<number, readonly CardPoolSection[]>>();
 const collectibleSpellPoolCache = new WeakMap<CardDatabase, readonly CardInfo[]>();
+const collectibleMinionPoolCache = new WeakMap<CardDatabase, readonly CardInfo[]>();
 
 function inferCardPoolSections(cardDb: CardDatabase, source: CardInfo): readonly CardPoolSection[] {
   let sectionsByCard = cardPoolSectionCache.get(cardDb);
@@ -220,33 +222,55 @@ function inferCardPoolSections(cardDb: CardDatabase, source: CardInfo): readonly
     return cached;
   }
   const text = source.text ?? "";
-  if (!isRandomSpellPoolCard(source)) {
+  const randomSpellPool = isRandomSpellPoolCard(source);
+  const exactMinionCost = randomExactCostMinionPool(text);
+  if (!randomSpellPool && exactMinionCost === undefined) {
     sectionsByCard.set(source.dbfId, []);
     return [];
   }
 
-  let allSpells = collectibleSpellPoolCache.get(cardDb);
-  if (!allSpells) {
-    allSpells = listCardInfos(cardDb)
-      .filter((card) => card.collectible === true && card.cardType === "法术")
-      .sort(compareCardInfo);
-    collectibleSpellPoolCache.set(cardDb, allSpells);
-  }
-  const pool = resolveRandomSpellPool(text, allSpells.filter((card) => card.dbfId !== source.dbfId));
-  const spells = pool.cards.map(toRelatedCardInfo);
-  const sections: CardPoolSection[] = [{
-    key: "random-spells",
-    title: pool.title,
-    emptyText: "当前卡牌库没有可匹配的法术",
-    cards: spells
-  }];
-  const minimumCost = numberValue(text.match(RANDOM_SPELL_MIN_COST_PATTERN)?.[1]);
-  if (minimumCost !== undefined) {
+  const sections: CardPoolSection[] = [];
+  if (randomSpellPool) {
+    let allSpells = collectibleSpellPoolCache.get(cardDb);
+    if (!allSpells) {
+      allSpells = listCardInfos(cardDb)
+        .filter((card) => card.collectible === true && card.cardType === "法术")
+        .sort(compareCardInfo);
+      collectibleSpellPoolCache.set(cardDb, allSpells);
+    }
+    const pool = resolveRandomSpellPool(text, allSpells.filter((card) => card.dbfId !== source.dbfId));
+    const spells = pool.cards.map(toRelatedCardInfo);
     sections.push({
-      key: `random-spells-min-cost-${minimumCost}`,
-      title: `牌库无随从时：卡库可见的${minimumCost}费及以上候选`,
-      emptyText: `当前卡牌库没有${minimumCost}费及以上的法术`,
-      cards: spells.filter((card) => (card.manaCost ?? -1) >= minimumCost)
+      key: "random-spells",
+      title: pool.title,
+      emptyText: "当前卡牌库没有可匹配的法术",
+      cards: spells
+    });
+    const minimumCost = numberValue(text.match(RANDOM_SPELL_MIN_COST_PATTERN)?.[1]);
+    if (minimumCost !== undefined) {
+      sections.push({
+        key: `random-spells-min-cost-${minimumCost}`,
+        title: `牌库无随从时：卡库可见的${minimumCost}费及以上候选`,
+        emptyText: `当前卡牌库没有${minimumCost}费及以上的法术`,
+        cards: spells.filter((card) => (card.manaCost ?? -1) >= minimumCost)
+      });
+    }
+  }
+  if (exactMinionCost !== undefined) {
+    let allMinions = collectibleMinionPoolCache.get(cardDb);
+    if (!allMinions) {
+      allMinions = listCardInfos(cardDb)
+        .filter((card) => card.collectible === true && card.cardType === "随从")
+        .sort(compareCardInfo);
+      collectibleMinionPoolCache.set(cardDb, allMinions);
+    }
+    sections.push({
+      key: `random-minions-exact-${exactMinionCost}`,
+      title: `卡库可见的${exactMinionCost}费随从候选`,
+      emptyText: `当前卡牌库没有${exactMinionCost}费随从`,
+      cards: allMinions
+        .filter((card) => card.dbfId !== source.dbfId && card.manaCost === exactMinionCost)
+        .map(toRelatedCardInfo)
     });
   }
   sectionsByCard.set(source.dbfId, sections);
@@ -255,6 +279,10 @@ function inferCardPoolSections(cardDb: CardDatabase, source: CardInfo): readonly
 
 export function isRandomSpellPoolCard(card: CardInfo): boolean {
   return RANDOM_SPELL_POOL_PATTERN.test(card.text ?? "");
+}
+
+function randomExactCostMinionPool(text: string): number | undefined {
+  return numberValue(text.match(RANDOM_EXACT_COST_MINION_POOL_PATTERN)?.[1]);
 }
 
 function resolveRandomSpellPool(

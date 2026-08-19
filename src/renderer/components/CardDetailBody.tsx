@@ -34,6 +34,7 @@ export function CardDetailBody({ details, className, mode }: CardDetailBodyProps
   const hasPlayedSpellContext =
     hasStructuredPlayedSpellContext ||
     playedSpells !== undefined;
+  const relatedCards = mergeRelatedCards(details.relatedCards, details.synergyCards ?? []);
   const cardPoolSections = details.cardPoolSections ?? [];
   const cardOutcomeSections = details.cardOutcomeSections ?? [];
   const gameContextSections = hasPlayedSpellContext
@@ -68,23 +69,35 @@ export function CardDetailBody({ details, className, mode }: CardDetailBodyProps
           }
         />
       ) : null}
-      {details.relatedCards.length > 0 || (!hasPlayedSpellContext && gameContextSections.length === 0) ? (
+      {relatedCards.length > 0 || (
+        !hasPlayedSpellContext &&
+        gameContextSections.length === 0 &&
+        cardPoolSections.length === 0 &&
+        cardOutcomeSections.length === 0
+      ) ? (
         <CardListSection
-          cards={details.relatedCards}
+          cards={relatedCards}
           className="card-detail-related"
           emptyText={details.isSpell ? "暂无生成或关联法术资料" : "暂无关联牌资料"}
           title={details.isSpell ? "生成/关联法术" : "关联牌"}
           showText
         />
       ) : null}
-      {mode === "interactive" ? cardPoolSections.map((section) => (
+      {cardPoolSections.map((section) => mode === "interactive" ? (
         <CardPoolSection
           cards={section.cards}
           emptyText={section.emptyText}
           key={`${details.cardId ?? details.dbfId}:${section.key}`}
           title={section.title}
         />
-      )) : null}
+      ) : (
+        <CardPoolSummarySection
+          cards={section.cards}
+          emptyText={section.emptyText}
+          key={`${details.cardId ?? details.dbfId}:${section.key}`}
+          title={section.title}
+        />
+      ))}
       {cardOutcomeSections.map((section) => (
         <CardOutcomeSection
           cards={section.cards}
@@ -105,6 +118,25 @@ export function CardDetailBody({ details, className, mode }: CardDetailBodyProps
       ))}
     </div>
   );
+}
+
+function mergeRelatedCards(
+  explicitCards: readonly RelatedCardInfo[],
+  inferredCards: readonly RelatedCardInfo[]
+): readonly RelatedCardInfo[] {
+  const cards = [...explicitCards];
+  const existingKeys = new Set(explicitCards.map(relatedCardKey));
+  for (const card of inferredCards) {
+    const key = relatedCardKey(card);
+    if (existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    cards.push(card);
+  }
+  return cards;
+}
+
+function relatedCardKey(card: RelatedCardInfo): string {
+  return card.cardId ? `id:${card.cardId.toLocaleLowerCase()}` : `dbf:${card.dbfId}`;
 }
 
 function CardDetailArtwork({ details }: { readonly details: CardDetails }) {
@@ -244,6 +276,44 @@ function CardPoolSection({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function CardPoolSummarySection({
+  cards,
+  emptyText,
+  title
+}: {
+  readonly cards: readonly RelatedCardInfo[];
+  readonly emptyText: string;
+  readonly title: string;
+}) {
+  const visibleCards = cards.slice(0, CARD_POOL_BATCH_SIZE);
+  return (
+    <div
+      aria-label={`${title}，共 ${cards.length} 张，当前显示 ${visibleCards.length} 张`}
+      className="card-related-list card-spell-history card-pool-section card-pool-summary-section"
+      role="region"
+    >
+      <span>{title}（{cards.length}）</span>
+      {visibleCards.length > 0 ? (
+        <div className="card-related-cards" role="list">
+          {visibleCards.map((card, index) => (
+            <RelatedCardRow
+              card={card}
+              key={`${card.cardId ?? card.dbfId}-${index}`}
+              role="listitem"
+              showText
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="card-spell-history-empty">{emptyText}</div>
+      )}
+      {cards.length > visibleCards.length ? (
+        <small className="card-pool-summary-note">固定卡牌说明后可查看其余 {cards.length - visibleCards.length} 张</small>
+      ) : null}
+    </div>
   );
 }
 
