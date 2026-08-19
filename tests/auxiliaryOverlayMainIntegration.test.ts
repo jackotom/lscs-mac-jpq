@@ -46,6 +46,19 @@ describe("auxiliary overlay main integration", () => {
     expect(functionSource("endAuxiliaryOverlayDrag")).toContain("saveBounds");
   });
 
+  it("keeps every overlay visible throughout an auxiliary drag and its focus handoff", () => {
+    expect(functionSource("beginAuxiliaryOverlayDrag")).toContain("markAuxiliaryOverlayInteraction");
+    expect(functionSource("moveAuxiliaryOverlayDrag")).toContain("markAuxiliaryOverlayInteraction");
+    expect(functionSource("endAuxiliaryOverlayDrag")).toContain("markAuxiliaryOverlayInteraction");
+    expect(functionSource("isAnyOverlayInteractionActive")).toContain("isAuxiliaryOverlayInteractionActive()");
+
+    const refreshSource = functionSource("refreshBoardAttackOverlayWindow");
+    expect(refreshSource).toContain("isAuxiliaryOverlayInteractionActive()");
+    expect(refreshSource).toMatch(
+      /shouldShowBoardAttackOverlay\([\s\S]*?auxiliaryInteractionActive[\s\S]*?\)/u
+    );
+  });
+
   it("binds each smart counter sender to its own persisted drag target", () => {
     const createSource = functionSource("createSmartCounterOverlayWindow");
     const releaseSource = functionSource("releaseSmartCounterOverlayWindow");
