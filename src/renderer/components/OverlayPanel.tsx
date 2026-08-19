@@ -58,7 +58,11 @@ export function OverlayPanel({ view, className = "overlay-shell", style, onClose
         </section>
       ) : (
         <>
-          {view.arena?.showDeckStats ? <ArenaOverlay view={view.arena} /> : <NormalOverlay view={view} />}
+          {view.arena?.showDeckStats ? (
+            <ArenaOverlay arena={view.arena} globalEffects={view.globalEffects ?? []} />
+          ) : (
+            <NormalOverlay view={view} />
+          )}
         </>
       )}
     </section>
@@ -393,12 +397,28 @@ function asText(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function ArenaOverlay({ view }: { view: NonNullable<OverlayPanelProps["view"]["arena"]> }) {
-  const stageTitle = `${view.statusLabel} · ${view.progress}`;
-  const stageLabel = view.progress.includes("张候选") ? view.progress : stageTitle;
+function ArenaOverlay({
+  arena,
+  globalEffects
+}: {
+  readonly arena: NonNullable<OverlayPanelProps["view"]["arena"]>;
+  readonly globalEffects: readonly OverlayCardItem[];
+}) {
+  const stageTitle = `${arena.statusLabel} · ${arena.progress}`;
+  const stageLabel = arena.progress.includes("张候选") ? arena.progress : stageTitle;
 
   return (
     <section className="overlay-arena overlay-arena-stats" aria-label="竞技场卡组影响">
+      {globalEffects.length > 0 ? (
+        <div className="overlay-card-groups overlay-arena-global-effects">
+          <CollapsibleCardGroup
+            label="影响全局"
+            count={countCards(globalEffects)}
+            items={globalEffects}
+            emptyLabel="暂无全局影响"
+          />
+        </div>
+      ) : null}
       <strong className="overlay-arena-stage" aria-label="竞技场阶段" title={stageTitle}>
         {stageLabel}
       </strong>
@@ -407,7 +427,7 @@ function ArenaOverlay({ view }: { view: NonNullable<OverlayPanelProps["view"]["a
         <span>卡牌</span>
         <span>影响</span>
       </div>
-      <ArenaDeckStatsList items={view.deck} />
+      <ArenaDeckStatsList items={arena.deck} />
     </section>
   );
 }

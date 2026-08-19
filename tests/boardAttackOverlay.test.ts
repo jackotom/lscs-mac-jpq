@@ -47,8 +47,12 @@ describe("board attack overlay", () => {
     });
   });
 
-  it("shows only for an active game while Hearthstone is frontmost", () => {
+  it("stays visible while Hearthstone or one of the tracker overlays is frontmost", () => {
     expect(shouldShowBoardAttackOverlay(true, "Hearthstone")).toBe(true);
+    expect(shouldShowBoardAttackOverlay(true, "炉石记牌器")).toBe(true);
+    expect(shouldShowBoardAttackOverlay(true, "Hearthstone Mac Tracker")).toBe(true);
+    expect(shouldShowBoardAttackOverlay(true, undefined, true)).toBe(true);
+    expect(shouldShowBoardAttackOverlay(false, "炉石记牌器", true)).toBe(false);
     expect(shouldShowBoardAttackOverlay(false, "Hearthstone")).toBe(false);
     expect(shouldShowBoardAttackOverlay(true, "ChatGPT")).toBe(false);
   });

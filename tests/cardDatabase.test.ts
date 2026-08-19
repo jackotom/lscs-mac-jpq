@@ -126,6 +126,33 @@ describe("card database details", () => {
       .toBe(details.cardPoolSections);
   });
 
+  it("lists exact-cost collectible minions for random summons without explicit child ids", () => {
+    const database = createCardDatabase([
+      {
+        id: 124079,
+        cardId: "JAIL_912",
+        name: "预言师",
+        collectible: true,
+        type: "MINION",
+        cost: 7,
+        text: "预备。嘲讽。亡语：为你的英雄恢复6点生命值。随机召唤一个法力值消耗为（6）的随从。"
+      },
+      { id: 9101, cardId: "SIX_COST_MINION", name: "六费候选随从", collectible: true, type: "MINION", cost: 6 },
+      { id: 9102, cardId: "FIVE_COST_MINION", name: "五费随从", collectible: true, type: "MINION", cost: 5 },
+      { id: 9103, cardId: "SIX_COST_SPELL", name: "六费法术", collectible: true, type: "SPELL", cost: 6 },
+      { id: 9104, cardId: "SIX_COST_TOKEN", name: "不可收藏六费随从", collectible: false, type: "MINION", cost: 6 }
+    ]);
+
+    expect(toCardDetails(database, getCardInfo(database, 124079)!).cardPoolSections).toEqual([
+      {
+        key: "random-minions-exact-6",
+        title: "卡库可见的6费随从候选",
+        emptyText: "当前卡牌库没有6费随从",
+        cards: [expect.objectContaining({ dbfId: 9101, name: "六费候选随从" })]
+      }
+    ]);
+  });
+
   it("narrows visible random-spell candidates by explicit cost, class, school, and deck-dependent conditions", () => {
     const database = createCardDatabase([
       {

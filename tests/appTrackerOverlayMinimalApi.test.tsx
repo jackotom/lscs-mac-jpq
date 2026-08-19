@@ -222,6 +222,65 @@ describe("tracker overlay preload boundary", () => {
     expect(screen.queryByText("未解析竞技场牌")).not.toBeInTheDocument();
   });
 
+  it("uses the canonical card-tracking details for main-deck candidate pools", async () => {
+    const cardTracking = {
+      ...structuredClone(createEmptyCardTracking("candidate-pool")),
+      detailsByCardKey: {
+        "id:jail_912": {
+          dbfId: 124079,
+          cardId: "JAIL_912",
+          name: "预言师",
+          cardType: "随从",
+          isSpell: false,
+          relatedCards: [],
+          cardPoolSections: [{
+            key: "random-minions-exact-6",
+            title: "卡库可见的6费随从候选",
+            emptyText: "当前卡牌库没有6费随从",
+            cards: [{ dbfId: 9101, cardId: "SIX_COST_MINION", name: "六费候选随从", manaCost: 6, cardType: "随从" }]
+          }]
+        }
+      }
+    };
+    const state = createPublicTrackerState({
+      status: "watching",
+      gameActive: true,
+      deckName: "竞技场牌库",
+      deck: [{
+        name: "预言师",
+        cardId: "JAIL_912",
+        count: 1,
+        remaining: 1,
+        drawn: 0,
+        played: 0,
+        details: {
+          dbfId: 124079,
+          cardId: "JAIL_912",
+          name: "预言师",
+          cardType: "随从",
+          isSpell: false,
+          relatedCards: []
+        }
+      }],
+      events: [],
+      summary: { totalCards: 1, remainingCards: 1, drawnCards: 0, opponentPlayedCount: 0 },
+      cardTracking
+    });
+    window.hearthstoneTracker = {
+      discoverLogs: vi.fn(async () => []),
+      getState: vi.fn(async () => state),
+      onUpdate: vi.fn(() => () => undefined)
+    } as unknown as typeof window.hearthstoneTracker;
+    const { default: App } = await import("../src/renderer/App.js");
+
+    render(<App />);
+
+    await openWorkbench();
+    fireEvent.click((await screen.findAllByText("预言师"))[0]!);
+    expect(await screen.findByText("卡库可见的6费随从候选（1）")).toBeInTheDocument();
+    expect(screen.queryByText("暂无关联牌资料")).not.toBeInTheDocument();
+  });
+
   it("renders an unresolved inserted-card placeholder in a constructed deck", async () => {
     const state = createPublicTrackerState({
       status: "watching",

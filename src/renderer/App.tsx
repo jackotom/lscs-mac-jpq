@@ -971,9 +971,13 @@ function App() {
     () => (
       logIssue
         ? []
-        : toDeckCards(deckDisplayState.deck, !deckDisplayState.arena || deckDisplayState.arena.status === "inactive")
+        : toDeckCards(
+            deckDisplayState.deck,
+            !deckDisplayState.arena || deckDisplayState.arena.status === "inactive",
+            deckDisplayState.cardTracking.detailsByCardKey
+          )
     ),
-    [deckDisplayState.arena, deckDisplayState.deck, logIssue]
+    [deckDisplayState.arena, deckDisplayState.cardTracking.detailsByCardKey, deckDisplayState.deck, logIssue]
   );
   const deckSummary = useMemo(
     () => (logIssue ? emptyDeckSummary : toDeckSummary(deckDisplayState, deckImported)),
@@ -1789,7 +1793,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.5.7</small>
+          <small>v0.5.10</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
@@ -2250,7 +2254,11 @@ function toDeckSummary(state: PublicTrackerState, deckImported: boolean): DeckSu
   };
 }
 
-function toDeckCards(rows: CardTrackerRow[], includeUnresolved = false): DeckCard[] {
+function toDeckCards(
+  rows: CardTrackerRow[],
+  includeUnresolved = false,
+  detailsByCardKey: Readonly<Record<string, CardDetails>> = {}
+): DeckCard[] {
   return rows.filter((row) => includeUnresolved || !row.unresolved).map((row, index) => ({
     id: `deck-${row.name}-${index}`,
     name: row.name,
@@ -2259,9 +2267,22 @@ function toDeckCards(rows: CardTrackerRow[], includeUnresolved = false): DeckCar
     drawn: row.drawn,
     copiesRemaining: row.remaining,
     copiesTotal: row.count,
-    details: row.details,
+    details: mergeCanonicalDeckDetails(row, detailsByCardKey),
     unresolved: row.unresolved
   }));
+}
+
+function mergeCanonicalDeckDetails(
+  row: CardTrackerRow,
+  detailsByCardKey: Readonly<Record<string, CardDetails>>
+): CardDetails | undefined {
+  const cardKey = row.cardId
+    ? `id:${row.cardId.trim().toLocaleLowerCase()}`
+    : `name:${row.name.trim().toLocaleLowerCase()}`;
+  const canonicalDetails = detailsByCardKey[cardKey];
+  return canonicalDetails && row.details
+    ? { ...canonicalDetails, ...row.details }
+    : canonicalDetails ?? row.details;
 }
 
 function toGameEvents(events: TrackerEvent[]): GameEvent[] {

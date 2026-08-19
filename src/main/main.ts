@@ -197,6 +197,7 @@ let cardPreviewRequestSerial = 0;
 let overlayInteractionActiveUntil = 0;
 let opponentOverlayInteractionActiveUntil = 0;
 let ladderDeckOverlayInteractionActiveUntil = 0;
+let auxiliaryOverlayInteractionActiveUntil = 0;
 let initialBackgroundWindowReady = false;
 let initialLaunchActivateObserved = false;
 let mainWindowUserActivationAllowedAfterMs = Number.POSITIVE_INFINITY;
@@ -269,6 +270,7 @@ const cardPreviewAutoHideMs = 10000;
 const mainWindowActivateGraceMs = 1_500;
 const cardPreviewVisibilityIntervalMs = 150;
 const arenaHeroRankingInteractionGraceMs = 1_200;
+const auxiliaryOverlayInteractionGraceMs = 1_200;
 const overlaySettingsPreviewGraceMs = 2_000;
 const overlaySettingsPreviewSession = new OverlaySettingsPreviewSession(overlaySettingsPreviewGraceMs);
 let overlaySettingsPreviewWindows = {
@@ -448,7 +450,16 @@ function isAnyOverlayInteractionActive() {
   const now = Date.now();
   return now < overlayInteractionActiveUntil ||
     now < opponentOverlayInteractionActiveUntil ||
-    now < ladderDeckOverlayInteractionActiveUntil;
+    now < ladderDeckOverlayInteractionActiveUntil ||
+    isAuxiliaryOverlayInteractionActive();
+}
+
+function markAuxiliaryOverlayInteraction(): void {
+  auxiliaryOverlayInteractionActiveUntil = Date.now() + auxiliaryOverlayInteractionGraceMs;
+}
+
+function isAuxiliaryOverlayInteractionActive(): boolean {
+  return auxiliaryOverlayDragSessions.size > 0 || Date.now() < auxiliaryOverlayInteractionActiveUntil;
 }
 
 const hasSingleInstanceLock = process.env.QA_ALLOW_MULTIPLE_INSTANCES === "1" || app.requestSingleInstanceLock();
@@ -816,6 +827,7 @@ function registerIpc() {
     setMouseInteractive: (kind, interactive) => {
       const window = getMovableAuxiliaryOverlayWindow(kind);
       if (!window || window.isDestroyed()) return;
+      markAuxiliaryOverlayInteraction();
       setAuxiliaryOverlayMouseInteractive(window, interactive);
     },
     beginDrag: beginAuxiliaryOverlayDrag,
@@ -1692,7 +1704,12 @@ async function refreshBoardAttackOverlayWindow() {
     }
     const state = tracker.getState();
     const frontmostAppName = await getFrontmostAppName();
-    if (!shouldShowBoardAttackOverlay(Boolean(state.gameActive), frontmostAppName)) {
+    const auxiliaryInteractionActive = isAuxiliaryOverlayInteractionActive();
+    if (!shouldShowBoardAttackOverlay(
+      Boolean(state.gameActive),
+      frontmostAppName,
+      auxiliaryInteractionActive
+    )) {
       hideAll();
       return;
     }
@@ -1826,6 +1843,7 @@ function beginAuxiliaryOverlayDrag(
   kind: MovableAuxiliaryOverlayKind,
   point: AuxiliaryOverlayPoint
 ): void {
+  markAuxiliaryOverlayInteraction();
   const window = getMovableAuxiliaryOverlayWindow(kind);
   if (!window || window.isDestroyed()) return;
   const initialBounds = window.getBounds();
@@ -1841,6 +1859,7 @@ function moveAuxiliaryOverlayDrag(
   kind: MovableAuxiliaryOverlayKind,
   point: AuxiliaryOverlayPoint
 ): void {
+  markAuxiliaryOverlayInteraction();
   const session = auxiliaryOverlayDragSessions.get(kind);
   const window = getMovableAuxiliaryOverlayWindow(kind);
   if (!session || !window || window !== session.window || window.isDestroyed()) return;
@@ -1856,6 +1875,7 @@ async function endAuxiliaryOverlayDrag(
   kind: MovableAuxiliaryOverlayKind,
   point: AuxiliaryOverlayPoint
 ): Promise<void> {
+  markAuxiliaryOverlayInteraction();
   moveAuxiliaryOverlayDrag(kind, point);
   const session = auxiliaryOverlayDragSessions.get(kind);
   const window = getMovableAuxiliaryOverlayWindow(kind);
@@ -1869,6 +1889,7 @@ async function endAuxiliaryOverlayDrag(
     if (auxiliaryOverlayDragSessions.get(kind) === session) {
       auxiliaryOverlayDragSessions.delete(kind);
     }
+    markAuxiliaryOverlayInteraction();
   }
 }
 

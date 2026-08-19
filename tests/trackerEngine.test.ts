@@ -240,6 +240,25 @@ describe("parseLogLine", () => {
     expect(ordinaryPlay.some((event) => event.type === "global-effect")).toBe(false);
   });
 
+  it("emits the real Millhouse Mana Storm play as a persistent global effect", () => {
+    const events = parseLogLine(
+      "D 17:26:33.6257920 GameState.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=米尔牢斯·法力风暴 id=261 zone=HAND zonePos=3 cardId=JAIL_122 player=1] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1"
+    );
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "global-effect",
+        source: "played",
+        entity: expect.objectContaining({
+          id: "261",
+          name: "米尔牢斯·法力风暴",
+          cardId: "JAIL_122",
+          controller: 1
+        })
+      })
+    ]));
+  });
+
   it("parses attack blocks with both attacker and target", () => {
     const events = parseLogLine(
       "D 12:00:03.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=ATTACK Entity=[entityName=友方随从 id=51 zone=PLAY cardId=TEST_MINION player=1] EffectCardId=0 EffectIndex=0 Target=[entityName=对方英雄 id=4 zone=PLAY cardId=HERO_01 player=2] SubOption=-1"
@@ -500,6 +519,29 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Enti
 
     engine.applyLine("D 12:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=本地玩家 id=1 zone=PLAY cardId= player=1] tag=PLAYSTATE value=LOST");
     expect(engine.getState()).toMatchObject({ globalEffects: [], opponentGlobalEffects: [] });
+  });
+
+  it("tracks Millhouse once across duplicate real log blocks and clears it for a new game", () => {
+    const richDb = createCardDatabase([
+      { id: 126353, cardId: "JAIL_122", name: "米尔牢斯·法力风暴", type: "MINION", cost: 5 }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    const gameStatePlay = "D 17:26:33.6257920 GameState.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=米尔牢斯·法力风暴 id=261 zone=HAND zonePos=3 cardId=JAIL_122 player=1] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1";
+    const taskListPlay = "D 17:26:34.0243320 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=米尔牢斯·法力风暴 id=261 zone=HAND zonePos=3 cardId=JAIL_122 player=1] EffectCardId=System.Collections.Generic.List`1[System.String] EffectIndex=0 Target=0 SubOption=-1";
+
+    engine.applyText([
+      "D 17:20:00.0000000 GameState.DebugPrintPower() - CREATE_GAME",
+      gameStatePlay,
+      taskListPlay
+    ].join("\n"));
+
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ name: "米尔牢斯·法力风暴", count: 1, cardId: "JAIL_122" })
+    ]);
+
+    engine.applyLine("D 17:30:00.0000000 GameState.DebugPrintPower() - CREATE_GAME");
+    expect(engine.getState().globalEffects).toEqual([]);
   });
 
   it("在星空投影球详情中按施放顺序记录本局我方法术并忽略重复日志", () => {

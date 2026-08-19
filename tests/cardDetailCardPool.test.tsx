@@ -34,7 +34,7 @@ const yoggInTheBox: CardDetails = {
 };
 
 describe("CardDetailBody card pools", () => {
-  it("hides theoretical pools completely in summary mode while keeping actual results complete", () => {
+  it("shows the first twelve theoretical candidates in summary mode while keeping actual results complete", () => {
     const actualCards = Array.from({ length: 25 }, (_, index) => ({
       key: `actual-${index}`,
       card: {
@@ -60,9 +60,33 @@ describe("CardDetailBody card pools", () => {
       />
     );
 
-    expect(screen.queryByText("卡库可见的随机法术候选（2）")).not.toBeInTheDocument();
+    const pool = screen.getByRole("region", { name: "卡库可见的随机法术候选，共 2 张，当前显示 2 张" });
+    expect(within(pool).getByText("火球术")).toBeVisible();
+    expect(within(pool).getByText("炎爆术")).toBeVisible();
+    expect(screen.queryByText("暂无生成或关联法术资料")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /继续显示/ })).not.toBeInTheDocument();
     expect(screen.getAllByText(/^实际结果 \d+$/)).toHaveLength(25);
+  });
+
+  it("includes inferred synergy cards in the visible related-card section", () => {
+    render(
+      <CardDetailBody
+        details={{
+          ...yoggInTheBox,
+          cardPoolSections: [],
+          synergyCards: [{
+            dbfId: 1234,
+            cardId: "RELATED_PARTNER",
+            name: "关联搭档",
+            cardType: "随从",
+            reason: "共同关联测试衍生物"
+          }]
+        }}
+        mode="summary"
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "生成/关联法术，共 1 张" })).toHaveTextContent("关联搭档");
   });
 
   it("starts interactive theoretical pools collapsed and reveals twelve cards per batch", () => {

@@ -56,7 +56,7 @@ describe("card preview window isolation", () => {
     } as unknown as typeof window.hearthstoneTracker;
     const { default: App } = await import("../src/renderer/App.js");
 
-    render(<App />);
+    const { container } = render(<App />);
     act(() => updatePreview({
       ...details,
       cardPoolSections: [{
@@ -67,12 +67,15 @@ describe("card preview window isolation", () => {
       }]
     }));
 
-    expect(screen.queryByText("古神随机法术候选（1）")).not.toBeInTheDocument();
+    expect(screen.getByText("古神随机法术候选（1）")).toBeInTheDocument();
+    expect(container.querySelector(".card-pool-summary-section")).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "q", altKey: true });
-    expect(screen.queryByText("古神随机法术候选（1）")).not.toBeInTheDocument();
+    expect(screen.getByText("古神随机法术候选（1）")).toBeInTheDocument();
 
     act(() => updatePinned(true));
     expect(screen.getByText("古神随机法术候选（1）")).toBeInTheDocument();
+    expect(container.querySelector(".card-pool-summary-section")).not.toBeInTheDocument();
+    expect(container.querySelector("details.card-pool-section")).toBeInTheDocument();
     expect(screen.getByText("已固定 · ⌥Q 取消")).toBeInTheDocument();
   });
 });

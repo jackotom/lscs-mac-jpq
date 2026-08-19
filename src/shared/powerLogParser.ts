@@ -31,6 +31,7 @@ const PLAYED_GLOBAL_EFFECT_CARD_IDS = new Set([
   "DMF_108", "DMF_534", "DRG_315",
   "ETC_330", "ETC_417",
   "GDB_467", "OG_118", "SCH_609",
+  "JAIL_122",
   "TLC_828", "TOY_805", "TOY_877",
   "TSC_944", "YOG_505"
 ]);

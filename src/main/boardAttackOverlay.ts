@@ -1,4 +1,4 @@
-import { isHearthstoneFrontmost } from "./frontmostApp.js";
+import { isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
 import {
   configureOverlayWorkspaceWindow,
   getOverlayWindowPlatformOptions
@@ -208,6 +208,13 @@ export function getBoardAttackOverlayQuery(
   };
 }
 
-export function shouldShowBoardAttackOverlay(gameActive: boolean, frontmostAppName: string | undefined): boolean {
-  return gameActive && isHearthstoneFrontmost(frontmostAppName);
+export function shouldShowBoardAttackOverlay(
+  gameActive: boolean,
+  frontmostAppName: string | undefined,
+  auxiliaryInteractionActive = false
+): boolean {
+  return gameActive && (
+    auxiliaryInteractionActive ||
+    isHearthstoneOrTrackerFrontmost(frontmostAppName)
+  );
 }
