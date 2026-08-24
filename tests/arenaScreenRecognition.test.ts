@@ -91,7 +91,7 @@ describe("arena screen recognition", () => {
 
   it("uses the bundled Resources helper in a packaged app", () => {
     expect(resolveArenaOcrHelperPath("/Tracker.app/Contents/Resources", import.meta.url, true))
-      .toBe("/Tracker.app/Contents/Resources/arena-ocr");
+      .toBe("/Tracker.app/Contents/MacOS/arena-ocr");
   });
 
   it("keeps only the three card-title lanes from an OCR response", () => {

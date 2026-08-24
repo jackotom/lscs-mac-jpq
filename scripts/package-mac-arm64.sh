@@ -33,7 +33,20 @@ for stale_path in "$output_dir"/release-* "$output_dir"/炉石记牌器\ *.app "
     rm -rf "$stale_path"
   fi
 done
-rm -f "$output_dir"/炉石记牌器-mac-arm64-v*.zip
+for stale_path in \
+  "$output_dir"/Hearthstone-Tracker-*.zip \
+  "$output_dir"/Hearthstone-Tracker-*.zip.sha256 \
+  "$output_dir"/hearthstone-tracker-mac-arm64-v*.zip \
+  "$output_dir"/hearthstone-tracker-mac-arm64-v*.zip.sha256 \
+  "$output_dir"/hearthstone-tracker-mac-arm64.zip \
+  "$output_dir"/hearthstone-tracker-mac-arm64.zip.sha256 \
+  "$output_dir"/炉石记牌器-mac-arm64.v*.zip \
+  "$output_dir"/炉石记牌器-mac-arm64-v*.zip \
+  "$output_dir"/炉石记牌器.app.v*; do
+  if [[ -e "$stale_path" ]]; then
+    rm -rf "$stale_path"
+  fi
+done
 
 if [[ ! -x "$root_dir/native/bin/arena-ocr" ]]; then
   echo "竞技场识别组件未构建" >&2
@@ -116,21 +129,34 @@ assert_minimal_package "$publish_app"
 info_plist="$publish_app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :NSScreenCaptureUsageDescription 仅用于在炉石传说界面自动识别当前模式、套牌和竞技场候选牌，画面不会上传。" "$info_plist" 2>/dev/null || \
   /usr/libexec/PlistBuddy -c "Add :NSScreenCaptureUsageDescription string 仅用于在炉石传说界面自动识别当前模式、套牌和竞技场候选牌，画面不会上传。" "$info_plist"
-signing_identity="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -n 1)}"
+mv "$publish_app/Contents/Resources/arena-ocr" "$publish_app/Contents/MacOS/arena-ocr"
+mv "$publish_app/Contents/Resources/frontmost-app" "$publish_app/Contents/MacOS/frontmost-app"
+source_commit="$(git rev-parse HEAD)"
+source_state="clean"
+if [[ -n "$(git status --porcelain)" ]]; then
+  source_state="dirty"
+fi
+node -e '
+  const fs = require("node:fs");
+  const [target, version, commit, state] = process.argv.slice(1);
+  fs.writeFileSync(target, `${JSON.stringify({ version, commit, state }, null, 2)}\n`);
+' "$publish_app/Contents/Resources/release-provenance.json" "$app_version" "$source_commit" "$source_state"
+signing_identity="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -n 1)}"
 if [[ -z "$signing_identity" ]]; then
-  echo "没有找到可用的 Apple Development 签名证书" >&2
+  echo "没有找到可用的 Developer ID Application 签名证书" >&2
   exit 1
 fi
-codesign --force --deep --sign "$signing_identity" "$publish_app"
-codesign --force --sign "$signing_identity" \
-  --identifier "cc.acyg.hearthstonemactracker.arena-ocr" \
-  "$publish_app/Contents/Resources/arena-ocr"
-codesign --force --sign "$signing_identity" \
-  --identifier "cc.acyg.hearthstonemactracker.frontmost-app" \
-  "$publish_app/Contents/Resources/frontmost-app"
-codesign --force --sign "$signing_identity" "$publish_app"
+node "$root_dir/scripts/sign-mac-app.mjs" \
+  "$publish_app" \
+  "$signing_identity" \
+  "$publish_app/Contents/MacOS/arena-ocr" \
+  "$publish_app/Contents/MacOS/frontmost-app"
 plutil -extract NSScreenCaptureUsageDescription raw "$info_plist" >/dev/null
-codesign --verify --deep --strict "$publish_app"
+codesign --verify --deep --strict --verbose=2 "$publish_app"
+signature_details="$(codesign -dv --verbose=4 "$publish_app" 2>&1)"
+grep -Fq "Authority=Developer ID Application:" <<<"$signature_details"
+grep -Eq 'flags=.*runtime' <<<"$signature_details"
+grep -Fq "Timestamp=" <<<"$signature_details"
 
 ditto -c -k --sequesterRsrc --keepParent "$publish_app" "$publish_zip"
 

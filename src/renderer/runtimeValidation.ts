@@ -4,6 +4,7 @@ import {
   type PublicTrackerState,
   type TrackerSettings
 } from "../shared/types";
+import type { ArenaInsightsResult, CollectionInsightsResult } from "./types";
 
 const trackerStatuses = new Set(["idle", "watching", "paused", "missing-log", "error"]);
 const arenaStatuses = new Set(["inactive", "drafting", "redrafting", "complete", "playing"]);
@@ -46,6 +47,9 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isOptionalMatchFlow(value.matchFlow)) {
     throw new Error("对局进程数据无效，已拒绝更新界面。");
   }
+  if (!isOptionalOpponentHand(value.opponentHand) || !isOptionalTurnTimer(value.turnTimer)) {
+    throw new Error("对手手牌或回合计时数据无效，已拒绝更新界面。");
+  }
   if (value.deckIdentity !== undefined && !isDeckIdentity(value.deckIdentity)) {
     throw new Error("套牌识别状态数据无效，已拒绝更新界面。");
   }
@@ -66,6 +70,28 @@ function isDeckIdentity(value: unknown): boolean {
     isNonNegativeInteger(value.candidateCount) &&
     typeof value.bestScore === "number" && Number.isFinite(value.bestScore) && value.bestScore >= 0 &&
     typeof value.scoreLead === "number" && Number.isFinite(value.scoreLead) && value.scoreLead >= 0;
+}
+
+function isOptionalOpponentHand(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((entry) =>
+    isRecord(entry) && hasOnlyKeys(entry, ["entityId", "cardId", "name", "drawnTurn", "created", "forged", "buffs", "count", "details"]) &&
+    (isNonEmptyString(entry.entityId) || isNonEmptyString(entry.name)) && isOptionalString(entry.entityId) &&
+    isOptionalString(entry.cardId) && isOptionalString(entry.name) && isOptionalPositiveInteger(entry.drawnTurn) &&
+    (entry.created === undefined || typeof entry.created === "boolean") &&
+    (entry.forged === undefined || typeof entry.forged === "boolean") &&
+    (entry.buffs === undefined || (Array.isArray(entry.buffs) && entry.buffs.every(isNonEmptyString))) &&
+    (entry.count === undefined || isPositiveInteger(entry.count)) && (entry.details === undefined || isCardDetails(entry.details))
+  ));
+}
+
+function isOptionalTurnTimer(value: unknown): boolean {
+  return value === undefined || (
+    isRecord(value) && hasOnlyKeys(value, ["turn", "activeSide", "startedAt", "durationSeconds"]) &&
+    isOptionalPositiveInteger(value.turn) &&
+    (value.activeSide === undefined || value.activeSide === "friendly" || value.activeSide === "opponent") &&
+    (value.startedAt === undefined || (isNonEmptyString(value.startedAt) && Number.isFinite(Date.parse(value.startedAt)))) &&
+    isNonNegativeInteger(value.durationSeconds)
+  );
 }
 
 export function parseTrackerSettings(value: unknown): TrackerSettings {
@@ -97,6 +123,112 @@ export function parseMatchHistoryResult(value: unknown): MatchHistoryResult {
   }
 
   return value as unknown as MatchHistoryResult;
+}
+
+export function parseArenaInsightsResult(value: unknown): ArenaInsightsResult {
+  if (!isRecord(value)) throw new Error("竞技场档案数据无效，已拒绝更新界面。");
+  if (value.status === "error" && isArenaInsightsMeta(value) && isNonEmptyString(value.error) &&
+      isOptionalArenaInsightArrays(value)) return value as unknown as ArenaInsightsResult;
+  if (value.status !== "ok" || !isArenaInsightsMeta(value) ||
+      !Array.isArray(value.runs) || !value.runs.every(isArenaInsightRun) ||
+      !Array.isArray(value.highWinDecks) || !value.highWinDecks.every(isArenaInsightRun) ||
+      !value.highWinDecks.every((run) => (run as { wins: number }).wins >= 10) ||
+      !Array.isArray(value.mulliganStats) || !value.mulliganStats.every(isArenaMulliganInsight) ||
+      (value.summary !== undefined && !isArenaInsightSummary(value.summary))) {
+    throw new Error("竞技场档案数据无效，已拒绝更新界面。");
+  }
+  return value as unknown as ArenaInsightsResult;
+}
+
+export function parseCollectionInsightsResult(value: unknown): CollectionInsightsResult {
+  if (!isRecord(value)) throw new Error("收藏数据无效，已拒绝更新界面。");
+  if (value.status === "error" && isNonEmptyString(value.error) && isOptionalCollectionSnapshot(value)) return value as unknown as CollectionInsightsResult;
+  if (value.status !== "ok" || !isOneOf(value.source, ["log", "import", "manual"]) || !isValidDate(value.updatedAt) ||
+      !Array.isArray(value.cards) || !value.cards.every(isCollectionInsightCard) ||
+      !Array.isArray(value.packs) || !value.packs.every(isCollectionInsightPack) ||
+      !Array.isArray(value.pity) || !value.pity.every(isCollectionInsightPity) ||
+      !Array.isArray(value.cardBacks) || !value.cardBacks.every(isCollectionInsightCosmetic) ||
+      !Array.isArray(value.heroSkins) || !value.heroSkins.every(isCollectionInsightCosmetic) ||
+      !Array.isArray(value.coins) || !value.coins.every(isCollectionInsightCosmetic)) {
+    throw new Error("收藏数据无效，已拒绝更新界面。");
+  }
+  return value as unknown as CollectionInsightsResult;
+}
+
+function isArenaInsightsMeta(value: Record<string, unknown>): boolean {
+  return value.source === "本机竞技场档案" && isValidDate(value.updatedAt);
+}
+
+function isOptionalArenaInsightArrays(value: Record<string, unknown>): boolean {
+  return (value.runs === undefined || (Array.isArray(value.runs) && value.runs.every(isArenaInsightRun))) &&
+    (value.highWinDecks === undefined || (Array.isArray(value.highWinDecks) && value.highWinDecks.every(isArenaInsightRun) && value.highWinDecks.every((run) => (run as { wins: number }).wins >= 10))) &&
+    (value.mulliganStats === undefined || (Array.isArray(value.mulliganStats) && value.mulliganStats.every(isArenaMulliganInsight))) &&
+    (value.summary === undefined || isArenaInsightSummary(value.summary));
+}
+
+function isOptionalCollectionSnapshot(value: Record<string, unknown>): boolean {
+  return (value.source === undefined || isOneOf(value.source, ["log", "import", "manual"])) &&
+    (value.updatedAt === undefined || isValidDate(value.updatedAt)) &&
+    (value.cards === undefined || (Array.isArray(value.cards) && value.cards.every(isCollectionInsightCard))) &&
+    (value.packs === undefined || (Array.isArray(value.packs) && value.packs.every(isCollectionInsightPack))) &&
+    (value.pity === undefined || (Array.isArray(value.pity) && value.pity.every(isCollectionInsightPity))) &&
+    (value.cardBacks === undefined || (Array.isArray(value.cardBacks) && value.cardBacks.every(isCollectionInsightCosmetic))) &&
+    (value.heroSkins === undefined || (Array.isArray(value.heroSkins) && value.heroSkins.every(isCollectionInsightCosmetic))) &&
+    (value.coins === undefined || (Array.isArray(value.coins) && value.coins.every(isCollectionInsightCosmetic)));
+}
+
+function isArenaInsightRun(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isValidDate(value.startedAt) &&
+    (value.endedAt === undefined || isValidDate(value.endedAt)) && isOptionalString(value.hero) &&
+    isNonNegativeInteger(value.wins) && isNonNegativeInteger(value.losses) && isOptionalFiniteNumber(value.deckScore) &&
+    Array.isArray(value.deck) && value.deck.every((card) => isRecord(card) && isNonEmptyString(card.name) && isPositiveInteger(card.count) && isOptionalString(card.cardId)) &&
+    Array.isArray(value.rewards) && value.rewards.every((reward) => isRecord(reward) && isOneOf(reward.type, ["gold", "dust", "pack", "card", "other"]) && isOptionalString(reward.name) && isOptionalString(reward.cardId) && isOptionalNonNegativeInteger(reward.amount)) &&
+    Array.isArray(value.mulligan) && value.mulligan.every(isArenaMulliganRecord) &&
+    Array.isArray(value.recordedMatchIds) && value.recordedMatchIds.every(isNonEmptyString);
+}
+
+function isArenaMulliganRecord(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.cardName) && isOptionalString(value.cardId) &&
+    (value.drawnBeforeMulligan === undefined || typeof value.drawnBeforeMulligan === "boolean") &&
+    typeof value.keptInMulligan === "boolean" && typeof value.inHandAfterMulligan === "boolean" && typeof value.won === "boolean";
+}
+
+function isArenaInsightSummary(value: unknown): boolean {
+  return isRecord(value) && isNonNegativeInteger(value.runCount) && isNonNegativeInteger(value.totalWins) &&
+    isNonNegativeInteger(value.totalLosses) && isOptionalPercentage(value.winRate);
+}
+
+function isArenaMulliganInsight(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.cardName) && isOptionalString(value.cardId) &&
+    isNonNegativeInteger(value.drawnBeforeMulligan) && isNonNegativeInteger(value.kept) &&
+    isNonNegativeInteger(value.inHandAfterMulligan) && isNonNegativeInteger(value.wins) &&
+    isOptionalPercentage(value.winRate) && value.wins <= value.inHandAfterMulligan;
+}
+
+function isCollectionInsightCard(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.cardId) && isOptionalString(value.name) &&
+    isNonNegativeInteger(value.normal) && isNonNegativeInteger(value.golden);
+}
+
+function isCollectionInsightPack(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.set) && isValidDate(value.openedAt) &&
+    Array.isArray(value.cards) && value.cards.every((card) => isRecord(card) &&
+      isOneOf(card.rarity, ["common", "rare", "epic", "legendary"]) && isOptionalString(card.cardId) &&
+      isOptionalString(card.name) && (card.golden === undefined || typeof card.golden === "boolean"));
+}
+
+function isCollectionInsightPity(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.set) && isNonNegativeInteger(value.packsSinceLegendary) &&
+    isOptionalNonNegativeInteger(value.packsSinceEpic) && (value.epicLimit === undefined || value.epicLimit === 10) &&
+    (value.legendaryLimit === undefined || value.legendaryLimit === 40) && typeof value.partial === "boolean";
+}
+
+function isCollectionInsightCosmetic(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.name);
+}
+
+function isValidDate(value: unknown): boolean {
+  return isNonEmptyString(value) && Number.isFinite(Date.parse(value));
 }
 
 function isSummary(value: unknown): boolean {

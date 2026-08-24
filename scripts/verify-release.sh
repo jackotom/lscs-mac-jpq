@@ -527,7 +527,7 @@ if [[ "$actual_short_version" != "$expected_app_version" || "$actual_build_versi
   exit 1
 fi
 for helper in arena-ocr frontmost-app; do
-  helper_path="$app_path/Contents/Resources/$helper"
+  helper_path="$app_path/Contents/MacOS/$helper"
   if [[ ! -x "$helper_path" ]]; then
     echo "本机组件不可执行：$helper" >&2
     exit 1
@@ -537,8 +537,17 @@ done
 lipo -archs "$app_executable" | grep -qw arm64
 plutil -extract NSScreenCaptureUsageDescription raw "$app_path/Contents/Info.plist" | grep -q .
 codesign --verify --deep --strict "$app_path"
-if codesign -dv "$app_path" 2>&1 | grep -q 'Signature=adhoc'; then
-  echo "安装包使用了临时签名" >&2
+signature_details="$(codesign -dv --verbose=4 "$app_path" 2>&1)"
+if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signature_details"; then
+  echo "安装包未使用 Developer ID 正式签名" >&2
+  exit 1
+fi
+if ! grep -Eq 'flags=.*runtime' <<<"$signature_details"; then
+  echo "安装包未启用 Hardened Runtime" >&2
+  exit 1
+fi
+if ! grep -Fq 'Timestamp=' <<<"$signature_details"; then
+  echo "安装包缺少可信时间戳" >&2
   exit 1
 fi
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePublicTrackerState } from "../src/renderer/runtimeValidation";
+import { parseArenaInsightsResult, parseCollectionInsightsResult, parsePublicTrackerState } from "../src/renderer/runtimeValidation";
 import {
   createEmptyCardTracking,
   createPublicTrackerState
@@ -61,6 +61,57 @@ function createDetailsWithOutcomeSections() {
 }
 
 describe("card tracking runtime validation", () => {
+  it("accepts structured local insight snapshots and rejects invalid counters", () => {
+    const arena = {
+      status: "ok", source: "本机竞技场档案", updatedAt: "2026-08-22T12:00:00.000Z", runs: [], highWinDecks: [], mulliganStats: []
+    };
+    expect(parseArenaInsightsResult(arena)).toEqual(arena);
+    expect(() => parseArenaInsightsResult({ ...arena, runs: [{ id: "bad", wins: -1 }] })).toThrow(/竞技场档案数据无效/);
+
+    const collection = {
+      status: "ok", source: "import", updatedAt: "2026-08-22T12:00:00.000Z", cards: [], packs: [], pity: [], cardBacks: [], heroSkins: [], coins: []
+    };
+    expect(parseCollectionInsightsResult(collection)).toEqual(collection);
+    expect(() => parseCollectionInsightsResult({ ...collection, pity: [{ set: "标准包", packsSinceLegendary: -1, partial: true }] })).toThrow(/收藏数据无效/);
+  });
+
+  it("rejects untrusted insight sources and inconsistent derived arena facts", () => {
+    const run = { id: "run", startedAt: "2026-08-22T12:00:00.000Z", wins: 10, losses: 1, deck: [], rewards: [], mulligan: [], recordedMatchIds: [] };
+    const arena = { status: "ok", source: "本机竞技场档案", updatedAt: "2026-08-22T12:00:00.000Z", runs: [run], highWinDecks: [run], mulliganStats: [{ cardName: "火球术", drawnBeforeMulligan: 1, kept: 1, inHandAfterMulligan: 1, wins: 1, winRate: 100 }] };
+    expect(() => parseArenaInsightsResult({ ...arena, source: "公开数据" })).toThrow(/竞技场档案数据无效/);
+    expect(() => parseArenaInsightsResult({ ...arena, highWinDecks: [{ ...run, wins: 9 }] })).toThrow(/竞技场档案数据无效/);
+    expect(() => parseArenaInsightsResult({ ...arena, mulliganStats: [{ cardName: "火球术", kept: 1, wins: 1, winRate: 100 }] })).toThrow(/竞技场档案数据无效/);
+    const collection = { status: "ok", source: "manual", updatedAt: "2026-08-22T12:00:00.000Z", cards: [{ cardId: "A", normal: 1, golden: 0 }], packs: [], pity: [], cardBacks: [], heroSkins: [], coins: [] };
+    expect(() => parseCollectionInsightsResult(collection)).not.toThrow();
+  });
+
+  it("accepts confirmed opponent hand details but rejects malformed timer data", () => {
+    const valid = createPublicTrackerState() as unknown as Record<string, unknown>;
+    valid.opponentHand = [{
+      entityId: "64",
+      name: "火球术",
+      drawnTurn: 3,
+      created: false,
+      forged: true,
+      buffs: ["+1 法术伤害"]
+    }];
+    valid.turnTimer = {
+      turn: 4,
+      activeSide: "opponent",
+      startedAt: "2026-08-22T12:00:00.000Z",
+      durationSeconds: 75
+    };
+    expect(() => parsePublicTrackerState(valid)).not.toThrow();
+
+    const invalid = structuredClone(valid);
+    (invalid.turnTimer as Record<string, unknown>).durationSeconds = -1;
+    expect(() => parsePublicTrackerState(invalid)).toThrow(/对手手牌或回合计时数据无效/);
+
+    const invalidBuff = structuredClone(valid);
+    ((invalidBuff.opponentHand as Array<Record<string, unknown>>)[0]!.buffs as unknown[]) = [42];
+    expect(() => parsePublicTrackerState(invalidBuff)).toThrow(/对手手牌或回合计时数据无效/);
+  });
+
   it("accepts numeric drawn and deck impacts but rejects non-numeric values", () => {
     const valid = createPublicTrackerState() as unknown as Record<string, unknown>;
     valid.arena = {

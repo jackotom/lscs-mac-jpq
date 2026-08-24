@@ -104,6 +104,10 @@ import {
 } from "./startupHealthCheck.js";
 import type { CardLibraryResult, CardPreviewRequest, CollectionDeck, CollectionDeckScanResult, PublicTrackerState, TrackerSettings } from "../shared/types.js";
 import type { LadderMode } from "../shared/ladderDeckRecommendation.js";
+import { ArenaRunStore } from "./arenaRunStore.js";
+import { ArenaInsightsService } from "./arenaInsightsService.js";
+import { CollectionInsightsStore } from "./collectionInsightsStore.js";
+import { CollectionInsightsService, parseCollectionCsvIpcInput } from "./collectionInsightsService.js";
 
 if (process.env.QA_USER_DATA_DIR) {
   app.setPath("userData", process.env.QA_USER_DATA_DIR);
@@ -145,7 +149,9 @@ const collectionDecks = new CollectionDeckService();
 const arenaScreenRecognizer = process.env.QA_SKIP_ARENA_SCREEN_RECOGNITION === "1"
   ? { recognize: async () => ({ status: "ok" as const, texts: [] }) }
   : new ArenaScreenRecognizer(undefined, captureHearthstoneDisplay);
-const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer);
+const arenaInsights = new ArenaInsightsService(new ArenaRunStore());
+const collectionInsights = new CollectionInsightsService(new CollectionInsightsStore());
+const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer, undefined, arenaInsights);
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
 const auxiliaryOverlayWindowStateStore = new AuxiliaryOverlayWindowStateStore(app.getPath("userData"));
 let trackerSettings: TrackerSettings = DEFAULT_TRACKER_SETTINGS;
@@ -946,6 +952,50 @@ function registerIpc() {
     return true;
   });
   secureHandle("tracker:get-match-history", () => tracker.getMatchHistory());
+  const assertMainWorkbench = (event: Electron.IpcMainInvokeEvent) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+      throw new Error("只有主工作台可以访问档案与收藏数据");
+    }
+  };
+  secureHandle("tracker:get-arena-insights", (event) => {
+    assertMainWorkbench(event);
+    return arenaInsights.getInsights();
+  });
+  secureHandle("tracker:record-arena-rewards", (event, runId: unknown, rewards: unknown) => {
+    assertMainWorkbench(event);
+    if (typeof runId !== "string" || !runId.trim() || !Array.isArray(rewards)) {
+      throw new Error("竞技场奖励输入无效");
+    }
+    return arenaInsights.recordRewards(runId, rewards);
+  });
+  secureHandle("tracker:import-arena-runs", (event, runs: unknown) => {
+    assertMainWorkbench(event);
+    return arenaInsights.importRuns(runs);
+  });
+  secureHandle("tracker:export-arena-runs", (event) => {
+    assertMainWorkbench(event);
+    return arenaInsights.exportRuns();
+  });
+  secureHandle("tracker:get-collection-insights", (event) => {
+    assertMainWorkbench(event);
+    return collectionInsights.getInsights();
+  });
+  secureHandle("tracker:import-collection-snapshot", (event, snapshot: unknown) => {
+    assertMainWorkbench(event);
+    return collectionInsights.importSnapshot(snapshot);
+  });
+  secureHandle("tracker:import-collection-csv", (event, csvText: unknown) => {
+    assertMainWorkbench(event);
+    return collectionInsights.importCollectionCsv(parseCollectionCsvIpcInput(csvText));
+  });
+  secureHandle("tracker:record-pack-opening", (event, pack: unknown) => {
+    assertMainWorkbench(event);
+    return collectionInsights.recordPackOpening(pack);
+  });
+  secureHandle("tracker:update-cosmetics", (event, cosmetics: unknown) => {
+    assertMainWorkbench(event);
+    return collectionInsights.updateCosmetics(cosmetics);
+  });
   secureHandle("tracker:get-ladder-deck-recommendation", async (event, mode: unknown) => {
     if (mode !== "standard" && mode !== "wild") throw new Error("天梯模式无效");
     const result = await ladderDeckRecommendations.get(mode);

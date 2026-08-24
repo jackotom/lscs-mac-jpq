@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toCardTrackingView } from "../src/renderer/cardTrackingView";
 import { OpponentOverlayPanel } from "../src/renderer/components/OpponentOverlayPanel";
@@ -67,6 +67,54 @@ function view(
 }
 
 describe("opponent overlay", () => {
+  it("shows confirmed opponent hand timeline and only counts down from a reliable start time", () => {
+    render(<OpponentOverlayPanel view={{
+      ...view(),
+      opponentHand: [{
+        entityId: "hand-1",
+        name: "锻造火球术",
+        drawnTurn: 3,
+        created: true,
+        forged: true,
+        buffs: ["法术伤害 +1"]
+      }],
+      turnTimer: { turn: 4, activeSide: "opponent", startedAt: "2026-08-22T12:00:00.000Z", durationSeconds: 75 }
+    } as OverlayPanelViewModel} isCollapsed={false} />);
+
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("锻造火球术");
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("第 3 回合抽取");
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("创建");
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("已锻造");
+    expect(screen.getByLabelText("回合计时")).toHaveTextContent("剩余");
+  });
+
+  it("marks an unavailable timer without inventing a countdown", () => {
+    render(<OpponentOverlayPanel view={{ ...view(), turnTimer: { turn: 5, durationSeconds: 75 } }} isCollapsed={false} />);
+    expect(screen.getByLabelText("回合计时")).toHaveClass("is-unavailable");
+    expect(screen.getByLabelText("回合计时")).not.toHaveTextContent("剩余");
+  });
+
+  it("updates reliable timer countdown while the overlay stays open", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-22T12:00:00.000Z"));
+    render(<OpponentOverlayPanel view={{ ...view(), turnTimer: { turn: 5, startedAt: "2026-08-22T12:00:00.000Z", durationSeconds: 75 } }} isCollapsed={false} />);
+    expect(screen.getByLabelText("回合计时")).toHaveTextContent("剩余 1:15");
+    act(() => { vi.advanceTimersByTime(5_000); });
+    expect(screen.getByLabelText("回合计时")).toHaveTextContent("剩余 1:10");
+    vi.useRealTimers();
+  });
+
+  it("deduplicates confirmed entities and keeps legacy rows visible as limited evidence", () => {
+    render(<OpponentOverlayPanel view={{ ...view(), opponentHand: [
+      { entityId: "same", name: "火球术", created: true, forged: true, buffs: [] },
+      { entityId: "same", name: "火球术", created: true, forged: true, buffs: [] },
+      { name: "旧版已知手牌", count: 2 }
+    ] }} isCollapsed={false} />);
+    expect(screen.getAllByText("火球术")).toHaveLength(1);
+    expect(screen.getByText("旧版已知手牌 ×2")).toBeInTheDocument();
+    expect(screen.getByText("火球术").closest(".opponent-hand-row")).toHaveClass("is-created", "is-forged");
+  });
+
   it("keeps secret slots out of the regular opponent tracker", () => {
     const secret: OverlaySecretSlot = {
       id: "slot-1",

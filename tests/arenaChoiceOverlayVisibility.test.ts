@@ -43,7 +43,7 @@ describe("arena choice overlay visibility", () => {
 
   it("resolves the packaged frontmost app helper from Electron resources", () => {
     expect(resolveFrontmostAppHelperPath("/Applications/Tracker.app/Contents/Resources", "file:///ignored.js", true))
-      .toBe("/Applications/Tracker.app/Contents/Resources/frontmost-app");
+      .toBe("/Applications/Tracker.app/Contents/MacOS/frontmost-app");
   });
 
   it("resolves the project frontmost app helper during development", () => {

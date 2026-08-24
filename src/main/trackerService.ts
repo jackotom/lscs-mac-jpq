@@ -33,6 +33,7 @@ import {
   type SessionContext,
   type SessionKey
 } from "./trackerSession.js";
+import type { ArenaDeckCard, ArenaMulliganRecord } from "../shared/arenaInsights.js";
 
 interface CollectionDeckScanner {
   scanAndImportDecks(options?: { logPath?: string }): Promise<CollectionDeckScanResult>;
@@ -40,6 +41,12 @@ interface CollectionDeckScanner {
 
 interface ArenaScreenRecognizerLike {
   recognize(options?: ArenaScreenRecognitionOptions): Promise<ArenaScreenRecognitionResult>;
+}
+
+interface ArenaInsightsRecorder {
+  startRun(input: { id: string; startedAt: string; hero?: string; deck: readonly ArenaDeckCard[] }): Promise<unknown>;
+  recordResult(runId: string, result: "win" | "loss", matchId: string, mulligan?: readonly ArenaMulliganRecord[]): Promise<unknown>;
+  completeRun(runId: string, endedAt: string): Promise<unknown>;
 }
 
 interface PendingExactArenaDeck {
@@ -120,13 +127,18 @@ export class TrackerService {
   private pendingMatchIds = new Set<string>();
   private matchHistoryWriteErrors = new Map<string, string>();
   private matchHistoryWrites: Promise<void> = Promise.resolve();
+  private arenaInsightsWrites: Promise<void> = Promise.resolve();
+  private activeArenaRunId: string | undefined;
+  private lastArenaRunSnapshotSignature: string | undefined;
+  private arenaInsightsWriteError: string | undefined;
   private disposing = false;
   private disposePromise: Promise<void> | undefined;
 
   constructor(
     private readonly collectionDecks?: CollectionDeckScanner,
     private readonly arenaScreenRecognizer: ArenaScreenRecognizerLike = new ArenaScreenRecognizer(),
-    private readonly matchHistory = new MatchHistoryStore()
+    private readonly matchHistory = new MatchHistoryStore(),
+    private readonly arenaInsights?: ArenaInsightsRecorder
   ) {}
 
   private get activeLogPath() {
@@ -159,7 +171,8 @@ export class TrackerService {
       arenaLogPath: this.arenaLogPath,
       constructedScreenMode: this.constructedScreenMode,
       trackerMode: this.resolveTrackerMode(state),
-      arena: this.arena.getState()
+      arena: this.arena.getState(),
+      error: state.error ?? this.arenaInsightsWriteError
     };
   }
 
@@ -338,6 +351,7 @@ export class TrackerService {
     }
     const currentArenaText = selectCurrentArenaLogText(arenaContent);
     this.arena.applyArenaText(currentArenaText);
+    this.syncArenaInsightsFromState();
     await this.applyInitialExactArenaDeck(selectedCollectionDeck, arenaLogPath, sessionContext);
     if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
@@ -522,6 +536,7 @@ export class TrackerService {
     }
 
     await this.matchHistoryWrites;
+    await this.arenaInsightsWrites;
     this.beginSession();
   }
 
@@ -588,6 +603,7 @@ export class TrackerService {
         this.engine.setStatus("watching", this.activeLogPath ?? logPath);
       }
       if (this.isArenaLog(logPath, sessionContext)) {
+        const arenaRunBeforeUpdate = this.activeArenaRunId;
         this.arena.setPreferArenaLogPicks(true);
         const previousRedraftGenerationId = this.arena.getState().redraftGenerationId;
         if (wasTruncated) {
@@ -609,6 +625,15 @@ export class TrackerService {
         }
         this.bindLatestExactArenaDeckToNewRedraft(previousRedraftGenerationId, text, modifiedAtMs, sessionContext);
         this.applyPendingExactArenaDeck(sessionContext);
+        this.syncArenaInsightsFromState();
+        if (/SetDraftMode\s*-\s*NO_ACTIVE_DRAFT\b/i.test(text) && arenaRunBeforeUpdate) {
+          const endedAtMs = resolveLatestLogEventAt(
+            text,
+            modifiedAtMs,
+            (line) => /SetDraftMode\s*-\s*NO_ACTIVE_DRAFT\b/i.test(line)
+          );
+          this.completeArenaRun(arenaRunBeforeUpdate, new Date(endedAtMs ?? modifiedAtMs).toISOString());
+        }
         if (
           this.pendingPowerGameText &&
           (this.arena.getState().status === "complete" || this.arena.getState().status === "playing")
@@ -736,6 +761,8 @@ export class TrackerService {
     this.latestExactArenaDeckObservation = undefined;
     this.latestArenaDeckEventAtMs = undefined;
     this.activeArenaGame = false;
+    this.activeArenaRunId = undefined;
+    this.lastArenaRunSnapshotSignature = undefined;
     this.activeTrackerMode = undefined;
     this.activeSessionUsesUsableArenaLog = false;
     this.pendingLogBytes.clear();
@@ -1419,6 +1446,11 @@ export class TrackerService {
       ...(this.activeMatchDeckName ? { deckName: this.activeMatchDeckName } : {}),
       endedAt
     };
+    if (match.mode === "arena" && match.result !== "tie" && this.activeArenaRunId && this.arenaInsights) {
+      const runId = this.activeArenaRunId;
+      const arenaResult = match.result;
+      this.enqueueArenaInsightsWrite(() => this.arenaInsights!.recordResult(runId, arenaResult, match.id, []));
+    }
     this.pendingMatchIds.add(match.id);
     this.matchHistoryWrites = this.matchHistoryWrites.then(async () => {
       try {
@@ -1452,7 +1484,79 @@ export class TrackerService {
     return state.gameActive || state.deck.length > 0 ? this.activeTrackerMode : undefined;
   }
 
+  private syncArenaInsightsFromState() {
+    if (!this.arenaInsights) return;
+    const state = this.arena.getState();
+    if (state.status === "inactive" || (!state.hero && state.deck.length === 0 && state.picks.length === 0)) return;
+
+    if (!this.activeArenaRunId) {
+      const identity = state.deckId ?? createHash("sha256")
+        .update(`${this.sessionContext.key}:${state.hero?.cardId ?? state.hero?.name ?? "unknown"}:${state.picks[0]?.at ?? "observed"}`)
+        .digest("hex")
+        .slice(0, 20);
+      this.activeArenaRunId = `arena:${identity}`;
+    }
+    const runId = this.activeArenaRunId;
+
+    const scores = new Map<string, number>();
+    for (const pick of state.picks) {
+      const key = pick.chosen.cardId ? `id:${pick.chosen.cardId}` : `name:${pick.chosen.name}`;
+      if (pick.chosen.score !== undefined) scores.set(key, pick.chosen.score);
+    }
+    const deck = state.deck.map((card) => {
+      const key = card.cardId ? `id:${card.cardId}` : `name:${card.name}`;
+      const score = scores.get(key);
+      return { ...card, ...(score !== undefined ? { score } : {}) };
+    });
+    const signature = JSON.stringify({
+      runId,
+      hero: state.hero?.className ?? state.hero?.name,
+      deck
+    });
+    if (signature === this.lastArenaRunSnapshotSignature) return;
+    this.lastArenaRunSnapshotSignature = signature;
+    const observedAt = state.picks[0]?.at ?? state.lastUpdated;
+    const startedAt = observedAt && Number.isFinite(Date.parse(observedAt))
+      ? observedAt
+      : new Date().toISOString();
+    this.enqueueArenaInsightsWrite(
+      () => this.arenaInsights!.startRun({
+        id: runId,
+        startedAt,
+        ...(state.hero?.className || state.hero?.name ? { hero: state.hero.className ?? state.hero.name } : {}),
+        deck
+      }),
+      () => {
+        if (this.lastArenaRunSnapshotSignature === signature) this.lastArenaRunSnapshotSignature = undefined;
+      }
+    );
+  }
+
+  private completeArenaRun(runId: string, endedAt: string) {
+    if (!this.arenaInsights) return;
+    this.enqueueArenaInsightsWrite(() => this.arenaInsights!.completeRun(runId, endedAt));
+    if (this.activeArenaRunId === runId) {
+      this.activeArenaRunId = undefined;
+      this.lastArenaRunSnapshotSignature = undefined;
+    }
+  }
+
+  private enqueueArenaInsightsWrite(operation: () => Promise<unknown>, onError?: () => void) {
+    const write = this.arenaInsightsWrites.catch(() => undefined).then(async () => {
+      try {
+        await operation();
+        this.arenaInsightsWriteError = undefined;
+      } catch (error) {
+        this.arenaInsightsWriteError = `竞技场档案写入失败：${error instanceof Error ? error.message : String(error)}`;
+        onError?.();
+        this.pushState();
+      }
+    });
+    this.arenaInsightsWrites = write;
+  }
+
   private syncArenaDeckToTracker() {
+    this.syncArenaInsightsFromState();
     if (
       this.engine.getState().autoMatchedDeckId &&
       this.constructedScreenMode &&

@@ -42,6 +42,22 @@ describe("parseDeckText", () => {
 });
 
 describe("parseLogLine", () => {
+  it("parses confirmed forge tags without treating unrelated tags as forged", () => {
+    const forged = parseLogLine(
+      "D 12:00:00.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=未知手牌 id=64 zone=HAND cardId= player=2] tag=FORGED value=1"
+    );
+    const ordinary = parseLogLine(
+      "D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=未知手牌 id=64 zone=HAND cardId= player=2] tag=COST value=1"
+    );
+
+    expect(forged).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "card-forged", entityId: "64", forged: true })
+    ]));
+    expect(ordinary).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "card-forged" })
+    ]));
+  });
+
   it("parses trustworthy match-flow tags without guessing their meaning", () => {
     const turn = parseLogLine(
       "D 12:00:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=7"
@@ -283,6 +299,74 @@ describe("parseLogLine", () => {
 });
 
 describe("TrackerEngine", () => {
+  it("keeps unknown opponent draws by entity, reveals them later, and deduplicates forge and buffs", () => {
+    const richDb = createCardDatabase([
+      { id: 1, cardId: "KNOWN_001", name: "已揭示手牌", type: "SPELL" },
+      { id: 2, cardId: "BUFF_001", name: "法术伤害 +1", type: "ENCHANTMENT" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: richDb });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=3
+D 12:00:02.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=UNKNOWN ENTITY id=64 zone=DECK cardId= player=2] CardID=
+D 12:00:03.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=64 zone=DECK cardId= player=2] tag=ZONE value=HAND
+`);
+
+    expect(engine.getState().opponentHand).toEqual([{
+      entityId: "64",
+      drawnTurn: 3,
+      created: false,
+      forged: false,
+      buffs: []
+    }]);
+
+    engine.applyText(`
+D 12:00:04.000 PowerTaskList.DebugPrintPower() - SHOW_ENTITY - Updating Entity=[entityName=已揭示手牌 id=64 zone=HAND cardId= player=2] CardID=KNOWN_001
+D 12:00:05.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=已揭示手牌 id=64 zone=HAND cardId=KNOWN_001 player=2] tag=FORGED value=1
+D 12:00:05.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=已揭示手牌 id=64 zone=HAND cardId=KNOWN_001 player=2] tag=FORGED value=1
+D 12:00:06.000 PowerTaskList.DebugPrintPower() - SHOW_ENTITY - Updating Entity=[entityName=法术伤害 +1 id=99 zone=SETASIDE cardId= player=2] CardID=BUFF_001
+D 12:00:06.100 PowerTaskList.DebugPrintPower() -     tag=CARDTYPE value=ENCHANTMENT
+D 12:00:06.200 PowerTaskList.DebugPrintPower() -     tag=ATTACHED value=64
+D 12:00:06.200 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=法术伤害 +1 id=99 zone=SETASIDE cardId=BUFF_001 player=2] tag=ATTACHED value=64
+`);
+
+    expect(engine.getState().opponentHand).toEqual([
+      expect.objectContaining({
+        entityId: "64",
+        cardId: "KNOWN_001",
+        name: "已揭示手牌",
+        drawnTurn: 3,
+        created: false,
+        forged: true,
+        buffs: ["法术伤害 +1"]
+      })
+    ]);
+  });
+
+  it("marks created opponent hand entities and clears hand timing on a new game", () => {
+    const engine = new TrackerEngine();
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=4
+D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=对手 id=2 zone=PLAY cardId= player=2] tag=CURRENT_PLAYER value=1
+D 12:00:02.500 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=STEP value=MAIN_ACTION
+D 12:00:03.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Creating ID=65 CardID=
+D 12:00:03.100 PowerTaskList.DebugPrintPower() -     tag=ZONE value=HAND
+D 12:00:03.200 PowerTaskList.DebugPrintPower() -     tag=CONTROLLER value=2
+`);
+
+    expect(engine.getState()).toMatchObject({
+      opponentHand: [{ entityId: "65", drawnTurn: 4, created: true, forged: false, buffs: [] }],
+      turnTimer: { turn: 4, activeSide: "opponent", durationSeconds: 75 }
+    });
+
+    engine.applyLine("D 12:01:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME");
+    expect(engine.getState().opponentHand).toEqual([]);
+    expect(engine.getState().turnTimer).toBeUndefined();
+  });
+
   it("publishes match flow and stamps trusted turns onto uses, burns, and events", () => {
     const engine = createLifecycleEngine("1x 友方使用牌\n1x 烧毁测试牌");
 
@@ -1304,7 +1388,10 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Updating Entity=[
 
     expect(engine.getState()).toMatchObject({
       opponentDeck: [],
-      opponentHand: [],
+      opponentHand: [
+        { entityId: "22", created: false, forged: false, buffs: [] },
+        { entityId: "23", created: false, forged: false, buffs: [] }
+      ],
       opponentDeckCount: 2,
       opponentHandCount: 2
     });
@@ -1325,10 +1412,12 @@ D 12:00:02.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Updating Entity=[
       "D 12:00:03.000 PowerTaskList.DebugPrintPower() - SHOW_ENTITY - Updating Entity=[entityName=被揭示的牌 id=30 zone=HAND cardId= player=2] CardID=REVEALED"
     );
 
-    expect(engine.getState()).toMatchObject({
-      opponentHand: [{ name: "被揭示的牌", count: 1, cardId: "REVEALED" }],
-      opponentHandCount: 2
-    });
+    expect(engine.getState().opponentHand).toHaveLength(2);
+    expect(engine.getState().opponentHand).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityId: "30", name: "被揭示的牌", count: 1, cardId: "REVEALED" }),
+      expect.objectContaining({ entityId: "31" })
+    ]));
+    expect(engine.getState().opponentHandCount).toBe(2);
   });
 
   it("keeps a revealed opponent card known when a linked deathrattle returns it as a new hand entity", () => {
@@ -1426,7 +1515,10 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_END
 `);
 
     expect(engine.getState()).toMatchObject({
-      opponentHand: [],
+      opponentHand: [
+        { entityId: "100", created: false, forged: false, buffs: [] },
+        { entityId: "101", created: false, forged: false, buffs: [] }
+      ],
       opponentHandCount: 2
     });
   });
@@ -1468,7 +1560,7 @@ D 12:00:03.000 PowerTaskList.DebugPrintPower() - BLOCK_END
 `);
 
     expect(engine.getState()).toMatchObject({
-      opponentHand: [],
+      opponentHand: [{ entityId: "100", created: false, forged: false, buffs: [] }],
       opponentHandCount: 1
     });
   });

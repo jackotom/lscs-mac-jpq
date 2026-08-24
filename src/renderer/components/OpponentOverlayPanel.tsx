@@ -1,6 +1,6 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Layers3, Minus } from "lucide-react";
-import type { OpponentOverlayPanelProps, OverlayCardItem, OverlayStatusTone } from "../types";
+import type { OpponentOverlayPanelProps, OverlayCardItem, OverlayStatusTone, OpponentHandTimelineEntry, OpponentTurnTimer } from "../types";
 import { CollapsibleCardGroup } from "./OverlayPanel";
 import { CardTrackingGroups } from "./CardTrackingGroups";
 import { PublicMatchCounters } from "./PublicMatchCounters";
@@ -63,6 +63,8 @@ export function OpponentOverlayPanel({
       ) : (
         <>
           <MatchPulse pulse={view.matchPulse} variant="actor" />
+          <OpponentHandTimeline entries={view.opponentHand} />
+          <OpponentTurnTimerView timer={view.turnTimer} />
           <section className="opponent-tracking-summary" aria-label="对手概览">
             <span>牌库 <strong>{view.cardTracking.current.deck.countLabel}</strong></span>
             <span>手牌 <strong>{view.cardTracking.current.hand.countLabel}</strong></span>
@@ -81,6 +83,63 @@ export function OpponentOverlayPanel({
       )}
     </section>
   );
+}
+
+function OpponentHandTimeline({ entries }: { entries?: readonly OpponentHandTimelineEntry[] }) {
+  const byEntityId = new Map<string, OpponentHandTimelineEntry & { entityId: string }>();
+  const legacyEntries: OpponentHandTimelineEntry[] = [];
+  for (const entry of entries ?? []) {
+    if (typeof entry.entityId === "string" && entry.entityId.trim()) {
+      byEntityId.set(entry.entityId, entry as OpponentHandTimelineEntry & { entityId: string });
+    } else {
+      legacyEntries.push(entry);
+    }
+  }
+  const confirmedEntries = [...byEntityId.values()];
+  if (!confirmedEntries.length && !legacyEntries.length) return null;
+  return (
+    <section className="opponent-hand-timeline" aria-label="对手手牌时间线">
+      <strong>已确认手牌</strong>
+      <ul>
+        {confirmedEntries.map((entry) => (
+          <li className={`opponent-hand-row${entry.name ? "" : " opponent-hand-unknown"}${entry.created ? " is-created" : ""}${entry.forged ? " is-forged" : ""}`} key={entry.entityId}>
+            <span>{entry.name ?? "未知手牌"}</span>
+            <small>{entry.drawnTurn ? `第 ${entry.drawnTurn} 回合抽取` : "抽取回合未知"}</small>
+            {entry.created ? <em>创建</em> : null}
+            {entry.forged ? <em>已锻造</em> : null}
+            {(entry.buffs ?? []).map((buff) => <em key={buff}>{buff}</em>)}
+          </li>
+        ))}
+        {legacyEntries.map((entry, index) => <li className="opponent-hand-row opponent-hand-legacy" key={`legacy-${entry.cardId ?? entry.name ?? "unknown"}-${index}`}><span>{entry.name ? `${entry.name} ×${entry.count ?? 1}` : "旧版未知手牌记录"}</span><small>缺少实体标识，不能纳入抽取时间线</small></li>)}
+      </ul>
+    </section>
+  );
+}
+
+function OpponentTurnTimerView({ timer }: { timer?: OpponentTurnTimer }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!timer?.startedAt || !Number.isFinite(Date.parse(timer.startedAt))) return;
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [timer?.startedAt]);
+  if (!timer?.turn) return null;
+  const startedAt = timer.startedAt ? Date.parse(timer.startedAt) : Number.NaN;
+  const hasReliableStart = Number.isFinite(startedAt);
+  const elapsedSeconds = hasReliableStart ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const remainingSeconds = Math.max(0, timer.durationSeconds - elapsedSeconds);
+  return (
+    <section className={`opponent-turn-timer${hasReliableStart ? "" : " is-unavailable"}`} aria-label="回合计时">
+      <strong>第 {timer.turn} 回合</strong>
+      <span>{timer.activeSide === "opponent" ? "对手行动" : timer.activeSide === "friendly" ? "我方行动" : "行动方未知"}</span>
+      {hasReliableStart ? <span>剩余 {formatSeconds(remainingSeconds)}</span> : null}
+    </section>
+  );
+}
+
+function formatSeconds(value: number): string {
+  return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
 }
 
 function StatusPill({ tone, label }: { tone: OverlayStatusTone; label: string }) {

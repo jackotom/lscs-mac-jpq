@@ -1,7 +1,7 @@
 import { FolderOpen, MonitorUp, Pause, Play, ScrollText, Settings, Swords, Upload } from "lucide-react";
 import type { TrackerStatus } from "../types";
 
-export type MainView = "home" | "tracker" | "card-library" | "deck-tools" | "match-history" | "settings";
+export type MainView = "home" | "tracker" | "card-library" | "deck-tools" | "match-history" | "arena-insights" | "collection-insights" | "settings";
 
 interface TopBarProps {
   status: TrackerStatus;

@@ -21,6 +21,7 @@ import type {
   DeckIdentitySource,
   EntitySnapshot,
   OpponentSecretSlot,
+  OpponentHandEntry,
   ParsedLogEvent,
   PlayerMatchCounters,
   PublicCardHistoryGroup,
@@ -234,6 +235,10 @@ export class TrackerEngine {
     | undefined;
   private pendingKnownEntityReturn: EntitySnapshot | undefined;
   private pendingKnownEntityReturnCandidateIds = new Set<string>();
+  private opponentHandDrawnTurn = new Map<string, number>();
+  private createdEntityIds = new Set<string>();
+  private forgedEntityIds = new Set<string>();
+  private buffsByAttachedEntityId = new Map<string, Set<string>>();
   private matchFlow: MatchFlow;
   private secretTracker: SecretTracker;
 
@@ -305,6 +310,7 @@ export class TrackerEngine {
     this.pendingEntityDetailZoneEvents = [];
     this.pendingKnownEntityReturn = undefined;
     this.pendingKnownEntityReturnCandidateIds.clear();
+    this.clearOpponentHandTimeline();
     this.clearMatchCounters();
     this.kelthuzadResurrectionCountByController.clear();
     this.clearMatchCardHistory();
@@ -680,6 +686,7 @@ export class TrackerEngine {
     this.pendingEntityDetailZoneEvents = [];
     this.pendingKnownEntityReturn = undefined;
     this.pendingKnownEntityReturnCandidateIds.clear();
+    this.clearOpponentHandTimeline();
     this.clearMatchCounters();
     this.kelthuzadResurrectionCountByController.clear();
     this.clearMatchCardHistory();
@@ -736,6 +743,7 @@ export class TrackerEngine {
     this.pendingEntityDetailZoneEvents = [];
     this.pendingKnownEntityReturn = undefined;
     this.pendingKnownEntityReturnCandidateIds.clear();
+    this.clearOpponentHandTimeline();
     this.clearMatchCounters();
     this.kelthuzadResurrectionCountByController.clear();
     this.clearMatchCardHistory();
@@ -846,7 +854,7 @@ export class TrackerEngine {
       friendlyHand,
       friendlyOther,
       opponentDeck: opponentZones.deck,
-      opponentHand: opponentZones.hand,
+      opponentHand: this.buildOpponentHandTimeline(),
       opponentOther: opponentZones.other,
       globalEffects: this.buildGlobalEffects(this.globalEffects),
       opponentGlobalEffects: this.buildGlobalEffects(this.opponentGlobalEffects),
@@ -865,6 +873,15 @@ export class TrackerEngine {
         toDetails: (card) => this.cardDatabase ? toCardDetails(this.cardDatabase, card) : undefined
       }),
       ...(matchFlow ? { matchFlow } : {}),
+      ...(matchFlow
+        ? {
+            turnTimer: {
+              ...(matchFlow.globalTurn !== undefined ? { turn: matchFlow.globalTurn } : {}),
+              ...(matchFlow.activeSide ? { activeSide: matchFlow.activeSide } : {}),
+              durationSeconds: 75
+            }
+          }
+        : {}),
       events: this.events.slice(-120).reverse(),
       summary,
       lastUpdated: new Date().toISOString(),
@@ -896,6 +913,13 @@ export class TrackerEngine {
 
     if (event.type === "match-flow") {
       this.matchFlow.accept(event);
+      return;
+    }
+
+    if (event.type === "card-forged") {
+      if (!event.entityId) return;
+      if (event.forged) this.forgedEntityIds.add(event.entityId);
+      else this.forgedEntityIds.delete(event.entityId);
       return;
     }
 
@@ -967,7 +991,10 @@ export class TrackerEngine {
 
     if (event.type === "entity-reference") {
       const field = event.relation === "attached" ? "attachedToEntityId" : "storedEntityId";
-      this.mergeEntity({ id: event.entityId, [field]: event.referencedEntityId });
+      const merged = this.mergeEntity({ id: event.entityId, [field]: event.referencedEntityId });
+      if (event.relation === "attached" && merged) {
+        this.recordConfirmedBuff(merged, event.referencedEntityId);
+      }
       return;
     }
 
@@ -1002,6 +1029,9 @@ export class TrackerEngine {
     if (event.type === "entity") {
       const existing = event.entity.id ? this.entities.get(event.entity.id) : undefined;
       const merged = this.mergeEntity(existing?.zone ? { ...event.entity, zone: existing.zone } : event.entity);
+      if (event.creating && this.gameSetupComplete && merged?.id) {
+        this.createdEntityIds.add(merged.id);
+      }
       if (
         event.creating &&
         merged?.id &&
@@ -1157,6 +1187,11 @@ export class TrackerEngine {
       (deckRow !== undefined && controller === undefined);
     const isOpponent = this.isKnownOpponentController(controller);
     const cardInfo = this.findCardInfo(cardId, cardName);
+
+    if (event.entityId && isOpponent && event.toZone === "HAND" && fromZone !== "HAND") {
+      const turn = this.currentMatchTurn();
+      if (turn !== undefined) this.opponentHandDrawnTurn.set(event.entityId, turn);
+    }
 
     if (
       this.gameActive &&
@@ -1470,6 +1505,9 @@ export class TrackerEngine {
           ? { attachedToEntityId: tagValue }
           : { storedEntityId: tagValue })
       });
+      if (tagName === "ATTACHED" && this.pendingEntityDetail) {
+        this.recordConfirmedBuff(this.pendingEntityDetail, tagValue);
+      }
       return;
     }
 
@@ -2436,6 +2474,58 @@ export class TrackerEngine {
         ? { details: this.buildLegacyInlineCardDetails(cardInfo, "opponent") }
         : {})
     };
+  }
+
+  private buildOpponentHandTimeline(): OpponentHandEntry[] {
+    const rows: OpponentHandEntry[] = [];
+    for (const entity of this.entities.values()) {
+      if (
+        !entity.id ||
+        entity.zone !== "HAND" ||
+        !this.isKnownOpponentController(entity.controller) ||
+        this.isKnownNonDisplayableEntity(entity)
+      ) {
+        continue;
+      }
+      const known = this.resolveOpponentZoneCard(entity);
+      rows.push({
+        entityId: entity.id,
+        ...(known?.cardId ? { cardId: known.cardId } : {}),
+        ...(known?.name ? { name: known.name } : {}),
+        ...(this.opponentHandDrawnTurn.has(entity.id)
+          ? { drawnTurn: this.opponentHandDrawnTurn.get(entity.id)! }
+          : {}),
+        created: this.createdEntityIds.has(entity.id) || this.generatedEntityIds.has(entity.id),
+        forged: this.forgedEntityIds.has(entity.id),
+        buffs: [...(this.buffsByAttachedEntityId.get(entity.id) ?? [])],
+        ...(known ? { count: 1 as const } : {}),
+        ...(known?.details ? { details: known.details } : {})
+      });
+    }
+    return rows.sort((left, right) =>
+      (left.drawnTurn ?? Number.MAX_SAFE_INTEGER) - (right.drawnTurn ?? Number.MAX_SAFE_INTEGER) ||
+      left.entityId!.localeCompare(right.entityId!)
+    );
+  }
+
+  private recordConfirmedBuff(entity: EntitySnapshot, attachedEntityId: string) {
+    const cardInfo = this.findCardInfo(entity.cardId, entity.name);
+    const cardType = entity.cardType?.toLocaleUpperCase();
+    if (cardType !== "ENCHANTMENT" && cardInfo?.cardType !== "附魔") {
+      return;
+    }
+    const name = cardInfo?.name ?? entity.name;
+    if (!name) return;
+    const buffs = this.buffsByAttachedEntityId.get(attachedEntityId) ?? new Set<string>();
+    buffs.add(name);
+    this.buffsByAttachedEntityId.set(attachedEntityId, buffs);
+  }
+
+  private clearOpponentHandTimeline() {
+    this.opponentHandDrawnTurn.clear();
+    this.createdEntityIds.clear();
+    this.forgedEntityIds.clear();
+    this.buffsByAttachedEntityId.clear();
   }
 
   private isKnownNonDisplayableEntity(entity: EntitySnapshot): boolean {

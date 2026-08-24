@@ -26,7 +26,7 @@ export function resolveFrontmostAppHelperPath(
   isPackaged = Boolean(app?.isPackaged)
 ) {
   if (isPackaged && resourcesPath) {
-    return path.join(resourcesPath, "frontmost-app");
+    return path.resolve(resourcesPath, "../MacOS/frontmost-app");
   }
   return path.resolve(path.dirname(fileURLToPath(moduleUrl)), "../../native/bin/frontmost-app");
 }

@@ -15,6 +15,13 @@ import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats.js"
 import type { CardDetails } from "../shared/cardDatabase.js";
 import type { LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation.js";
 import type { HomeNewsResult } from "../shared/homeNews.js";
+import type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights.js";
+import type {
+  CollectionInsightsResult,
+  CollectionSnapshot,
+  CosmeticItem,
+  PackOpeningRecord
+} from "../shared/collectionInsights.js";
 
 type PreloadCapability =
   | "main"
@@ -132,6 +139,26 @@ const mainApi = {
     return () => ipcRenderer.removeListener("tracker:open-settings", listener);
   },
   getMatchHistory: () => ipcRenderer.invoke("tracker:get-match-history") as Promise<MatchHistoryResult>,
+  getArenaInsights: () => ipcRenderer.invoke("tracker:get-arena-insights") as Promise<ArenaInsightsResult>,
+  recordArenaRewards: (runId: string, rewards: readonly ArenaReward[]) =>
+    ipcRenderer.invoke("tracker:record-arena-rewards", runId, rewards) as Promise<ArenaRunRecord>,
+  importArenaRuns: (runs: readonly ArenaRunRecord[]) =>
+    ipcRenderer.invoke("tracker:import-arena-runs", runs) as Promise<readonly ArenaRunRecord[]>,
+  exportArenaRuns: () =>
+    ipcRenderer.invoke("tracker:export-arena-runs") as Promise<readonly ArenaRunRecord[]>,
+  getCollectionInsights: () =>
+    ipcRenderer.invoke("tracker:get-collection-insights") as Promise<CollectionInsightsResult>,
+  importCollectionSnapshot: (snapshot: CollectionSnapshot) =>
+    ipcRenderer.invoke("tracker:import-collection-snapshot", snapshot) as Promise<CollectionSnapshot>,
+  importCollectionCsv: (csvText: string) =>
+    ipcRenderer.invoke("tracker:import-collection-csv", csvText) as Promise<CollectionSnapshot>,
+  recordPackOpening: (pack: PackOpeningRecord) =>
+    ipcRenderer.invoke("tracker:record-pack-opening", pack) as Promise<CollectionSnapshot>,
+  updateCosmetics: (cosmetics: {
+    readonly cardBacks?: readonly CosmeticItem[];
+    readonly heroSkins?: readonly CosmeticItem[];
+    readonly coins?: readonly CosmeticItem[];
+  }) => ipcRenderer.invoke("tracker:update-cosmetics", cosmetics) as Promise<CollectionSnapshot>,
   getHomeNews: () => ipcRenderer.invoke("tracker:get-home-news") as Promise<HomeNewsResult>,
   getArenaHeroWinRateRanking: () =>
     ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking") as Promise<ArenaHeroWinRateRankingResult>,

@@ -12,6 +12,8 @@ import type {
   PublicTrackingConfidence,
   PublicTrackingStatus,
   PublicTrackerState,
+  OpponentHandEntry,
+  TurnTimerState,
   TrackerSettings
 } from "../shared/types";
 import type { CardDetails } from "../shared/cardDatabase";
@@ -20,6 +22,11 @@ import type { CSSProperties } from "react";
 import type { LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation";
 import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats";
 import type { HomeNewsResult } from "../shared/homeNews";
+import type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
+import type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
+
+export type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
+export type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
 
 export type { CardLibraryQuery, CardLibraryResult };
 
@@ -52,6 +59,19 @@ export interface HearthstoneTrackerApi {
   onCardPreviewUpdate?: (callback: (details: CardDetails) => void) => () => void;
   onCardPreviewPinnedChange?: (callback: (pinned: boolean) => void) => () => void;
   getMatchHistory?: () => Promise<import("../shared/types").MatchHistoryResult>;
+  getArenaInsights?: () => Promise<ArenaInsightsResult>;
+  recordArenaRewards?: (runId: string, rewards: readonly ArenaReward[]) => Promise<ArenaRunRecord>;
+  importArenaRuns?: (runs: readonly ArenaRunRecord[]) => Promise<readonly ArenaRunRecord[]>;
+  exportArenaRuns?: () => Promise<readonly ArenaRunRecord[]>;
+  getCollectionInsights?: () => Promise<CollectionInsightsResult>;
+  importCollectionSnapshot?: (snapshot: CollectionSnapshot) => Promise<CollectionSnapshot>;
+  importCollectionCsv?: (csvText: string) => Promise<CollectionSnapshot>;
+  recordPackOpening?: (pack: PackOpeningRecord) => Promise<CollectionSnapshot>;
+  updateCosmetics?: (cosmetics: {
+    readonly cardBacks?: readonly CosmeticItem[];
+    readonly heroSkins?: readonly CosmeticItem[];
+    readonly coins?: readonly CosmeticItem[];
+  }) => Promise<CollectionSnapshot>;
   getHomeNews?: () => Promise<HomeNewsResult>;
   getArenaHeroWinRateRanking?: () => Promise<ArenaHeroWinRateRankingResult>;
   openHomeNewsItem?: (itemId: string) => Promise<void>;
@@ -277,6 +297,10 @@ export interface OverlayPublicMatchCounters {
   spellsPlayed?: number;
 }
 
+export type OpponentHandTimelineEntry = OpponentHandEntry;
+
+export type OpponentTurnTimer = TurnTimerState;
+
 export interface MatchPulseView {
   readonly turn?: number;
   readonly activeSide?: "friendly" | "opponent";
@@ -297,6 +321,8 @@ export interface OverlayPanelViewModel {
   friendlyCounters?: OverlayPublicMatchCounters;
   opponentCounters?: OverlayPublicMatchCounters;
   matchPulse?: MatchPulseView;
+  opponentHand?: readonly OpponentHandTimelineEntry[];
+  turnTimer?: OpponentTurnTimer;
   status: OverlayStatusView;
   arena?: OverlayArenaView;
 }

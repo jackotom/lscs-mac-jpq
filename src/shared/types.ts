@@ -385,6 +385,26 @@ export interface DeckIdentityEvidence {
   readonly scoreLead: number;
 }
 
+export interface OpponentHandEntry {
+  readonly entityId?: string;
+  readonly cardId?: string;
+  readonly name?: string;
+  readonly drawnTurn?: number;
+  readonly created?: boolean;
+  readonly forged?: boolean;
+  readonly buffs?: readonly string[];
+  /** One physical hand entity. Kept for one compatibility version. */
+  readonly count?: number;
+  readonly details?: CardDetails;
+}
+
+export interface TurnTimerState {
+  readonly turn?: number;
+  readonly activeSide?: "friendly" | "opponent";
+  readonly startedAt?: string;
+  readonly durationSeconds: number;
+}
+
 export interface PublicTrackerState {
   status: "idle" | "watching" | "paused" | "missing-log" | "error";
   trackerMode?: TrackerMode;
@@ -400,7 +420,7 @@ export interface PublicTrackerState {
   friendlyHand?: TrackerZoneCard[];
   friendlyOther?: TrackerZoneCard[];
   opponentDeck?: TrackerZoneCard[];
-  opponentHand?: TrackerZoneCard[];
+  opponentHand?: OpponentHandEntry[];
   opponentOther?: TrackerZoneCard[];
   globalEffects?: TrackerZoneCard[];
   opponentGlobalEffects?: TrackerZoneCard[];
@@ -412,6 +432,7 @@ export interface PublicTrackerState {
   matchCounters?: MatchCounters;
   smartCounters?: readonly SmartCardCounter[];
   matchFlow?: MatchFlowSnapshot;
+  turnTimer?: TurnTimerState;
   events: TrackerEvent[];
   summary: TrackerSummary;
   arena?: ArenaState;
@@ -661,6 +682,13 @@ export interface MatchFlowLogEvent {
   raw: string;
 }
 
+export interface CardForgedLogEvent {
+  type: "card-forged";
+  entityId?: string;
+  forged: boolean;
+  raw: string;
+}
+
 export type ParsedLogEvent =
   | ZoneChangeLogEvent
   | EntityLogEvent
@@ -681,7 +709,8 @@ export type ParsedLogEvent =
   | GlobalEffectLogEvent
   | PlayerIdentityLogEvent
   | PlayerCounterLogEvent
-  | MatchFlowLogEvent;
+  | MatchFlowLogEvent
+  | CardForgedLogEvent;
 
 export interface LogCandidate {
   path: string;

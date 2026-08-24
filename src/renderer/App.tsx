@@ -3,11 +3,13 @@ import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Minus, Puzz
 import { DeckPanel } from "./components/DeckPanel";
 import { EventFeed } from "./components/EventFeed";
 import { ArenaPanel } from "./components/ArenaPanel";
+import { ArenaInsightsPanel } from "./components/ArenaInsightsPanel";
 import { ArenaChoiceOverlayPanel } from "./components/ArenaChoiceOverlayPanel";
 import { ArenaHeroWinRateRankingPanel } from "./components/ArenaHeroWinRateRankingPanel";
 import { CardDetailBody } from "./components/CardDetailBody";
 import { CardLibraryPanel } from "./components/CardLibraryPanel";
 import { MatchHistoryPanel } from "./components/MatchHistoryPanel";
+import { CollectionInsightsPanel } from "./components/CollectionInsightsPanel";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { OpponentPanel } from "./components/OpponentPanel";
@@ -26,7 +28,7 @@ import { toDashboardOpponentView } from "./dashboardView";
 import { shouldApplyInitialTrackerState } from "./stateInitialization";
 import { createSynchronousActionLock, selectVisibleNotice, shouldRequestCardLibrary } from "./frontendStability";
 import { preserveArenaChoiceStatistics } from "./arenaChoiceStability";
-import { parseMatchHistoryResult, parsePublicTrackerState, parseTrackerSettings } from "./runtimeValidation";
+import { parseArenaInsightsResult, parseCollectionInsightsResult, parseMatchHistoryResult, parsePublicTrackerState, parseTrackerSettings } from "./runtimeValidation";
 import { resolveTrackerTheme } from "./trackerTheme";
 import { toMatchPulseViewFromState } from "./matchPulse";
 import {
@@ -57,6 +59,13 @@ import type {
   OpponentOverview,
   OpponentPlayedCard,
   OverlaySmartCounter,
+  ArenaInsightsResult,
+  ArenaReward,
+  ArenaRunRecord,
+  CollectionSnapshot,
+  CosmeticItem,
+  PackOpeningRecord,
+  CollectionInsightsResult,
   TrackerStatus
 } from "./types";
 
@@ -439,13 +448,15 @@ const emptyDeckSummary: DeckSummary = {
 
 type AppView = MainView;
 
-type WorkbenchNavId = "tracker" | "card-library" | "deck-tools" | "match-history" | "overlay-settings" | "plugin-settings" | "data-backup" | "about";
+type WorkbenchNavId = "tracker" | "card-library" | "deck-tools" | "match-history" | "arena-insights" | "collection-insights" | "overlay-settings" | "plugin-settings" | "data-backup" | "about";
 
 const workbenchItems = [
   { id: "tracker", view: "tracker", label: "实时对局", ariaLabel: "实时对局", icon: Swords },
   { id: "card-library", view: "card-library", label: "卡牌资料", ariaLabel: "打开卡牌资料", icon: BookOpen },
   { id: "deck-tools", view: "deck-tools", label: "卡组工具", ariaLabel: "卡组工具", icon: Upload },
   { id: "match-history", view: "match-history", label: "对局记录", ariaLabel: "对局记录", icon: History },
+  { id: "arena-insights", view: "arena-insights", label: "竞技场中心", ariaLabel: "打开竞技场中心", icon: Swords },
+  { id: "collection-insights", view: "collection-insights", label: "收藏中心", ariaLabel: "打开收藏中心", icon: Database },
   { id: "overlay-settings", view: "settings", sectionId: "settings-overlay-title", label: "悬浮窗设置", ariaLabel: "悬浮窗设置", icon: SlidersHorizontal },
   { id: "plugin-settings", view: "settings", sectionId: "settings-other-title", label: "插件设置", ariaLabel: "插件与其他设置", icon: Puzzle },
   { id: "data-backup", view: "settings", sectionId: "settings-privacy-title", label: "数据与备份", ariaLabel: "数据、备份与隐私", icon: Database },
@@ -551,6 +562,12 @@ function App() {
   const [matchHistoryResult, setMatchHistoryResult] = useState<MatchHistoryResult | undefined>();
   const [matchHistoryError, setMatchHistoryError] = useState<string | undefined>();
   const [isMatchHistoryLoading, setIsMatchHistoryLoading] = useState(false);
+  const [arenaInsights, setArenaInsights] = useState<ArenaInsightsResult | undefined>();
+  const [arenaInsightsError, setArenaInsightsError] = useState<string | undefined>();
+  const [isArenaInsightsLoading, setIsArenaInsightsLoading] = useState(false);
+  const [collectionInsights, setCollectionInsights] = useState<CollectionInsightsResult | undefined>();
+  const [collectionInsightsError, setCollectionInsightsError] = useState<string | undefined>();
+  const [isCollectionInsightsLoading, setIsCollectionInsightsLoading] = useState(false);
   const [homeNews, setHomeNews] = useState<HomeNewsResult>();
   const [homeNewsError, setHomeNewsError] = useState<string>();
   const [isHomeNewsLoading, setIsHomeNewsLoading] = useState(false);
@@ -570,6 +587,8 @@ function App() {
   const settingsSaveInFlight = useRef(false);
   const lastCardLibraryRequest = useRef<CardLibraryQuery>();
   const secretOverlayCollapseChangeVersion = useRef(0);
+  const arenaInsightsRequestVersion = useRef(0);
+  const collectionInsightsRequestVersion = useRef(0);
   const isBusy = isInitializing || pendingAction !== undefined;
 
   useEffect(() => {
@@ -1142,6 +1161,98 @@ function App() {
     }
   }
 
+  async function loadArenaInsights() {
+    const requestVersion = ++arenaInsightsRequestVersion.current;
+    if (!api?.getArenaInsights) {
+      if (requestVersion === arenaInsightsRequestVersion.current) {
+        setArenaInsights(undefined);
+        setArenaInsightsError("当前桌面版尚未提供竞技场档案。");
+        setIsArenaInsightsLoading(false);
+      }
+      return;
+    }
+    setIsArenaInsightsLoading(true);
+    setArenaInsightsError(undefined);
+    try {
+      const result = parseArenaInsightsResult(await api.getArenaInsights());
+      if (requestVersion === arenaInsightsRequestVersion.current) setArenaInsights(result);
+    } catch (error) {
+      if (requestVersion === arenaInsightsRequestVersion.current) setArenaInsightsError(toUserErrorMessage(error, "读取竞技场档案失败。"));
+    } finally {
+      if (requestVersion === arenaInsightsRequestVersion.current) setIsArenaInsightsLoading(false);
+    }
+  }
+
+  async function loadCollectionInsights() {
+    const requestVersion = ++collectionInsightsRequestVersion.current;
+    if (!api?.getCollectionInsights) {
+      if (requestVersion === collectionInsightsRequestVersion.current) {
+        setCollectionInsights(undefined);
+        setCollectionInsightsError("当前桌面版尚未提供收藏中心。");
+        setIsCollectionInsightsLoading(false);
+      }
+      return;
+    }
+    setIsCollectionInsightsLoading(true);
+    setCollectionInsightsError(undefined);
+    try {
+      const result = parseCollectionInsightsResult(await api.getCollectionInsights());
+      if (requestVersion === collectionInsightsRequestVersion.current) setCollectionInsights(result);
+    } catch (error) {
+      if (requestVersion === collectionInsightsRequestVersion.current) setCollectionInsightsError(toUserErrorMessage(error, "读取收藏记录失败。"));
+    } finally {
+      if (requestVersion === collectionInsightsRequestVersion.current) setIsCollectionInsightsLoading(false);
+    }
+  }
+
+  async function recordArenaRewards(runId: string, rewards: readonly ArenaReward[]) {
+    if (!api?.recordArenaRewards) throw new Error("当前桌面版尚未提供竞技场奖励录入。");
+    await api.recordArenaRewards(runId, rewards);
+    await loadArenaInsights();
+  }
+
+  async function importArenaRuns(runs: readonly ArenaRunRecord[]) {
+    if (!api?.importArenaRuns) throw new Error("当前桌面版尚未提供竞技场档案导入。");
+    await api.importArenaRuns(runs);
+    await loadArenaInsights();
+  }
+
+  async function exportArenaRuns() {
+    if (!api?.exportArenaRuns) throw new Error("当前桌面版尚未提供竞技场档案导出。");
+    const runs = await api.exportArenaRuns();
+    const blob = new Blob([JSON.stringify(runs, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "hearthstone-arena-runs.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importCollectionSnapshot(snapshot: CollectionSnapshot) {
+    if (!api?.importCollectionSnapshot) throw new Error("当前桌面版尚未提供收藏快照导入。");
+    await api.importCollectionSnapshot(snapshot);
+    await loadCollectionInsights();
+  }
+
+  async function importCollectionCsv(csvText: string) {
+    if (!api?.importCollectionCsv) throw new Error("当前桌面版尚未提供 CSV 收藏导入。");
+    await api.importCollectionCsv(csvText);
+    await loadCollectionInsights();
+  }
+
+  async function recordPackOpening(pack: PackOpeningRecord) {
+    if (!api?.recordPackOpening) throw new Error("当前桌面版尚未提供开包录入。");
+    await api.recordPackOpening(pack);
+    await loadCollectionInsights();
+  }
+
+  async function updateCollectionCosmetics(cosmetics: { readonly cardBacks?: readonly CosmeticItem[]; readonly heroSkins?: readonly CosmeticItem[]; readonly coins?: readonly CosmeticItem[] }) {
+    if (!api?.updateCosmetics) throw new Error("当前桌面版尚未提供装饰品更新。");
+    await api.updateCosmetics(cosmetics);
+    await loadCollectionInsights();
+  }
+
   async function saveTrackerSettings(nextSettings: TrackerSettings) {
     if (!api?.setTrackerSettings) {
       setSettingsError("当前版本无法保存软件设置，请更新后重试。");
@@ -1269,6 +1380,18 @@ function App() {
       void loadTrackerSettings("plugin-settings");
       return;
     }
+    if (view === "arena-insights") {
+      setActiveWorkbenchItem("arena-insights");
+      setActiveView(view);
+      void loadArenaInsights();
+      return;
+    }
+    if (view === "collection-insights") {
+      setActiveWorkbenchItem("collection-insights");
+      setActiveView(view);
+      void loadCollectionInsights();
+      return;
+    }
     setActiveWorkbenchItem(view);
     setActiveView(view);
   }
@@ -1282,6 +1405,8 @@ function App() {
       return;
     }
     setActiveView(item.view);
+    if (item.view === "arena-insights") void loadArenaInsights();
+    if (item.view === "collection-insights") void loadCollectionInsights();
   }
 
   function updateCardLibraryQuery(update: Partial<CardLibraryQuery>) {
@@ -1628,6 +1753,10 @@ function App() {
           />
         ) : activeView === "match-history" ? (
           <MatchHistoryPanel result={matchHistoryResult} loading={isMatchHistoryLoading} error={matchHistoryError} />
+        ) : activeView === "arena-insights" ? (
+          <ArenaInsightsPanel result={arenaInsights} loading={isArenaInsightsLoading} error={arenaInsightsError} onRefresh={() => { void loadArenaInsights(); }} onRecordRewards={recordArenaRewards} onImportRuns={importArenaRuns} onExportRuns={exportArenaRuns} />
+        ) : activeView === "collection-insights" ? (
+          <CollectionInsightsPanel result={collectionInsights} loading={isCollectionInsightsLoading} error={collectionInsightsError} onRefresh={() => { void loadCollectionInsights(); }} onImportSnapshot={importCollectionSnapshot} onImportCsv={importCollectionCsv} onRecordPack={recordPackOpening} onUpdateCosmetics={updateCollectionCosmetics} />
         ) : activeView === "home" ? (
           <HomeDashboard
             state={isQaHomeDemo ? qaHomeState : deckDisplayState}
@@ -1793,7 +1922,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.5.10</small>
+          <small>v0.6.0</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
@@ -2145,7 +2274,9 @@ function OpponentOverlayWindow({
     cardTracking: {
       ...rawOverlayView.cardTracking,
       secretSlots: []
-    }
+    },
+    opponentHand: state.opponentHand,
+    turnTimer: state.turnTimer
   };
 
   return (

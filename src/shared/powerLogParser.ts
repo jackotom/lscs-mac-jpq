@@ -185,6 +185,16 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
     events.push(playerCounter);
   }
 
+  const forged = line.match(/\btag=(?:FORGE|FORGED)\s+value=([01])\b/i);
+  if (forged) {
+    events.push({
+      type: "card-forged",
+      entityId: entity.id,
+      forged: forged[1] === "1",
+      raw: line
+    });
+  }
+
   if (line.includes("FULL_ENTITY") || line.includes("SHOW_ENTITY")) {
     if (entity.id || entity.name || entity.cardId) {
       events.push({

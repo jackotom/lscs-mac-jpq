@@ -1,6 +1,6 @@
 {
   "name": "hearthstone-mac-tracker",
-  "version": "0.5.10",
+  "version": "0.6.0",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -13,11 +13,15 @@
     "test": "cross-env CHOKIDAR_USEPOLLING=1 vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "package:mac-arm64": "npm run build:native && npm run build && bash scripts/package-mac-arm64.sh",
+    "notarize:mac-arm64": "bash scripts/notarize-mac-arm64.sh",
+    "release:github": "bash scripts/publish-github-release.sh",
     "screenshots:readme": "npm run build:native && npm run build && node scripts/generate-readme-screenshots.mjs",
     "verify:card-lifecycle-ui": "node scripts/verify-card-lifecycle-ui.mjs",
     "verify:independent-overlays-ui": "npm run build && node scripts/verify-independent-overlays-ui.mjs",
     "verify:arena-redraft-ui": "VERIFY_ARENA_REDRAFT_ONLY=1 bash scripts/verify-release.sh",
-    "verify:release": "bash scripts/verify-release.sh"
+    "verify:release": "bash scripts/verify-release.sh",
+    "site:dev": "npm --prefix website run dev",
+    "site:build": "npm --prefix website run build"
   },
   "dependencies": {
     "chokidar": "^4.0.3",

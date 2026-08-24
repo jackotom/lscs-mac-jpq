@@ -210,7 +210,7 @@ export function resolveArenaOcrHelperPath(
   isPackaged = Boolean(app?.isPackaged)
 ) {
   if (isPackaged && resourcesPath) {
-    return path.join(resourcesPath, "arena-ocr");
+    return path.resolve(resourcesPath, "../MacOS/arena-ocr");
   }
   return path.resolve(path.dirname(fileURLToPath(moduleUrl)), "../../native/bin/arena-ocr");
 }

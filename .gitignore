@@ -12,6 +12,8 @@ outputs/
 # Local configuration and runtime data
 .env
 .env.*
+!.env.example
+!website/.env.example
 *.db
 *.sqlite
 *.sqlite3
@@ -40,4 +42,5 @@ cache/
 /.continue/
 /--full-page
 /code-review.md
+/docs/superpowers/
 /mika-v2-upgrade/

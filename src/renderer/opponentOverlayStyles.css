@@ -869,3 +869,125 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
   height: 24px;
   border-radius: 0;
 }
+
+/* Confirmed opponent-hand facts live in a short, separate timeline. */
+.opponent-hand-timeline {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 3px;
+  gap: 3px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-color: rgba(137, 164, 180, 0.48) transparent;
+  scrollbar-width: thin;
+}
+
+.opponent-hand-timeline > strong {
+  overflow: hidden;
+  padding: 1px 2px 0;
+  color: var(--opponent-overlay-muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opponent-hand-timeline > ul {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  gap: 3px;
+  overflow: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.opponent-hand-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 3px 5px;
+  border: 1px solid var(--opponent-overlay-line-soft);
+  border-radius: 4px;
+  color: var(--opponent-overlay-text);
+  background: var(--opponent-overlay-row);
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.opponent-hand-row > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opponent-hand-row time,
+.opponent-hand-row small {
+  color: var(--opponent-overlay-muted);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.opponent-hand-unknown {
+  border-style: dashed;
+  color: var(--opponent-overlay-muted);
+  background: rgba(143, 167, 181, 0.07);
+}
+
+.opponent-hand-row.is-created::after,
+.opponent-hand-row.is-forged::after {
+  justify-self: end;
+  padding: 1px 3px;
+  border: 1px solid rgba(140, 233, 192, 0.28);
+  border-radius: 3px;
+  color: var(--opponent-overlay-live);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.opponent-hand-row.is-created::after {
+  content: "生成";
+}
+
+.opponent-hand-row.is-forged::after {
+  content: "锻造";
+}
+
+.opponent-turn-timer {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid rgba(140, 233, 192, 0.25);
+  border-radius: 5px;
+  color: var(--opponent-overlay-live);
+  background: rgba(140, 233, 192, 0.08);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.opponent-turn-timer.is-unavailable {
+  border-color: var(--opponent-overlay-line-soft);
+  color: var(--opponent-overlay-muted);
+  background: var(--opponent-overlay-row);
+  font-variant-numeric: normal;
+}
+
+.opponent-overlay-shell :focus-visible {
+  outline: 2px solid #8cc8ff;
+  outline-offset: 1px;
+}

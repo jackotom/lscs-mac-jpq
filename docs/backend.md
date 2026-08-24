@@ -315,3 +315,13 @@ Legacy shared fields remain for one compatibility version, but renderer state is
 - The provisional tracker deck uses the latest retained-card snapshot plus replacements that arrived after that snapshot. It never uses the 31–35 card evidence pool as a playable deck.
 - A provisional deck below 30 cards is padded only with an explicit `待确认重选牌` unresolved row. If the retained snapshot is ambiguous or exceeds 30 with pending choices, only directly observed replacements are trusted and the rest stay unresolved.
 - A matching exact 30-card deck replaces the provisional deck. Old, mismatched, incomplete, or delayed exact snapshots cannot overwrite a newer redraft generation.
+
+## 2026-08-22 竞技场、收藏与对手手牌契约
+
+- `PublicTrackerState.opponentHand` 向后兼容旧区域行，同时允许发布按实体去重的抽取回合、揭示牌名、创建、锻造和增益信息。新对局清空实时手牌；长期竞技场和收藏档案不受影响。
+- `turnTimer` 只发布日志能够确认的回合与行动方。没有可靠完整时间戳时不发布 `startedAt`，renderer 不倒计时。
+- `ArenaInsightsService` 使用 `arena-runs.json` 原子保存轮次。活跃竞技场首次出现即建档，牌组签名变化时幂等刷新 1→30 和地下竞技场 31→35→30 过程；已有胜负不能被牌组刷新清除。真实本方比赛结果累积胜负，只有明确 `NO_ACTIVE_DRAFT` 证据封档。
+- 本机日志不能完整证明换前、保留和换后状态时，自动档案写入空留牌样本。结构化导入只有通过完整 schema 后才参与留牌统计。
+- `CollectionInsightsService` 使用 `collection-insights.json` 原子保存卡牌、开包和装饰品。并发竞技场结果和并发开包都经过串行 mutation，不能由 read-modify-write 竞争覆盖。
+- 手动开包来源固定为 `manual`。导入快照不信任外部保底字段；保底按已确认开包重新计算，史诗 10 包、传说 40 包，并强制标记 `partial`。
+- 竞技场与收藏 IPC 只允许主工作台读取和写入；辅助悬浮窗 preload 不暴露导入、导出、奖励、开包或装饰品写入口。所有输入在写盘前做严格 schema 校验，失败保留最后有效数据。
