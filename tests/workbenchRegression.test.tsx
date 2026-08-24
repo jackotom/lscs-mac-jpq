@@ -82,6 +82,7 @@ describe("workbench navigation regressions", () => {
     fireEvent.click(await screen.findByRole("button", { name: "打开二级工作台" }));
 
     const destinations = [
+      { navigation: "权限管理", heading: "权限管理" },
       { navigation: "悬浮窗设置", heading: "悬浮窗设置" },
       { navigation: "插件与其他设置", heading: "其他设置" },
       { navigation: "数据、备份与隐私", heading: "数据与隐私" },

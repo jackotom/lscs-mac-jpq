@@ -108,6 +108,7 @@ import { ArenaRunStore } from "./arenaRunStore.js";
 import { ArenaInsightsService } from "./arenaInsightsService.js";
 import { CollectionInsightsStore } from "./collectionInsightsStore.js";
 import { CollectionInsightsService, parseCollectionCsvIpcInput } from "./collectionInsightsService.js";
+import { createAppPermissionManager } from "./appPermissions.js";
 
 if (process.env.QA_USER_DATA_DIR) {
   app.setPath("userData", process.env.QA_USER_DATA_DIR);
@@ -146,6 +147,21 @@ process.on("unhandledRejection", (reason) => {
   diagnosticLogger.error("主进程未处理的异步失败", reason);
 });
 const collectionDecks = new CollectionDeckService();
+const screenRecordingSettingsUrl =
+  "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture";
+const appPermissionManager = createAppPermissionManager({
+  getScreenCaptureStatus: () => systemPreferences.getMediaAccessStatus("screen"),
+  requestScreenCapture: async () => {
+    await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: 1, height: 1 },
+      fetchWindowIcons: false
+    });
+  },
+  openScreenRecordingSettings: async () => {
+    await shell.openExternal(screenRecordingSettingsUrl);
+  }
+});
 const arenaScreenRecognizer = process.env.QA_SKIP_ARENA_SCREEN_RECOGNITION === "1"
   ? { recognize: async () => ({ status: "ok" as const, texts: [] }) }
   : new ArenaScreenRecognizer(undefined, captureHearthstoneDisplay);
@@ -208,7 +224,6 @@ let initialBackgroundWindowReady = false;
 let initialLaunchActivateObserved = false;
 let mainWindowUserActivationAllowedAfterMs = Number.POSITIVE_INFINITY;
 let qaCaptureShutdownRequested = false;
-let screenRecordingSettingsOpened = false;
 let lastCaptureDiagnostic: string | undefined;
 let boardAttackOverlayMonitor: NodeJS.Timeout | undefined;
 let boardAttackOverlayRefreshInFlight = false;
@@ -312,6 +327,12 @@ const ladderDeckOverlayController = new LadderDeckOverlayController({
 });
 
 async function captureHearthstoneDisplay() {
+  if (!appPermissionManager.isScreenCaptureGranted()) {
+    throw new ScreenCaptureError(
+      "permission-denied",
+      "需要允许炉石记牌器录制屏幕，才能自动识别当前模式和套牌。"
+    );
+  }
   try {
     const displays = screen.getAllDisplays();
     const targetDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
@@ -345,14 +366,7 @@ async function captureHearthstoneDisplay() {
       lastCaptureDiagnostic = diagnostic;
       diagnosticLogger.warn("炉石窗口截图失败", error);
     }
-    const accessStatus = systemPreferences.getMediaAccessStatus("screen");
-    if (accessStatus !== "granted" && !screenRecordingSettingsOpened) {
-      screenRecordingSettingsOpened = true;
-      void shell.openExternal(
-        "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture"
-      );
-    }
-    if (accessStatus !== "granted") {
+    if (!appPermissionManager.isScreenCaptureGranted()) {
       throw new ScreenCaptureError(
         "permission-denied",
         "需要允许炉石记牌器录制屏幕，才能自动识别当前模式和套牌。"
@@ -841,6 +855,23 @@ function registerIpc() {
     endDrag: endAuxiliaryOverlayDrag
   });
   const secureHandle = trustedIpcMain.handle.bind(trustedIpcMain);
+  const assertMainWindowSender = (event: Electron.IpcMainInvokeEvent) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+      throw new Error("只有主工作台可以管理系统权限");
+    }
+  };
+  secureHandle("tracker:get-permissions", (event) => {
+    assertMainWindowSender(event);
+    return appPermissionManager.getPermissions();
+  });
+  secureHandle("tracker:request-permission", async (event, permissionId: unknown) => {
+    assertMainWindowSender(event);
+    if (permissionId !== "screen-recording") {
+      throw new Error("权限标识无效");
+    }
+    await appPermissionManager.requestPermission(permissionId);
+    return appPermissionManager.getPermissions();
+  });
   secureHandle("tracker:discover-logs", () => discoverLogCandidates());
   secureHandle("tracker:get-home-news", () => homeNews.load());
   secureHandle("tracker:get-arena-hero-win-rate-ranking", () => arenaHeroStats.load());
@@ -1812,6 +1843,12 @@ async function resolveHearthstoneDisplay() {
   if (cachedHearthstoneDisplay && cachedHearthstoneDisplay.expiresAt > now) {
     const cached = screen.getAllDisplays().find((display) => display.id === cachedHearthstoneDisplay?.id);
     if (cached) return cached;
+  }
+
+  if (!appPermissionManager.isScreenCaptureGranted()) {
+    const fallback = screen.getPrimaryDisplay();
+    cachedHearthstoneDisplay = { id: fallback.id, expiresAt: now + 2_000 };
+    return fallback;
   }
 
   try {

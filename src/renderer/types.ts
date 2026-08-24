@@ -24,6 +24,7 @@ import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats";
 import type { HomeNewsResult } from "../shared/homeNews";
 import type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 import type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
+import type { AppPermissionId, AppPermissionSummary } from "../shared/appPermissions";
 
 export type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 export type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
@@ -81,6 +82,8 @@ export interface HearthstoneTrackerApi {
   openLogFolder?: () => Promise<void>;
   refreshCardDatabase?: () => Promise<CardDatabaseRefreshResult>;
   openSettings?: () => Promise<boolean>;
+  getAppPermissions?: () => Promise<AppPermissionSummary>;
+  requestAppPermission?: (permissionId: AppPermissionId) => Promise<AppPermissionSummary>;
   onOpenSettings?: (callback: () => void) => () => void;
   onTrackerSettingsUpdate?: (callback: (settings: TrackerSettings) => void) => () => void;
   getState: () => Promise<PublicTrackerState>;

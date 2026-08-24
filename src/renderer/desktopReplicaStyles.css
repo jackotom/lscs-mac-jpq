@@ -1395,6 +1395,99 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-info-row svg {
   color: #657793;
 }
 
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-list {
+  display: grid;
+  gap: 10px;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid #e4eaf2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  color: #2f7df4;
+  background: #edf5ff;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row > div {
+  min-width: 0;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row strong {
+  display: block;
+  color: #1d2939;
+  font-size: 14px;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row p,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-footnote p {
+  margin: 4px 0 0;
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-status,
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row button {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border: 1px solid #bfe5ca;
+  border-radius: 999px;
+  color: #278a48;
+  background: #effbf2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-row button {
+  border-color: #cfe0ff;
+  color: #226fd8;
+  background: #f1f6ff;
+  cursor: pointer;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-footnote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-footnote p {
+  grid-column: 1;
+  margin: 0;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-permission-footnote button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  color: #52647a;
+  background: #fff;
+}
+
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .settings-message {
   margin: 0;
   padding: 9px 10px;

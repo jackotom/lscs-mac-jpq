@@ -191,7 +191,7 @@ Cold-start freshness still uses the observable Arena/Decks file times. A manuall
 
 The main overlay bounds are stored as `overlay-window-bounds.json` under Electron `userData`. Saved bounds are validated against current display work areas before window creation; the default remains `100x900`, the supported minimum is `100x200`, and off-screen coordinates are clamped back into a visible display. Existing valid heights are preserved. Displays shorter than `900px` use their available work-area height instead.
 
-The main process captures the largest available Hearthstone window and fails closed when no such window exists, then applies the same strict local-database validation. Screen capture belongs to the signed main application, while `arena-ocr` only performs local text recognition and never requests permission itself. A denied permission opens System Settings at most once per run; transient capture failures only retry and do not produce a false permission prompt.
+The main process captures the largest available Hearthstone window and fails closed when no such window exists, then applies the same strict local-database validation. Screen capture belongs to the signed main application, while `arena-ocr` only performs local text recognition and never requests permission itself. Both automatic capture entry points preflight `getMediaAccessStatus("screen")` before any `desktopCapturer` call. Non-granted status returns immediately and never opens System Settings; only the main-window permission page can issue one explicit first request or open the fixed Screen Recording settings page. Transient capture failures still retry without being mislabeled as missing permission.
 
 The bundled `frontmost-app` helper uses `NSWorkspace` to read the current frontmost macOS application. Arena OCR and the three-choice overlay only run when that helper reports `Hearthstone`; switching to ChatGPT or any other app hides the overlay and pauses visual recognition. This avoids Apple Events/System Events automation prompts.
 
@@ -263,7 +263,7 @@ Main-process diagnostics are appended as structured lines to `hearthstone-tracke
 
 ## 2026-07-22 desktop settings integration
 
-Desktop settings now use one validated, migrated, atomically written store under Electron `userData`. General, overlay, appearance, retention, update, and diagnostic preferences are exposed through preload IPC and applied by the main process. This includes login-item intent, start-minimized behavior, tray/minimize handling, overlay visibility/position/opacity, card-data refresh cadence, match-history retention, log-folder opening, and restoring defaults. Invalid settings payloads are rejected rather than partially applied.
+Desktop settings now use one validated, migrated, atomically written store under Electron `userData`. General, overlay, appearance, retention, update, and diagnostic preferences are exposed through preload IPC and applied by the main process. This includes login-item intent, start-minimized behavior, tray/minimize handling, overlay visibility/position/opacity, card-data refresh cadence, match-history retention, log-folder opening, and restoring defaults. Permission status and permission requests use separate main-window-only IPC; overlay preload capabilities cannot access them. Invalid settings payloads are rejected rather than partially applied.
 
 Unsigned development builds can be denied permission when changing the macOS login item. The UI reports that failure; final signed-package QA must confirm the operating-system permission path.
 
@@ -323,5 +323,11 @@ Legacy shared fields remain for one compatibility version, but renderer state is
 - `ArenaInsightsService` 使用 `arena-runs.json` 原子保存轮次。活跃竞技场首次出现即建档，牌组签名变化时幂等刷新 1→30 和地下竞技场 31→35→30 过程；已有胜负不能被牌组刷新清除。真实本方比赛结果累积胜负，只有明确 `NO_ACTIVE_DRAFT` 证据封档。
 - 本机日志不能完整证明换前、保留和换后状态时，自动档案写入空留牌样本。结构化导入只有通过完整 schema 后才参与留牌统计。
 - `CollectionInsightsService` 使用 `collection-insights.json` 原子保存卡牌、开包和装饰品。并发竞技场结果和并发开包都经过串行 mutation，不能由 read-modify-write 竞争覆盖。
+
+## 2026-08-24 启动对局状态恢复契约
+
+- `Player.log` 的文件更新时间只能证明文件后来仍有写入，不能证明其中历史 `SERVER_GAME_STARTED` 属于 Power.log 之后的新对局。
+- 启动回放已有 `Power.log` 时同时读取最新 `LoadingScreen.log` 模式。已知模式不是 `GAMEPLAY` 时，禁止用历史 Player 开局事件把已结束状态重新激活；缺少 LoadingScreen 的旧客户端继续保留原 Power 停写补救。
+- 场攻主进程和专用 renderer 双重 fail-closed：`gameActive !== true` 时既不创建窗口，也不渲染场攻数字；QA 明确演示路由除外。
 - 手动开包来源固定为 `manual`。导入快照不信任外部保底字段；保底按已确认开包重新计算，史诗 10 包、传说 40 包，并强制标记 `partial`。
 - 竞技场与收藏 IPC 只允许主工作台读取和写入；辅助悬浮窗 preload 不暴露导入、导出、奖励、开包或装饰品写入口。所有输入在写盘前做严格 schema 校验，失败保留最后有效数据。

@@ -22,6 +22,10 @@ import type {
   CosmeticItem,
   PackOpeningRecord
 } from "../shared/collectionInsights.js";
+import type {
+  AppPermissionId,
+  AppPermissionSummary
+} from "../shared/appPermissions.js";
 
 type PreloadCapability =
   | "main"
@@ -133,6 +137,10 @@ const mainApi = {
   ...cardPreviewSourceApi,
   ...settingsApi,
   ...arenaHeroRankingApi,
+  getAppPermissions: () =>
+    ipcRenderer.invoke("tracker:get-permissions") as Promise<AppPermissionSummary>,
+  requestAppPermission: (permissionId: AppPermissionId) =>
+    ipcRenderer.invoke("tracker:request-permission", permissionId) as Promise<AppPermissionSummary>,
   onOpenSettings: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("tracker:open-settings", listener);

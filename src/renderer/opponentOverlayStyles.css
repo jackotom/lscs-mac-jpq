@@ -753,7 +753,8 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
 }
 
 .opponent-overlay-shell:has(.card-tracking-layout) {
-  grid-template-rows: 24px 26px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 0;
   min-width: 0;
   min-height: 0;
@@ -762,44 +763,29 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
   border-radius: 2px;
 }
 
-.opponent-overlay-shell:has(.card-tracking-layout):has(.overlay-public-counters) {
-  grid-template-rows: 24px 26px 30px minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(.match-pulse-actor) {
-  grid-template-rows: 24px 18px 26px minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(.match-pulse-actor):has(.overlay-public-counters) {
-  grid-template-rows: 24px 18px 26px 30px minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(> .overlay-card-group) {
-  grid-template-rows: 24px 26px minmax(19px, 96px) minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(.overlay-public-counters):has(> .overlay-card-group) {
-  grid-template-rows: 24px 26px 30px minmax(19px, 96px) minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(.match-pulse-actor):has(> .overlay-card-group) {
-  grid-template-rows: 24px 18px 26px minmax(19px, 96px) minmax(0, 1fr);
-}
-
-.opponent-overlay-shell:has(.card-tracking-layout):has(.match-pulse-actor):has(.overlay-public-counters):has(> .overlay-card-group) {
-  grid-template-rows: 24px 18px 26px 30px minmax(19px, 96px) minmax(0, 1fr);
+.opponent-overlay-shell:has(.card-tracking-layout) > .card-tracking-layout {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .opponent-overlay-shell:has(.card-tracking-layout) > .overlay-card-group {
   min-height: 0;
+  max-height: 96px;
+  flex: 0 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.opponent-overlay-shell:has(.card-tracking-layout) > .overlay-public-counters {
+  height: 30px;
+  flex: 0 0 30px;
 }
 
 .match-pulse-actor {
   display: flex;
   width: 100%;
   height: 18px;
+  flex: 0 0 auto;
   min-width: 0;
   align-items: center;
   justify-content: center;
@@ -830,6 +816,7 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
 .opponent-tracking-summary {
   display: grid;
   height: 26px;
+  flex: 0 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   border-bottom: 1px solid var(--opponent-overlay-line);
@@ -965,6 +952,7 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
 .opponent-turn-timer {
   display: inline-flex;
   min-width: 0;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: 5px;

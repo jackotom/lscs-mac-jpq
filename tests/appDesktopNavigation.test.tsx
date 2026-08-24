@@ -74,6 +74,8 @@ describe("desktop navigation shell", () => {
     expect(screen.getByRole("region", { name: "首页" })).toBeInTheDocument();
 
     await openWorkbench();
+    const sidebarButtons = screen.getByRole("navigation", { name: "工作台功能" }).querySelectorAll("button");
+    expect(sidebarButtons[0]).toHaveAccessibleName("权限管理");
     expect(screen.getByLabelText("当前对局概览")).toHaveTextContent("牌库剩余23 / 30已抽7对手已出0当前状态监听中");
 
     fireEvent.click(screen.getByRole("button", { name: "悬浮窗设置" }));

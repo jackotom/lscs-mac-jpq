@@ -5,31 +5,32 @@ import { describe, expect, it } from "vitest";
 const styles = readFileSync(join(process.cwd(), "src/renderer/opponentOverlayStyles.css"), "utf8");
 
 describe("opponent secret list styles", () => {
-  it("reserves compact rows for counters with and without match pulse", () => {
+  it("keeps status rows fixed while only the card area grows with window height", () => {
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(\.overlay-public-counters\)\s*\{\s*grid-template-rows:\s*24px 26px 30px minmax\(0,\s*1fr\);/
+      /\.opponent-overlay-shell:has\(\.card-tracking-layout\)\s*\{[^}]*?display:\s*flex;[^}]*?flex-direction:\s*column;/
     );
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(\.match-pulse-actor\):has\(\.overlay-public-counters\)\s*\{\s*grid-template-rows:\s*24px 18px 26px 30px minmax\(0,\s*1fr\);/
-    );
-  });
-
-  it("reserves a real row for global effects in every compact status combination", () => {
-    expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(> \.overlay-card-group\)\s*\{\s*grid-template-rows:\s*24px 26px minmax\(19px,\s*96px\) minmax\(0,\s*1fr\);/
+      /\.opponent-overlay-shell:has\(\.card-tracking-layout\)\s*>\s*\.card-tracking-layout\s*\{[^}]*?flex:\s*1 1 auto;[^}]*?min-height:\s*0;/
     );
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(\.overlay-public-counters\):has\(> \.overlay-card-group\)\s*\{\s*grid-template-rows:\s*24px 26px 30px minmax\(19px,\s*96px\) minmax\(0,\s*1fr\);/
+      /\.opponent-turn-timer\s*\{[^}]*?flex:\s*0 0 auto;/
     );
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(\.match-pulse-actor\):has\(> \.overlay-card-group\)\s*\{\s*grid-template-rows:\s*24px 18px 26px minmax\(19px,\s*96px\) minmax\(0,\s*1fr\);/
+      /\.opponent-overlay-shell:has\(\.card-tracking-layout\)\s*>\s*\.overlay-public-counters\s*\{[^}]*?height:\s*30px;[^}]*?flex:\s*0 0 30px;/
     );
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\):has\(\.match-pulse-actor\):has\(\.overlay-public-counters\):has\(> \.overlay-card-group\)\s*\{\s*grid-template-rows:\s*24px 18px 26px 30px minmax\(19px,\s*96px\) minmax\(0,\s*1fr\);/
+      /\.opponent-overlay-shell:has\(\.card-tracking-layout\)\s*>\s*\.overlay-card-group\s*\{[^}]*?max-height:\s*96px;[^}]*?flex:\s*0 1 auto;[^}]*?overflow-y:\s*auto;/
     );
     expect(styles).toMatch(
-      /\.opponent-overlay-shell:has\(\.card-tracking-layout\) > \.overlay-card-group\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-y:\s*auto;/
+      /\.opponent-overlay-shell:has\(\.card-tracking-layout\)\s*>\s*\.overlay-header\s*\{[^}]*?height:\s*24px;/
     );
+    expect(styles).toMatch(
+      /\.match-pulse-actor\s*\{[^}]*?height:\s*18px;[^}]*?flex:\s*0 0 auto;/
+    );
+    expect(styles).toMatch(
+      /\.opponent-tracking-summary\s*\{[^}]*?height:\s*26px;[^}]*?flex:\s*0 0 auto;/
+    );
+    expect(styles).not.toMatch(/\.opponent-overlay-shell:has\(\.card-tracking-layout\)[^{]*\{[^}]*grid-template-rows:/);
   });
 
   it("keeps every secret slot as a compact readable row", () => {

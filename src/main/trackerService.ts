@@ -252,9 +252,7 @@ export class TrackerService {
       session.arenaLogPath &&
       path.resolve(logPath) === path.resolve(session.arenaLogPath)
     );
-    const loadingScreenMode = !session?.powerLogPath && !usableArenaLog
-      ? await readLatestLoadingScreenMode(session?.loadingScreenLogPath)
-      : undefined;
+    const loadingScreenMode = await readLatestLoadingScreenMode(session?.loadingScreenLogPath);
     if (!this.isCurrentSession(sessionContext)) {
       return this.getState();
     }
@@ -397,7 +395,12 @@ export class TrackerService {
         true
       );
       this.offsets.set(session.powerLogPath, contentBuffer.length);
-      if (this.playerLogPath && parsePlayerLog(playerContent).some((event) => event.type === "game-started")) {
+      const playerLogMayRecoverStalledPower = loadingScreenMode === undefined || loadingScreenMode === "GAMEPLAY";
+      if (
+        playerLogMayRecoverStalledPower &&
+        this.playerLogPath &&
+        parsePlayerLog(playerContent).some((event) => event.type === "game-started")
+      ) {
         const playerStat = await fs.stat(this.playerLogPath).catch(() => undefined);
         if (!this.isCurrentSession(sessionContext)) {
           return this.getState();

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Minus, Puzzle, Settings, SlidersHorizontal, Swords, Upload, X } from "lucide-react";
+import { Activity, BookOpen, CircleHelp, Database, History, Layers3, Minus, Puzzle, Settings, ShieldCheck, SlidersHorizontal, Swords, Upload, X } from "lucide-react";
 import { DeckPanel } from "./components/DeckPanel";
 import { EventFeed } from "./components/EventFeed";
 import { ArenaPanel } from "./components/ArenaPanel";
@@ -50,6 +50,7 @@ import type { CardDetails } from "../shared/cardDatabase";
 import { HOME_NEWS_SOURCE_LABEL, OFFICIAL_HOME_NEWS_URL, type HomeNewsResult } from "../shared/homeNews";
 import type { LadderDeckRecommendation, LadderDeckRecommendationResult, LadderMode } from "../shared/ladderDeckRecommendation";
 import type { ArenaHeroWinRateRankingResult } from "../shared/arenaHeroStats";
+import type { AppPermissionId, AppPermissionSummary } from "../shared/appPermissions";
 import type {
   CardLibraryQuery,
   CardLibraryResult,
@@ -448,9 +449,10 @@ const emptyDeckSummary: DeckSummary = {
 
 type AppView = MainView;
 
-type WorkbenchNavId = "tracker" | "card-library" | "deck-tools" | "match-history" | "arena-insights" | "collection-insights" | "overlay-settings" | "plugin-settings" | "data-backup" | "about";
+type WorkbenchNavId = "permission-settings" | "tracker" | "card-library" | "deck-tools" | "match-history" | "arena-insights" | "collection-insights" | "overlay-settings" | "plugin-settings" | "data-backup" | "about";
 
 const workbenchItems = [
+  { id: "permission-settings", view: "settings", sectionId: "settings-permissions-title", label: "权限管理", ariaLabel: "权限管理", icon: ShieldCheck },
   { id: "tracker", view: "tracker", label: "实时对局", ariaLabel: "实时对局", icon: Swords },
   { id: "card-library", view: "card-library", label: "卡牌资料", ariaLabel: "打开卡牌资料", icon: BookOpen },
   { id: "deck-tools", view: "deck-tools", label: "卡组工具", ariaLabel: "卡组工具", icon: Upload },
@@ -579,6 +581,8 @@ function App() {
   const [settingsNotice, setSettingsNotice] = useState<string>();
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  const [appPermissions, setAppPermissions] = useState<AppPermissionSummary>();
+  const [isPermissionsLoading, setIsPermissionsLoading] = useState(false);
   const [isOpponentOverlayCollapsed, setIsOpponentOverlayCollapsed] = useState(false);
   const [isSecretOverlayCollapsed, setIsSecretOverlayCollapsed] = useState(false);
   const actionLock = useRef(createSynchronousActionLock());
@@ -730,6 +734,13 @@ function App() {
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, [activeView, activeWorkbenchItem]);
+
+  useEffect(() => {
+    if (activeView !== "settings" || activeWorkbenchItem !== "permission-settings" || !api?.getAppPermissions) return;
+    const refresh = () => { void loadAppPermissions(); };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [activeView, activeWorkbenchItem, api]);
 
   useEffect(() => {
     if (!isOpponentOverlay || !api) {
@@ -1143,6 +1154,7 @@ function App() {
     setActiveView("settings");
     setSettingsError(undefined);
     setSettingsNotice(undefined);
+    if (workbenchItem === "permission-settings") void loadAppPermissions();
     if (!api?.getTrackerSettings) {
       setTrackerSettings(undefined);
       setSettingsError("当前版本无法读取软件设置，请更新后重试。");
@@ -1158,6 +1170,37 @@ function App() {
       setSettingsError(toUserErrorMessage(error, "读取软件设置失败，请重试。"));
     } finally {
       setIsSettingsLoading(false);
+    }
+  }
+
+  async function loadAppPermissions() {
+    if (!api?.getAppPermissions) {
+      setAppPermissions(undefined);
+      return;
+    }
+    setIsPermissionsLoading(true);
+    setSettingsError(undefined);
+    try {
+      setAppPermissions(await api.getAppPermissions());
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, "读取系统权限失败，请重试。"));
+    } finally {
+      setIsPermissionsLoading(false);
+    }
+  }
+
+  async function requestAppPermission(permissionId: AppPermissionId) {
+    if (!api?.requestAppPermission || isPermissionsLoading) return;
+    setIsPermissionsLoading(true);
+    setSettingsError(undefined);
+    setSettingsNotice(undefined);
+    try {
+      setAppPermissions(await api.requestAppPermission(permissionId));
+      setSettingsNotice("已发起授权。修改系统设置后，请彻底退出并重新打开软件。" );
+    } catch (error) {
+      setSettingsError(toUserErrorMessage(error, "打开授权设置失败，请重试。"));
+    } finally {
+      setIsPermissionsLoading(false);
     }
   }
 
@@ -1553,7 +1596,9 @@ function App() {
   }
 
   if (isFriendlyAttackOverlay || isOpponentAttackOverlay) {
-    const boardState = overlaySearchParams.get("qa-opponent-demo") === "1" ? qaOpponentOverlayState : state;
+    const isQaAttackOverlay = overlaySearchParams.get("qa-opponent-demo") === "1";
+    const boardState = isQaAttackOverlay ? qaOpponentOverlayState : state;
+    if (!isQaAttackOverlay && boardState.gameActive !== true) return null;
     const side = isFriendlyAttackOverlay ? "friendly" : "opponent";
     return <SingleAttackOverlay side={side} value={boardState.boardAttack?.[side] ?? 0} />;
   }
@@ -1728,6 +1773,10 @@ function App() {
             onOpenLogFolder={api?.openLogFolder ? openSettingsLogFolder : undefined}
             onRefreshCardDatabase={api?.refreshCardDatabase ? refreshSettingsCardDatabase : undefined}
             onRestoreDefaults={api?.restoreDefaultSettings ? restoreSettingsDefaults : undefined}
+            permissions={appPermissions}
+            isPermissionsLoading={isPermissionsLoading}
+            onRequestPermission={api?.requestAppPermission ? requestAppPermission : undefined}
+            onRefreshPermissions={api?.getAppPermissions ? loadAppPermissions : undefined}
           />
         ) : activeView === "deck-tools" ? (
           <DeckToolsPage
@@ -1922,7 +1971,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.6.0</small>
+          <small>v0.6.3</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

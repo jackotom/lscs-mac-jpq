@@ -60,11 +60,51 @@ function renderPanel(overrides: Partial<ComponentProps<typeof SettingsPanel>> = 
 }
 
 describe("software settings", () => {
+  it("puts permission management first and exposes missing authorization", () => {
+    const onRequestPermission = vi.fn();
+    const { container } = renderPanel({
+      permissions: {
+        permissions: [{
+          id: "screen-recording",
+          name: "屏幕录制",
+          description: "用于在本机识别炉石模式、套牌和竞技场候选牌。",
+          status: "needs-authorization",
+          statusLabel: "未授权",
+          actionLabel: "点击授权"
+        }]
+      },
+      onRequestPermission
+    });
+
+    const headings = [...container.querySelectorAll(".settings-form-section h2")].map((heading) => heading.textContent);
+    expect(headings[0]).toBe("权限管理");
+    expect(screen.getByText("屏幕录制")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "点击授权屏幕录制" }));
+    expect(onRequestPermission).toHaveBeenCalledWith("screen-recording");
+  });
+
+  it("shows normal without an authorization button when permission is granted", () => {
+    renderPanel({
+      permissions: {
+        permissions: [{
+          id: "screen-recording",
+          name: "屏幕录制",
+          description: "用于在本机识别炉石模式、套牌和竞技场候选牌。",
+          status: "normal",
+          statusLabel: "正常"
+        }]
+      }
+    });
+
+    expect(screen.getByText("正常")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /点击授权屏幕录制/ })).not.toBeInTheDocument();
+  });
+
   it("renders every settings group in one page without an internal menu or window chrome", () => {
     const { container } = renderPanel();
 
     expect(screen.getByRole("heading", { name: "设置", level: 1 })).toHaveFocus();
-    for (const name of ["基础设置", "悬浮窗设置", "快捷键设置", "外观设置", "其他设置", "数据与隐私", "关于我们"]) {
+    for (const name of ["权限管理", "基础设置", "悬浮窗设置", "快捷键设置", "外观设置", "其他设置", "数据与隐私", "关于我们"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     expect(screen.queryByRole("navigation", { name: "设置分区" })).not.toBeInTheDocument();

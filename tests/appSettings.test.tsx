@@ -22,6 +22,24 @@ function installApi(options: { failRead?: boolean; failSave?: boolean; blockSave
   let persisted: TrackerSettings = structuredClone(DEFAULT_TRACKER_SETTINGS);
   let openSettings: (() => void) | undefined;
   const saveReleases: Array<() => void> = [];
+  const missingPermissions = {
+    permissions: [{
+      id: "screen-recording" as const,
+      name: "屏幕录制",
+      description: "用于在本机识别炉石模式、套牌和竞技场候选牌。",
+      status: "needs-authorization" as const,
+      statusLabel: "未授权",
+      actionLabel: "点击授权"
+    }]
+  };
+  const normalPermissions = {
+    permissions: [{
+      ...missingPermissions.permissions[0],
+      status: "normal" as const,
+      statusLabel: "正常",
+      actionLabel: undefined
+    }]
+  };
   window.hearthstoneTracker = {
     discoverLogs: vi.fn(async () => []),
     getState: vi.fn(async () => trackerState),
@@ -44,6 +62,8 @@ function installApi(options: { failRead?: boolean; failSave?: boolean; blockSave
     }),
     openLogFolder: vi.fn(async () => undefined),
     refreshCardDatabase: vi.fn(async () => ({ status: "updated" as const, cardCount: 321, warnings: [] })),
+    getAppPermissions: vi.fn(async () => missingPermissions),
+    requestAppPermission: vi.fn(async () => normalPermissions),
     onOpenSettings: vi.fn((callback: () => void) => {
       openSettings = callback;
       return () => undefined;
@@ -62,6 +82,20 @@ async function openSettingsPage(): Promise<void> {
 }
 
 describe("settings API round trip", () => {
+  it("loads permission status from the first sidebar row and authorizes on click", async () => {
+    installApi();
+    render(<App />);
+    await openWorkbench();
+
+    fireEvent.click(screen.getByRole("button", { name: "权限管理" }));
+    const authorize = await screen.findByRole("button", { name: "点击授权屏幕录制" });
+    expect(window.hearthstoneTracker?.getAppPermissions).toHaveBeenCalledOnce();
+
+    fireEvent.click(authorize);
+    await waitFor(() => expect(window.hearthstoneTracker?.requestAppPermission).toHaveBeenCalledWith("screen-recording"));
+    expect(await screen.findByText("正常")).toBeInTheDocument();
+  });
+
   it("uses the trusted overlay API when the gear is clicked", async () => {
     window.history.replaceState({}, "", "/?overlay=1");
     const openSettings = vi.fn(async () => true);

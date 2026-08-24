@@ -1,10 +1,12 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
+import { createPublicTrackerState } from "./fixtures/publicTrackerState";
 
 afterEach(() => {
   cleanup();
   window.history.replaceState({}, "", "/");
+  delete window.hearthstoneTracker;
 });
 
 function renderRoute(query: string) {
@@ -13,6 +15,40 @@ function renderRoute(query: string) {
 }
 
 describe("independent overlay renderer routes", () => {
+  it.each(["friendly", "opponent"] as const)(
+    "does not flash the %s attack counter before a real state is available",
+    (side) => {
+      window.history.replaceState({}, "", `/?${side}-attack-overlay=1`);
+
+      const { container } = render(<App />);
+
+      expect(container.querySelector(".single-attack-overlay")).not.toBeInTheDocument();
+    }
+  );
+
+  it("removes a production attack counter as soon as the real game ends", async () => {
+    const activeState = createPublicTrackerState({
+      gameActive: true,
+      boardAttack: { friendly: 7, opponent: 12 }
+    });
+    let emitUpdate: ((state: typeof activeState) => void) | undefined;
+    window.hearthstoneTracker = {
+      getState: vi.fn(async () => activeState),
+      onUpdate: vi.fn((callback) => {
+        emitUpdate = callback;
+        return () => undefined;
+      })
+    } as unknown as typeof window.hearthstoneTracker;
+    window.history.replaceState({}, "", "/?friendly-attack-overlay=1");
+
+    const { container } = render(<App />);
+    expect(await screen.findByLabelText("我方场攻 7")).toBeInTheDocument();
+
+    act(() => emitUpdate?.({ ...activeState, gameActive: false }));
+
+    await waitFor(() => expect(container.querySelector(".single-attack-overlay")).not.toBeInTheDocument());
+  });
+
   it("renders only the friendly attack counter for its dedicated query", () => {
     const { container } = renderRoute("friendly-attack-overlay=1");
 

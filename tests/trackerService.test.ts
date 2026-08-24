@@ -338,6 +338,60 @@ describe("TrackerService log selection", () => {
     expect(state.friendlyOther).toEqual([]);
   });
 
+  it("does not revive an ended game from historical Player.log starts after returning to draft", async () => {
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return { warnings: [] };
+        }
+      }
+    }));
+    vi.doMock("../src/main/arenaRatingService.js", () => ({
+      ArenaRatingService: class ArenaRatingService {
+        async loadRatings() {
+          return { warnings: [] };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    const playerLog = join(sessionDir, "Player.log");
+    const loadingScreenLog = join(sessionDir, "LoadingScreen.log");
+    await writeFile(
+      powerLog,
+      [
+        "D 14:28:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_ARENA",
+        "D 14:35:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=STEP value=FINAL_GAMEOVER"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+    await writeFile(
+      playerLog,
+      [
+        "I 14:10:40.000 Network.GameHandle - SERVER_GAME_STARTED",
+        "I 14:28:02.000 Network.GameHandle - SERVER_GAME_STARTED",
+        "D 14:56:32.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=本地玩家#1234"
+      ].join("\n") + "\n",
+      "utf8"
+    );
+    await writeFile(
+      loadingScreenLog,
+      "D 14:35:20.000 LoadingScreen.OnSceneLoaded() - prevMode=GAMEPLAY currMode=DRAFT\n",
+      "utf8"
+    );
+    await utimes(powerLog, new Date("2026-08-24T14:35:00+08:00"), new Date("2026-08-24T14:35:00+08:00"));
+    await utimes(playerLog, new Date("2026-08-24T14:56:32+08:00"), new Date("2026-08-24T14:56:32+08:00"));
+    const service = new TrackerService();
+
+    const state = await service.start({ logPath: powerLog, deckText: "1x Old Card" });
+    await service.dispose();
+
+    expect(state.gameActive).toBe(false);
+    expect(state.turnTimer).toBeUndefined();
+  });
+
   it("recovers from a missing game-end log after the constructed deck screen is confirmed twice", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({

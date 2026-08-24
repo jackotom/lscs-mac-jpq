@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { SmartCardCounter, TrackerModeSettings, TrackerSettings } from "../../shared/types";
+import type { AppPermissionId, AppPermissionSummary } from "../../shared/appPermissions";
 
 type OverlaySettingsWithSmartCounterVisibility = TrackerSettings["overlay"] & {
   readonly hiddenSmartCounterIds?: readonly string[];
@@ -26,6 +27,10 @@ interface SettingsPanelProps {
   onOpenLogFolder?: () => void | Promise<void>;
   onRefreshCardDatabase?: () => void | Promise<void>;
   onRestoreDefaults?: () => void | Promise<void>;
+  permissions?: AppPermissionSummary;
+  isPermissionsLoading?: boolean;
+  onRequestPermission?: (permissionId: AppPermissionId) => void | Promise<void>;
+  onRefreshPermissions?: () => void | Promise<void>;
 }
 
 type SelectOption<Value extends string | number> = {
@@ -230,7 +235,11 @@ export function SettingsPanel({
   onChange,
   onOpenLogFolder,
   onRefreshCardDatabase,
-  onRestoreDefaults
+  onRestoreDefaults,
+  permissions,
+  isPermissionsLoading = false,
+  onRequestPermission,
+  onRefreshPermissions
 }: SettingsPanelProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const controlsDisabled = !settings;
@@ -284,6 +293,44 @@ export function SettingsPanel({
   ) : error ? (
     <p className="settings-message is-error" role="alert">{error}</p>
   ) : null;
+
+  const renderPermissions = () => (
+    <section className="settings-form-section" aria-labelledby="settings-permissions-title">
+      <SectionHeader id="settings-permissions-title" title="权限管理" description="查看软件真正需要的系统权限；正常不会重复索取。" />
+      <div className="settings-permission-list" aria-label="软件权限状态">
+        {permissions?.permissions.map((permission) => (
+          <article className={`settings-permission-row is-${permission.status}`} key={permission.id}>
+            <span className="settings-permission-icon" aria-hidden="true"><ShieldCheck size={18} /></span>
+            <div>
+              <strong>{permission.name}</strong>
+              <p>{permission.description}</p>
+            </div>
+            {permission.actionLabel && onRequestPermission ? (
+              <button
+                type="button"
+                disabled={isPermissionsLoading}
+                aria-label={`${permission.actionLabel}${permission.name}`}
+                onClick={() => { void onRequestPermission(permission.id); }}
+              >
+                {permission.actionLabel}
+              </button>
+            ) : (
+              <span className="settings-permission-status">{permission.statusLabel}</span>
+            )}
+          </article>
+        )) ?? (
+          <p className="settings-inline-note">
+            {isPermissionsLoading ? "正在检查权限…" : "打开本页后会检查系统权限。"}
+          </p>
+        )}
+      </div>
+      <div className="settings-permission-footnote">
+        <p>当前只需要“屏幕录制”，用于本机画面识别；不需要麦克风、相机或辅助功能权限。</p>
+        <p>如果系统里已经打开但仍未生效，请关闭后重新打开，并彻底退出再重开软件。</p>
+        {onRefreshPermissions ? <button type="button" disabled={isPermissionsLoading} onClick={() => { void onRefreshPermissions(); }}><RefreshCw size={14} aria-hidden="true" />刷新状态</button> : null}
+      </div>
+    </section>
+  );
 
   const renderGeneral = () => (
     <section className="settings-form-section" aria-labelledby="settings-general-title">
@@ -475,6 +522,7 @@ export function SettingsPanel({
       <main className="settings-section-content settings-single-content">
         {settingsState}
         <div className="settings-all-sections">
+          {renderPermissions()}
           {renderGeneral()}
           {renderOverlay()}
           {renderShortcuts()}
