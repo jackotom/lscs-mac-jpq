@@ -81,11 +81,34 @@ describe("opponent overlay", () => {
       turnTimer: { turn: 4, activeSide: "opponent", startedAt: "2026-08-22T12:00:00.000Z", durationSeconds: 75 }
     } as OverlayPanelViewModel} isCollapsed={false} />);
 
+    const timelineToggle = screen.getByRole("button", { name: "已确认手牌 (1)" });
+    const handToggle = screen.getByRole("button", { name: /手牌 \(5\)/ });
+    expect(handToggle).toHaveAttribute("aria-expanded", "true");
+    expect(timelineToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("锻造火球术")).not.toBeInTheDocument();
+    fireEvent.click(timelineToggle);
+    expect(timelineToggle).toHaveAttribute("aria-expanded", "true");
+    expect(handToggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("锻造火球术");
     expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("第 3 回合抽取");
     expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("创建");
     expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("已锻造");
     expect(screen.getByLabelText("回合计时")).toHaveTextContent("剩余");
+    const timeline = screen.getByLabelText("对手手牌时间线");
+    expect(timeline.parentElement).toHaveClass("card-tracking-main");
+    expect(timeline.previousElementSibling).toHaveAttribute("data-group-key", "removed");
+    expect(timeline.nextElementSibling).toBeNull();
+    fireEvent.click(handToggle);
+    expect(timelineToggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps an empty confirmed-hand button as the last current group", () => {
+    render(<OpponentOverlayPanel view={view()} isCollapsed={false} />);
+
+    const toggle = screen.getByRole("button", { name: "已确认手牌 (0)" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("暂无确认记录");
   });
 
   it("marks an unavailable timer without inventing a countdown", () => {
@@ -110,6 +133,7 @@ describe("opponent overlay", () => {
       { entityId: "same", name: "火球术", created: true, forged: true, buffs: [] },
       { name: "旧版已知手牌", count: 2 }
     ] }} isCollapsed={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "已确认手牌 (3)" }));
     expect(screen.getAllByText("火球术")).toHaveLength(1);
     expect(screen.getByText("旧版已知手牌 ×2")).toBeInTheDocument();
     expect(screen.getByText("火球术").closest(".opponent-hand-row")).toHaveClass("is-created", "is-forged");

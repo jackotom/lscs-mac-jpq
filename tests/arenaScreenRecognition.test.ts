@@ -224,4 +224,85 @@ printf '%s\\n' '{"status":"ok","observations":[{"text":"偷取牌库","confidenc
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("times out a stuck screen capture so the next recognition can retry", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "arena-screen-test-"));
+    const helperPath = path.join(directory, "fake-ocr");
+    await writeFile(
+      helperPath,
+      "#!/bin/sh\nprintf '%s\\n' '{\"status\":\"ok\",\"observations\":[]}'\n",
+      "utf8"
+    );
+    await chmod(helperPath, 0o755);
+
+    try {
+      const captureScreenImage = vi
+        .fn<() => Promise<Buffer>>()
+        .mockImplementationOnce(() => new Promise<Buffer>(() => undefined))
+        .mockResolvedValue(Buffer.from("png-data"));
+      const recognizer = new ArenaScreenRecognizer(
+        helperPath,
+        captureScreenImage,
+        async () => "Hearthstone",
+        async () => undefined,
+        20
+      );
+
+      await expect(recognizer.recognize()).resolves.toMatchObject({
+        status: "capture-failed",
+        message: "炉石窗口截图超时，正在自动重试。"
+      });
+      await expect(recognizer.recognize()).resolves.toMatchObject({ status: "ok" });
+      expect(captureScreenImage).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("bounds consecutive stuck captures and resumes after a late capture settles", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "arena-screen-test-"));
+    const helperPath = path.join(directory, "fake-ocr");
+    await writeFile(
+      helperPath,
+      "#!/bin/sh\nprintf '%s\\n' '{\"status\":\"ok\",\"observations\":[]}'\n",
+      "utf8"
+    );
+    await chmod(helperPath, 0o755);
+
+    let resolveFirst!: (value: Buffer) => void;
+    let resolveSecond!: (value: Buffer) => void;
+    const firstCapture = new Promise<Buffer>((resolve) => { resolveFirst = resolve; });
+    const secondCapture = new Promise<Buffer>((resolve) => { resolveSecond = resolve; });
+    const captureScreenImage = vi
+      .fn<() => Promise<Buffer>>()
+      .mockImplementationOnce(() => firstCapture)
+      .mockImplementationOnce(() => secondCapture)
+      .mockResolvedValue(Buffer.from("png-data"));
+    const recognizer = new ArenaScreenRecognizer(
+      helperPath,
+      captureScreenImage,
+      async () => "Hearthstone",
+      async () => undefined,
+      20
+    );
+
+    try {
+      await expect(recognizer.recognize()).resolves.toMatchObject({ status: "capture-failed" });
+      await expect(recognizer.recognize()).resolves.toMatchObject({ status: "capture-failed" });
+      await expect(recognizer.recognize()).resolves.toMatchObject({
+        status: "capture-failed",
+        message: "已有截图请求仍未返回，正在等待系统恢复。"
+      });
+      expect(captureScreenImage).toHaveBeenCalledTimes(2);
+
+      resolveFirst(Buffer.from("late-png-data"));
+      await firstCapture;
+      await expect(recognizer.recognize()).resolves.toMatchObject({ status: "ok" });
+      expect(captureScreenImage).toHaveBeenCalledTimes(3);
+    } finally {
+      resolveFirst(Buffer.from("late-png-data"));
+      resolveSecond(Buffer.from("late-png-data"));
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

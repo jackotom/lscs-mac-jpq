@@ -33,6 +33,16 @@ describe("opponent secret list styles", () => {
     expect(styles).not.toMatch(/\.opponent-overlay-shell:has\(\.card-tracking-layout\)[^{]*\{[^}]*grid-template-rows:/);
   });
 
+  it("keeps the collapsible confirmed-hand group in the main scroll area", () => {
+    expect(styles).not.toMatch(
+      /\.opponent-overlay-shell \.card-tracking-layout:has\(> \.opponent-hand-timeline\)/
+    );
+    expect(styles).toMatch(
+      /\.opponent-hand-list\s*\{[^}]*?align-content:\s*start;/
+    );
+    expect(styles).not.toMatch(/\.opponent-hand-list\s*\{[^}]*?overflow:\s*auto;/);
+  });
+
   it("keeps every secret slot as a compact readable row", () => {
     expect(styles).toMatch(
       /\.opponent-secret-section\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?align-content:\s*start;[\s\S]*?overflow:\s*visible;/

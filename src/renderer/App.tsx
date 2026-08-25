@@ -278,6 +278,12 @@ const qaOpponentOverlayState: PublicTrackerState = {
   events: [],
   summary: { totalCards: 0, remainingCards: 0, drawnCards: 0, [LEGACY_USED_COUNT_KEY]: 1 },
   cardTracking: createQaOpponentCardTracking(),
+  opponentHand: [
+    { entityId: "qa-hand-1", name: "永恒雏龙", drawnTurn: 1, created: false, forged: false, buffs: [] },
+    { entityId: "qa-hand-2", name: "纸艺天使", drawnTurn: 1, created: false, forged: false, buffs: [] },
+    { entityId: "qa-hand-3", name: "绝望鬼灵", drawnTurn: 1, created: false, forged: false, buffs: [] },
+    { entityId: "qa-hand-4", name: "致聋术", drawnTurn: 1, created: false, forged: false, buffs: [] }
+  ],
   lastUpdated: "2026-07-12T12:00:00.000Z"
 };
 
@@ -1971,7 +1977,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.6.3</small>
+          <small>v0.6.5</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

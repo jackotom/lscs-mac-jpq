@@ -1071,6 +1071,53 @@ describe("TrackerService log selection", () => {
     });
   });
 
+  it("does not clear an Arena deck from a mode-only constructed OCR result between games", async () => {
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return {
+            database: { "1001": { dbfId: 1001, name: "Arena Card", cardId: "ARENA_001" } },
+            warnings: []
+          };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    const arenaLog = join(sessionDir, "Arena.log");
+    await writeFile(arenaLog, [
+      "D 11:59:00.000 DraftManager.OnChoicesAndContents - Draft Deck ID: 1, Hero Card = HERO_08",
+      "D 11:59:00.000 DraftManager.OnChoicesAndContents - Draft deck contains card ARENA_001",
+      "D 11:59:01.000 SetDraftMode - ACTIVE_DRAFT_DECK"
+    ].join("\n") + "\n", "utf8");
+    await writeFile(powerLog, [
+      "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
+      "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=本地玩家#1234",
+      "D 12:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_ARENA",
+      "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=本地玩家 id=3 zone=PLAY player=2] tag=PLAYSTATE value=LOST"
+    ].join("\n") + "\n", "utf8");
+    const recognize = vi.fn(async () => ({
+      status: "ok" as const,
+      texts: [{ text: "标准对战", confidence: 1, x: 0.32, y: 0.91, width: 0.06, height: 0.02 }]
+    }));
+
+    const service = new TrackerService(undefined, { recognize });
+    try {
+      await service.start({ logPath: powerLog });
+      await vi.waitFor(() => expect(recognize).toHaveBeenCalled(), { timeout: 2_000, interval: 25 });
+      expect(service.getState()).toMatchObject({
+        trackerMode: "arena",
+        arena: { status: "playing" },
+        deckName: "竞技场牌库",
+        summary: { totalCards: 30 }
+      });
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it("clears a constructed deck when a later Arena game starts without an Arena deck", async () => {
     const { TrackerService } = await import("../src/main/trackerService.js");
     const sessionDir = await createSessionDir();
@@ -4367,7 +4414,7 @@ describe("TrackerService log selection", () => {
     expect(state.summary.totalCards).toBe(30);
   });
 
-  it("clears an old constructed preview while a Standard deck name is ambiguous", async () => {
+  it("keeps an Arena deck while a Standard deck name is ambiguous", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({
       CardDataService: class CardDataService {
@@ -4418,11 +4465,10 @@ describe("TrackerService log selection", () => {
     const state = await service.start({ logPath: arenaLog });
     await service.dispose();
 
-    expect(state.constructedScreenMode).toBe("standard");
-    expect(state.deckName).toBeUndefined();
+    expect(state.constructedScreenMode).toBeUndefined();
+    expect(state.deckName).toBe("竞技场牌库");
     expect(state.autoMatchedDeckId).toBeUndefined();
-    expect(state.deck).toEqual([]);
-    expect(state.summary.totalCards).toBe(0);
+    expect(state.summary.totalCards).toBe(30);
   });
 
   it.each(["permission-denied", "capture-failed", "window-not-found", "failed"] as const)(
@@ -4489,7 +4535,7 @@ describe("TrackerService log selection", () => {
     }
   );
 
-  it("clears a completed Arena deck when screen permission cannot verify the current mode", async () => {
+  it("keeps a completed Arena deck when screen permission cannot verify the current mode", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({
       CardDataService: class CardDataService {
@@ -4542,9 +4588,9 @@ describe("TrackerService log selection", () => {
     const state = await service.start({ logPath: arenaLog });
     await service.dispose();
 
-    expect(state.arena?.status).toBe("inactive");
-    expect(state.arena?.deck).toEqual([]);
-    expect(state.deck).toEqual([]);
+    expect(state.arena?.status).toBe("complete");
+    expect(state.deckName).toBe("竞技场牌库");
+    expect(state.summary.totalCards).toBe(30);
     expect(state.error).toContain("请允许录制屏幕");
   });
 
@@ -4662,7 +4708,7 @@ describe("TrackerService log selection", () => {
     await service.dispose();
   });
 
-  it("clears an old Arena deck as soon as a constructed mode is confirmed", async () => {
+  it("keeps an old Arena deck until a constructed deck is confirmed", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({
       CardDataService: class CardDataService {
@@ -4723,11 +4769,10 @@ describe("TrackerService log selection", () => {
     const state = await service.start({ logPath: arenaLog });
     await service.dispose();
 
-    expect(state.constructedScreenMode).toBe("standard");
-    expect(state.arena?.status).toBe("inactive");
-    expect(state.deckName).toBeUndefined();
-    expect(state.deck).toEqual([]);
-    expect(state.summary.totalCards).toBe(0);
+    expect(state.constructedScreenMode).toBeUndefined();
+    expect(state.arena?.status).toBe("complete");
+    expect(state.deckName).toBe("竞技场牌库");
+    expect(state.summary.totalCards).toBe(30);
   });
 
   it("switches between constructed decks on the Standard deck select screen", async () => {

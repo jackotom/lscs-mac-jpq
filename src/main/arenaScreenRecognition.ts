@@ -44,6 +44,8 @@ interface ArenaOcrPayload {
 
 const SCREEN_CAPTURE_DIRECTORY_PREFIX = "hearthstone-screen-";
 const STALE_SCREEN_CAPTURE_AGE_MS = 10 * 60 * 1_000;
+const SCREEN_CAPTURE_TIMEOUT_MS = 3_500;
+const MAX_PENDING_SCREEN_CAPTURES = 2;
 
 export async function cleanupStaleScreenCaptures(
   temporaryRoot = tmpdir(),
@@ -64,12 +66,14 @@ export async function cleanupStaleScreenCaptures(
 export class ArenaScreenRecognizer {
   private staleCaptureCleanup: Promise<void> | undefined;
   private staleCaptureCleanupComplete = false;
+  private pendingScreenCaptures = 0;
 
   constructor(
     private readonly helperPath = resolveArenaOcrHelperPath(),
     private readonly captureScreenImage?: () => Promise<Buffer>,
     private readonly getFrontmostApplication = getFrontmostAppName,
-    private readonly cleanupStaleCaptures = cleanupStaleScreenCaptures
+    private readonly cleanupStaleCaptures = cleanupStaleScreenCaptures,
+    private readonly captureTimeoutMs = SCREEN_CAPTURE_TIMEOUT_MS
   ) {}
 
   async recognize(options: ArenaScreenRecognitionOptions = {}): Promise<ArenaScreenRecognitionResult> {
@@ -98,10 +102,7 @@ export class ArenaScreenRecognizer {
       captureDirectory = await mkdtemp(path.join(tmpdir(), SCREEN_CAPTURE_DIRECTORY_PREFIX));
       const imagePath = path.join(captureDirectory, "screen.png");
       try {
-        if (!this.captureScreenImage) {
-          throw new ScreenCaptureError("capture-failed", "主进程截图功能不可用。");
-        }
-        await writeFile(imagePath, await this.captureScreenImage());
+        await writeFile(imagePath, await this.captureScreenImageWithTimeout());
       } catch (error) {
         const status = error instanceof ScreenCaptureError ? error.status : "permission-denied";
         if (status === "permission-denied") {
@@ -127,6 +128,27 @@ export class ArenaScreenRecognizer {
         await rm(captureDirectory, { recursive: true, force: true }).catch(() => undefined);
       }
     }
+  }
+
+  private captureScreenImageWithTimeout(): Promise<Buffer> {
+    if (!this.captureScreenImage) {
+      throw new ScreenCaptureError("capture-failed", "主进程截图功能不可用。");
+    }
+    if (this.pendingScreenCaptures >= MAX_PENDING_SCREEN_CAPTURES) {
+      throw new ScreenCaptureError("capture-failed", "已有截图请求仍未返回，正在等待系统恢复。");
+    }
+
+    this.pendingScreenCaptures += 1;
+    const operation = Promise.resolve().then(() => this.captureScreenImage!());
+    void operation.then(
+      () => { this.pendingScreenCaptures -= 1; },
+      () => { this.pendingScreenCaptures -= 1; }
+    );
+    return withTimeout(
+      operation,
+      this.captureTimeoutMs,
+      () => new ScreenCaptureError("capture-failed", "炉石窗口截图超时，正在自动重试。")
+    );
   }
 
   private async ensureStaleCaptureCleanup(): Promise<void> {
@@ -246,6 +268,26 @@ function numberValue(value: unknown) {
 
 function runHelper(helperPath: string, imagePath: string, profile: ArenaScreenRecognitionOptions["profile"]) {
   return runProcess(helperPath, ["--image", imagePath, ...(profile ? ["--profile", profile] : [])]);
+}
+
+function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutError: () => Error
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(timeoutError()), timeoutMs);
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function runProcess(executablePath: string, args: readonly string[], timeoutMs = 8000) {

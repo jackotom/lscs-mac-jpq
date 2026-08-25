@@ -857,41 +857,19 @@ html.opponent-overlay-collapsed .opponent-overlay-shell .overlay-header button::
   border-radius: 0;
 }
 
-/* Confirmed opponent-hand facts live in a short, separate timeline. */
+/* Confirmed opponent-hand facts reuse the regular collapsible group row. */
 .opponent-hand-timeline {
+  min-width: 0;
+}
+
+.opponent-hand-list {
   display: grid;
   min-width: 0;
-  min-height: 0;
+  align-content: start;
   margin: 0;
   padding: 3px;
   gap: 3px;
-  overflow: hidden;
-  overscroll-behavior: contain;
   list-style: none;
-  scrollbar-color: rgba(137, 164, 180, 0.48) transparent;
-  scrollbar-width: thin;
-}
-
-.opponent-hand-timeline > strong {
-  overflow: hidden;
-  padding: 1px 2px 0;
-  color: var(--opponent-overlay-muted);
-  font-size: 9px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.opponent-hand-timeline > ul {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  gap: 3px;
-  overflow: auto;
-  list-style: none;
-  overscroll-behavior: contain;
 }
 
 .opponent-hand-row {

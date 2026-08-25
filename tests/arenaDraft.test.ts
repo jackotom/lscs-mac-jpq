@@ -499,6 +499,27 @@ describe("ArenaDraftEngine", () => {
     expect(engine.getState().picks).toHaveLength(30);
   });
 
+  it("keeps an exact Arena deck when the same run repeats a partial lobby snapshot", () => {
+    const engine = new ArenaDraftEngine({ cardDatabase: cardDb, ratings, preferArenaLogPicks: true });
+    const exactDeck = [
+      { name: "Sample Singleton", cardId: "TEST_001", count: 28 },
+      { name: "Sample Pair", cardId: "TEST_002", count: 2 }
+    ];
+
+    expect(engine.applyExactDeck(exactDeck, "same-run")).toBe(true);
+    engine.applyArenaText([
+      "D 15:59:27.000 DraftManager.OnChoicesAndContents - Draft Deck ID: same-run, Hero Card = HERO_05",
+      "D 15:59:27.001 DraftManager.OnChoicesAndContents - Draft deck contains card TEST_001",
+      "D 15:59:27.002 DraftManager.OnChoicesAndContents - Draft deck contains card TEST_002",
+      "D 15:59:27.003 SetDraftMode - ACTIVE_DRAFT_DECK"
+    ].join("\n"));
+
+    expect(engine.getState()).toMatchObject({ status: "complete", unresolvedCount: 0 });
+    expect(engine.getState().deck).toEqual(expect.arrayContaining(
+      exactDeck.map((card) => expect.objectContaining(card))
+    ));
+  });
+
   it("replays the real 35-card Underground Arena boundary without trusting repeated Arena snapshots", () => {
     const engine = new ArenaDraftEngine({ preferArenaLogPicks: true });
     const retainedCardIds = [

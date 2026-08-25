@@ -725,6 +725,24 @@ export class ArenaDraftEngine {
       return;
     }
 
+    const confirmedDeckCount = this.confirmedDeck.reduce((total, card) => total + card.count, 0);
+    const repeatedSameRunSnapshot =
+      confirmedDeckCount === 30 &&
+      this.draftDeckId !== undefined &&
+      nextDeckId === this.draftDeckId;
+    if (repeatedSameRunSnapshot) {
+      this.draftDeckId = nextDeckId;
+      this.redraftGenerationId = nextRedraftGenerationId;
+      for (const event of pendingDraftContents) {
+        if (event.type === "hero-selected") {
+          this.hero = this.toHero(event);
+          this.rebuildScores();
+        }
+      }
+      this.touch();
+      return;
+    }
+
     this.resetDraft();
     this.draftDeckId = nextDeckId;
     this.redraftGenerationId = nextRedraftGenerationId;

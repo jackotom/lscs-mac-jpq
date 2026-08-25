@@ -956,8 +956,30 @@ export class TrackerService {
         }
 
         const inspection = inspectConstructedDeckScreen(result.texts, this.knownCollectionDecks);
-        if (inspection.mode) {
+        const hasActiveArenaRun = this.constructedScreenMode === undefined && (
+          currentArenaState.status !== "inactive" ||
+          this.engine.getState().deckName === "竞技场牌库"
+        );
+        if (hasActiveArenaRun) {
+          if (!inspection.mode || !inspection.selectedDeck) {
+            this.resetPendingArenaExit();
+            return;
+          }
           if (this.engine.hasActiveGame()) {
+            const deckKey = `${inspection.mode}:${inspection.selectedDeck.id}`;
+            if (deckKey === this.pendingArenaExitDeckKey) {
+              this.pendingArenaExitConfirmations += 1;
+            } else {
+              this.pendingArenaExitDeckKey = deckKey;
+              this.pendingArenaExitConfirmations = 1;
+            }
+            if (this.pendingArenaExitConfirmations < 2) {
+              return;
+            }
+          }
+        }
+        if (inspection.mode) {
+          if (this.engine.hasActiveGame() && !hasActiveArenaRun) {
             const deckKey = `${inspection.mode}:${inspection.selectedDeck?.id ?? "unresolved"}`;
             if (deckKey === this.pendingArenaExitDeckKey) {
               this.pendingArenaExitConfirmations += 1;
@@ -1010,11 +1032,6 @@ export class TrackerService {
         }
         const message = result.message ?? constructedScreenRecognitionFailureMessage(result.status);
         this.clearCollectionDeckPreview({ preserveDecksLog: true });
-        if (result.status === "permission-denied" && arenaState.status === "complete") {
-          this.arena.reset();
-          this.lastArenaDeckSignature = undefined;
-          this.engine.clearArenaDeck();
-        }
         if (this.getState().status !== "missing-log") {
           this.engine.setStatus("watching", this.activeLogPath, message);
         }

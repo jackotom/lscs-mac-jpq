@@ -43,7 +43,7 @@ describe("insights workspace style contracts", () => {
   it("keeps opponent hand facts compact without styling unknown cards as known", () => {
     const styles = load("opponentOverlayStyles.css");
 
-    expect(styles).toMatch(/\.opponent-hand-timeline > ul\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?overflow:\s*auto;/);
+    expect(styles).toMatch(/\.opponent-hand-list\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?align-content:\s*start;/);
     expect(styles).toMatch(/\.opponent-hand-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/);
     expect(styles).toMatch(/\.opponent-hand-row > \*\s*\{[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/);
     expect(styles).toMatch(/\.opponent-hand-unknown\s*\{[\s\S]*?border-style:\s*dashed;/);

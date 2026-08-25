@@ -18,6 +18,7 @@ describe("opponent overlay QA demo", () => {
     expect(screen.getByLabelText("对方下次疲劳伤害 3")).toBeInTheDocument();
     expect(screen.getByLabelText("对方尸体 4")).toBeInTheDocument();
     expect(screen.getByLabelText("对方已用法术 5")).toBeInTheDocument();
+    expect(screen.getByLabelText("对手手牌时间线")).toHaveTextContent("已确认手牌");
 
     fireEvent.click(screen.getByRole("button", { name: "历史" }));
     fireEvent.click(screen.getByRole("button", { name: /已使用 \(1\)/ }));

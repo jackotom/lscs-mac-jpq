@@ -2,7 +2,8 @@ import {
   useEffect,
   useId,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from "react";
 import { ChevronDown, ChevronRight, ImageOff } from "lucide-react";
 import { cardArtworkSources } from "../../shared/cardDatabase";
@@ -35,6 +36,7 @@ const currentKeys: readonly PublicCardZone[] = [
   "removed"
 ];
 const historyKeys = ["burned", "used"] as const;
+type BuiltInTrackingGroupKey = Exclude<TrackingGroupKey, "confirmed-hand">;
 const labels: Record<TrackingGroupKey, string> = {
   deck: "牌库",
   hand: "手牌",
@@ -43,14 +45,16 @@ const labels: Record<TrackingGroupKey, string> = {
   graveyard: "墓地",
   removed: "移除",
   burned: "疑似烧毁",
-  used: "已使用"
+  used: "已使用",
+  "confirmed-hand": "已确认手牌"
 };
 
 export function CardTrackingGroups({
   view,
   opponent = false,
   hideSecret = false,
-  unknownDeck
+  unknownDeck,
+  afterCurrentGroups
 }: {
   readonly view: OverlayCardTrackingView;
   readonly opponent?: boolean;
@@ -59,6 +63,10 @@ export function CardTrackingGroups({
     readonly label: "待识别" | "识别中" | "不可用";
     readonly emptyLabel: string;
   };
+  readonly afterCurrentGroups?: (controls: {
+    readonly expanded: boolean;
+    readonly onToggle: () => void;
+  }) => ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const initialMode = opponent
@@ -171,7 +179,7 @@ export function CardTrackingGroups({
     });
   };
 
-  const visibleKeys: readonly TrackingGroupKey[] = page === "current"
+  const visibleKeys: readonly BuiltInTrackingGroupKey[] = page === "current"
     ? (hideSecret ? currentKeys.filter((key) => key !== "secret") : currentKeys)
     : historyKeys;
 
@@ -196,6 +204,12 @@ export function CardTrackingGroups({
             onActiveCardChange={(card) => setActiveCardId(card?.id)}
           />
         ))}
+        {page === "current" && afterCurrentGroups
+          ? afterCurrentGroups({
+              expanded: expanded.has("confirmed-hand"),
+              onToggle: () => handleGroupToggle("confirmed-hand")
+            })
+          : null}
       </main>
       <footer className="card-tracking-footer" aria-label="记牌页面">
         <button
@@ -229,7 +243,7 @@ function TrackingGroup({
   activeCard,
   onActiveCardChange
 }: {
-  readonly groupKey: TrackingGroupKey;
+  readonly groupKey: BuiltInTrackingGroupKey;
   readonly view: OverlayCardTrackingView;
   readonly expanded: boolean;
   readonly onToggle: () => void;

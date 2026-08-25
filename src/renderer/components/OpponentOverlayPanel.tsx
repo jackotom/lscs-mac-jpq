@@ -1,5 +1,5 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import { Layers3, Minus } from "lucide-react";
+import { useEffect, useId, useState, type CSSProperties } from "react";
+import { ChevronDown, ChevronRight, Layers3, Minus } from "lucide-react";
 import type { OpponentOverlayPanelProps, OverlayCardItem, OverlayStatusTone, OpponentHandTimelineEntry, OpponentTurnTimer } from "../types";
 import { CollapsibleCardGroup } from "./OverlayPanel";
 import { CardTrackingGroups } from "./CardTrackingGroups";
@@ -63,7 +63,6 @@ export function OpponentOverlayPanel({
       ) : (
         <>
           <MatchPulse pulse={view.matchPulse} variant="actor" />
-          <OpponentHandTimeline entries={view.opponentHand} />
           <OpponentTurnTimerView timer={view.turnTimer} />
           <section className="opponent-tracking-summary" aria-label="对手概览">
             <span>牌库 <strong>{view.cardTracking.current.deck.countLabel}</strong></span>
@@ -78,14 +77,34 @@ export function OpponentOverlayPanel({
               emptyLabel="暂无全局影响"
             />
           ) : null}
-          <CardTrackingGroups view={view.cardTracking} opponent hideSecret />
+          <CardTrackingGroups
+            view={view.cardTracking}
+            opponent
+            hideSecret
+            afterCurrentGroups={({ expanded, onToggle }) => (
+              <OpponentHandTimeline
+                entries={view.opponentHand}
+                expanded={expanded}
+                onToggle={onToggle}
+              />
+            )}
+          />
         </>
       )}
     </section>
   );
 }
 
-function OpponentHandTimeline({ entries }: { entries?: readonly OpponentHandTimelineEntry[] }) {
+function OpponentHandTimeline({
+  entries,
+  expanded,
+  onToggle
+}: {
+  entries?: readonly OpponentHandTimelineEntry[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const contentId = useId();
   const byEntityId = new Map<string, OpponentHandTimelineEntry & { entityId: string }>();
   const legacyEntries: OpponentHandTimelineEntry[] = [];
   for (const entry of entries ?? []) {
@@ -96,22 +115,58 @@ function OpponentHandTimeline({ entries }: { entries?: readonly OpponentHandTime
     }
   }
   const confirmedEntries = [...byEntityId.values()];
-  if (!confirmedEntries.length && !legacyEntries.length) return null;
+  const count = confirmedEntries.length + legacyEntries.reduce(
+    (total, entry) => total + Math.max(1, entry.count ?? 1),
+    0
+  );
   return (
-    <section className="opponent-hand-timeline" aria-label="对手手牌时间线">
-      <strong>已确认手牌</strong>
-      <ul>
-        {confirmedEntries.map((entry) => (
-          <li className={`opponent-hand-row${entry.name ? "" : " opponent-hand-unknown"}${entry.created ? " is-created" : ""}${entry.forged ? " is-forged" : ""}`} key={entry.entityId}>
-            <span>{entry.name ?? "未知手牌"}</span>
-            <small>{entry.drawnTurn ? `第 ${entry.drawnTurn} 回合抽取` : "抽取回合未知"}</small>
-            {entry.created ? <em>创建</em> : null}
-            {entry.forged ? <em>已锻造</em> : null}
-            {(entry.buffs ?? []).map((buff) => <em key={buff}>{buff}</em>)}
-          </li>
-        ))}
-        {legacyEntries.map((entry, index) => <li className="opponent-hand-row opponent-hand-legacy" key={`legacy-${entry.cardId ?? entry.name ?? "unknown"}-${index}`}><span>{entry.name ? `${entry.name} ×${entry.count ?? 1}` : "旧版未知手牌记录"}</span><small>缺少实体标识，不能纳入抽取时间线</small></li>)}
-      </ul>
+    <section
+      className="overlay-card-group opponent-hand-timeline"
+      aria-label="对手手牌时间线"
+      data-group-key="confirmed-hand"
+      data-expanded={expanded ? "true" : "false"}
+    >
+      <button
+        type="button"
+        className="overlay-card-group-toggle"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={onToggle}
+      >
+        <span>已确认手牌 <em>({count})</em></span>
+        {expanded
+          ? <ChevronDown aria-hidden="true" size={13} />
+          : <ChevronRight aria-hidden="true" size={13} />}
+      </button>
+      {expanded ? (
+        <div id={contentId} className="overlay-card-group-content">
+          {confirmedEntries.length || legacyEntries.length ? (
+            <ul className="opponent-hand-list">
+              {confirmedEntries.map((entry) => (
+                <li
+                  className={`opponent-hand-row${entry.name ? "" : " opponent-hand-unknown"}${entry.created ? " is-created" : ""}${entry.forged ? " is-forged" : ""}`}
+                  key={entry.entityId}
+                >
+                  <span>{entry.name ?? "未知手牌"}</span>
+                  <small>{entry.drawnTurn ? `第 ${entry.drawnTurn} 回合抽取` : "抽取回合未知"}</small>
+                  {entry.created ? <em>创建</em> : null}
+                  {entry.forged ? <em>已锻造</em> : null}
+                  {(entry.buffs ?? []).map((buff) => <em key={buff}>{buff}</em>)}
+                </li>
+              ))}
+              {legacyEntries.map((entry, index) => (
+                <li
+                  className="opponent-hand-row opponent-hand-legacy"
+                  key={`legacy-${entry.cardId ?? entry.name ?? "unknown"}-${index}`}
+                >
+                  <span>{entry.name ? `${entry.name} ×${entry.count ?? 1}` : "旧版未知手牌记录"}</span>
+                  <small>缺少实体标识，不能纳入抽取时间线</small>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="overlay-card-group-empty">暂无确认记录</p>}
+        </div>
+      ) : null}
     </section>
   );
 }

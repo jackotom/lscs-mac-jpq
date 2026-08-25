@@ -3,7 +3,7 @@ import type { OverlayCardTrackingView } from "./types";
 
 export type TrackingLayoutMode = "short" | "tall" | "opponent";
 export type TrackingPage = "current" | "history";
-export type TrackingGroupKey = PublicCardZone | "burned" | "used";
+export type TrackingGroupKey = PublicCardZone | "burned" | "used" | "confirmed-hand";
 export type SelectionOrigin = "system" | "user";
 
 export interface TrackingSelection {
