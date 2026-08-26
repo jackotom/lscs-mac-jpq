@@ -128,9 +128,17 @@ function extractCardReference(input: string): { cardId?: string; cardName?: stri
   const cardId = candidate.match(/\b[A-Z][A-Z0-9]*_[A-Za-z0-9_]+\b/)?.[0];
 
   if (cardId) {
-    return { cardId };
+    const localizedCardName = candidate.match(new RegExp(`^(.*?)\\s*\\(\\s*${escapeRegExp(cardId)}\\s*\\)\\s*$`, "i"))?.[1];
+    const cardName = localizedCardName?.replace(/[\]\[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return cardName ? { cardId, cardName } : { cardId };
   }
 
   const cardName = candidate.replace(/[\]\[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
   return cardName ? { cardName } : undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
