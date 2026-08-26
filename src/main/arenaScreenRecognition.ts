@@ -46,6 +46,7 @@ const SCREEN_CAPTURE_DIRECTORY_PREFIX = "hearthstone-screen-";
 const STALE_SCREEN_CAPTURE_AGE_MS = 10 * 60 * 1_000;
 const SCREEN_CAPTURE_TIMEOUT_MS = 3_500;
 const MAX_PENDING_SCREEN_CAPTURES = 2;
+const ARENA_TITLE_FRAGMENT_MAX_HORIZONTAL_GAP = 0.012;
 
 export async function cleanupStaleScreenCaptures(
   temporaryRoot = tmpdir(),
@@ -194,20 +195,42 @@ export function selectArenaChoiceTexts(texts: readonly ArenaScreenText[]) {
 
   return lanes.map((lane) => {
     const laneCandidates = titleCandidates
-      .filter((text) => text.x >= lane.minX && text.x < lane.maxX)
-    const best = laneCandidates
+      .filter((text) => text.x >= lane.minX && text.x < lane.maxX);
+    const best = [...laneCandidates]
       .sort((left, right) =>
         arenaTitleCandidateDistance(left, lane.centerX) - arenaTitleCandidateDistance(right, lane.centerX)
       )[0];
     if (!best) {
       return "";
     }
-    return laneCandidates
+    const rowCandidates = laneCandidates
       .filter((text) => Math.abs(text.y - best.y) <= Math.max(0.012, (text.height + best.height) / 2))
-      .sort((left, right) => left.x - right.x)
+      .sort((left, right) => left.x - right.x);
+    let firstConnectedIndex = rowCandidates.indexOf(best);
+    let lastConnectedIndex = firstConnectedIndex;
+    while (
+      firstConnectedIndex > 0 &&
+      arenaTitleHorizontalGap(rowCandidates[firstConnectedIndex - 1]!, rowCandidates[firstConnectedIndex]!) <=
+        ARENA_TITLE_FRAGMENT_MAX_HORIZONTAL_GAP
+    ) {
+      firstConnectedIndex -= 1;
+    }
+    while (
+      lastConnectedIndex + 1 < rowCandidates.length &&
+      arenaTitleHorizontalGap(rowCandidates[lastConnectedIndex]!, rowCandidates[lastConnectedIndex + 1]!) <=
+        ARENA_TITLE_FRAGMENT_MAX_HORIZONTAL_GAP
+    ) {
+      lastConnectedIndex += 1;
+    }
+    return rowCandidates
+      .slice(firstConnectedIndex, lastConnectedIndex + 1)
       .map((text) => text.text.trim())
       .join("");
   });
+}
+
+function arenaTitleHorizontalGap(left: ArenaScreenText, right: ArenaScreenText) {
+  return Math.max(0, right.x - (left.x + left.width));
 }
 
 function arenaTitleCandidateDistance(text: ArenaScreenText, laneCenterX: number) {

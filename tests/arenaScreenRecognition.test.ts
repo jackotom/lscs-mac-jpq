@@ -139,6 +139,14 @@ describe("arena screen recognition", () => {
     ])).toEqual(["伊瑟拉。翡翠守护尽态", "中间。团队核心", "右侧。标题"]);
   });
 
+  it("merges the real small title gap but excludes distant same-line rules text", () => {
+    expect(selectArenaChoiceTexts([
+      { text: "伊瑟拉。", confidence: 1, x: 0.47, y: 0.61, width: 0.05, height: 0.03 },
+      { text: "翡翠守护尽态", confidence: 1, x: 0.525, y: 0.61, width: 0.06, height: 0.03 },
+      { text: "战吼", confidence: 1, x: 0.63, y: 0.61, width: 0.025, height: 0.03 }
+    ])).toEqual(["", "", "伊瑟拉。翡翠守护尽态"]);
+  });
+
   it("preserves an empty middle lane so the right card cannot shift left", () => {
     expect(selectArenaChoiceTexts([
       { text: "左侧传说", confidence: 1, x: 0.214, y: 0.61, width: 0.06, height: 0.03 },

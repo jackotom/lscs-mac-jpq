@@ -251,9 +251,12 @@ export class ArenaDraftEngine {
       return card ? { card, confidence: "exact" } : undefined;
     }
 
+    const longNameMaxDistance = this.acceptingTeamPreview
+      ? Math.ceil(fuzzyName.length / 2)
+      : Math.floor(fuzzyName.length / 2);
     const maxDistance = fuzzyName.length <= 5
       ? 1
-      : Math.min(5, Math.max(3, Math.ceil(fuzzyName.length / 2)));
+      : Math.min(5, Math.max(3, longNameMaxDistance));
     let best: { card: CardInfo; distance: number } | undefined;
     let bestDistanceMatches = 0;
     for (const [cardName] of this.cardInfoByName) {
@@ -292,7 +295,7 @@ export class ArenaDraftEngine {
     if (cardId.startsWith("HERO_")) {
       return false;
     }
-    const isLegendaryTeamHero = card.cardType === "英雄" && card.rarity === "LEGENDARY";
+    const isLegendaryTeamHero = this.acceptingTeamPreview && card.cardType === "英雄" && card.rarity === "LEGENDARY";
     if (isLegendaryTeamHero) {
       return true;
     }
