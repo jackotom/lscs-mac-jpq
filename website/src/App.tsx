@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 
-const releaseUrl = import.meta.env.VITE_DOWNLOAD_URL || "https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.5.4.zip";
+const releaseUrl = import.meta.env.VITE_DOWNLOAD_URL || "https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.6.7.zip";
 const changelogUrl = "https://github.com/jackotom/lscs-mac-jpq/blob/main/CHANGELOG.md";
 
 const navItems = [
@@ -79,11 +79,11 @@ function Hero() {
           <p>专为 Apple 芯片 Mac 打造。自动识别套牌，实时追踪牌库、对手已出牌与竞技场选牌。只在本机运行，不读内存，不打扰操作。</p>
           <div className="hero-actions">
             <a className="button button-primary" href={releaseUrl} target="_blank" rel="noreferrer">
-              下载公开版 v0.5.4 <Download size={20} />
+              下载公开版 v0.6.7 <Download size={20} />
             </a>
             <a className="text-link" href="#tracker">查看实际界面 <ArrowRight size={18} /></a>
           </div>
-          <span className="compatibility">macOS 12+ · Apple 芯片 · 约 115 MB</span>
+          <span className="compatibility">macOS 12+ · Apple 芯片 · 约 117 MB</span>
         </div>
 
         <div className="hero-visual" aria-label="炉石记牌器真实界面预览">
@@ -229,9 +229,9 @@ function PrivacyAndInstall() {
       <section className="download-finale">
         <div className="finale-inner">
           <h2>下一局，开始看清每张牌。</h2>
-          <a className="button button-light" href={releaseUrl} target="_blank" rel="noreferrer"><Download /> 下载公开版 v0.5.4</a>
-          <p className="finale-meta">macOS 12+ · Apple 芯片 · 约 115 MB</p>
-          <p className="signing-note">当前安装包已有开发签名，但未附带苹果公证票据。首次打开若被拦截，请前往“系统设置 → 隐私与安全性”选择“仍要打开”。</p>
+          <a className="button button-light" href={releaseUrl} target="_blank" rel="noreferrer"><Download /> 下载公开版 v0.6.7</a>
+          <p className="finale-meta">macOS 12+ · Apple 芯片 · 约 117 MB</p>
+          <p className="signing-note">当前安装包使用 Developer ID 正式签名，已通过 Apple 公证并装订票据。</p>
         </div>
       </section>
     </>

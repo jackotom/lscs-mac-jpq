@@ -1977,7 +1977,7 @@ function DesktopSidebar({
         <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.6.6</small>
+          <small>v0.6.7</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
