@@ -193,12 +193,20 @@ export function selectArenaChoiceTexts(texts: readonly ArenaScreenText[]) {
   ] as const;
 
   return lanes.map((lane) => {
-    const best = titleCandidates
+    const laneCandidates = titleCandidates
       .filter((text) => text.x >= lane.minX && text.x < lane.maxX)
+    const best = laneCandidates
       .sort((left, right) =>
         arenaTitleCandidateDistance(left, lane.centerX) - arenaTitleCandidateDistance(right, lane.centerX)
       )[0];
-    return best?.text.trim() ?? "";
+    if (!best) {
+      return "";
+    }
+    return laneCandidates
+      .filter((text) => Math.abs(text.y - best.y) <= Math.max(0.012, (text.height + best.height) / 2))
+      .sort((left, right) => left.x - right.x)
+      .map((text) => text.text.trim())
+      .join("");
   });
 }
 

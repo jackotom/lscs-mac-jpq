@@ -128,6 +128,17 @@ describe("arena screen recognition", () => {
     expect(selectArenaChoiceTexts(result.texts)).toEqual(["希希集", "伊莉达，寻罪", "克罗妮卡"]);
   });
 
+  it("merges split legendary-team title fragments only inside their original lanes", () => {
+    expect(selectArenaChoiceTexts([
+      { text: "伊瑟拉。", confidence: 1, x: 0.17, y: 0.61, width: 0.055, height: 0.03 },
+      { text: "翡翠守护尽态", confidence: 1, x: 0.23, y: 0.61, width: 0.064, height: 0.03 },
+      { text: "中间。", confidence: 1, x: 0.32, y: 0.61, width: 0.05, height: 0.03 },
+      { text: "团队核心", confidence: 1, x: 0.375, y: 0.61, width: 0.07, height: 0.03 },
+      { text: "右侧。", confidence: 1, x: 0.48, y: 0.61, width: 0.05, height: 0.03 },
+      { text: "标题", confidence: 1, x: 0.535, y: 0.61, width: 0.04, height: 0.03 }
+    ])).toEqual(["伊瑟拉。翡翠守护尽态", "中间。团队核心", "右侧。标题"]);
+  });
+
   it("preserves an empty middle lane so the right card cannot shift left", () => {
     expect(selectArenaChoiceTexts([
       { text: "左侧传说", confidence: 1, x: 0.214, y: 0.61, width: 0.06, height: 0.03 },

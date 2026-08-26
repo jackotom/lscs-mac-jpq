@@ -1412,6 +1412,67 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     expect(engine.getState().currentChoices[1]?.cardId).toBe("JAIL_719");
   });
 
+  it("matches the real noisy Deathwing team core and keeps the full Ysera title distinct", () => {
+    const legendaryTeamCardDb = createCardDatabase([
+      { dbfId: 125467, name: "灭世者死亡之翼", cardId: "CATA_190h", collectible: true, rarity: "LEGENDARY", cardType: "HERO" },
+      { dbfId: 113321, name: "伊瑟拉，翡翠守护巨龙", cardId: "EDR_000", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 1186, name: "伊瑟拉", cardId: "EX1_572", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 140003, name: "测试团队核心甲", cardId: "TEAM_CORE_A", collectible: true, rarity: "LEGENDARY", cardType: "MINION" }
+    ]);
+    const engine = new ArenaDraftEngine({ cardDatabase: legendaryTeamCardDb });
+    engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
+
+    const frame = ["买世者死皮定熟", "测试团队核心甲", "伊瑟拉。翡翠守护尽态"];
+    expect(engine.applyScreenChoices(frame)).toBe(false);
+    expect(engine.applyScreenChoices(frame)).toBe(true);
+    expect(engine.getState().currentChoices[0]).toMatchObject({
+      cardId: "CATA_190h",
+      name: "灭世者死亡之翼",
+      screenSlot: 0
+    });
+    expect(engine.getState().currentChoices[2]).toMatchObject({
+      cardId: "EDR_000",
+      name: "伊瑟拉，翡翠守护巨龙",
+      screenSlot: 2
+    });
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).not.toContain("EX1_572");
+  });
+
+  it("rejects a noisy seven-character title when the widened fuzzy match is tied", () => {
+    const ambiguousTeamCardDb = createCardDatabase([
+      { dbfId: 125467, name: "灭世者死亡之翼", cardId: "CATA_190h", collectible: true, rarity: "LEGENDARY", cardType: "HERO" },
+      { dbfId: 140005, name: "灭世者死亡之骨", cardId: "TEAM_CORE_DECOY", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 140003, name: "测试团队核心甲", cardId: "TEAM_CORE_A", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 140004, name: "测试团队核心乙", cardId: "TEAM_CORE_B", collectible: true, rarity: "LEGENDARY", cardType: "MINION" }
+    ]);
+    const engine = new ArenaDraftEngine({ cardDatabase: ambiguousTeamCardDb });
+    engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
+
+    const frame = ["买世者死皮定熟", "测试团队核心甲", "测试团队核心乙"];
+    expect(engine.applyScreenChoices(frame)).toBe(true);
+    expect(engine.applyScreenChoices(frame)).toBe(false);
+    expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
+      "TEAM_CORE_A",
+      "TEAM_CORE_B"
+    ]);
+  });
+
+  it("keeps ordinary hero portraits out of legendary-team screen choices", () => {
+    const heroPortraitCardDb = createCardDatabase([
+      { dbfId: 150001, name: "玛法里奥·怒风", cardId: "HERO_06", collectible: true, rarity: "LEGENDARY", cardType: "英雄" },
+      { dbfId: 150002, name: "测试团队核心甲", cardId: "TEAM_CORE_A", collectible: true, rarity: "LEGENDARY", cardType: "随从" },
+      { dbfId: 150003, name: "测试团队核心乙", cardId: "TEAM_CORE_B", collectible: true, rarity: "LEGENDARY", cardType: "随从" }
+    ]);
+    const engine = new ArenaDraftEngine({ cardDatabase: heroPortraitCardDb });
+    engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
+
+    expect(engine.applyScreenChoices(["玛法里奥·怒风", "测试团队核心甲", "测试团队核心乙"])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({ cardId: "TEAM_CORE_A", screenSlot: 1 }),
+      expect.objectContaining({ cardId: "TEAM_CORE_B", screenSlot: 2 })
+    ]);
+  });
+
   it("does not treat an internal non-collectible rules keyword as an arena card", () => {
     const cardDatabase = createCardDatabase([
       { dbfId: 70145, name: "流放", cardId: "DH_Lunar_TBBucket_2", cardType: "法术" },
