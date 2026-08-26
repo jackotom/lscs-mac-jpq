@@ -200,6 +200,9 @@ export class ArenaDraftEngine {
       const match = name ? this.findCardInfoByRecognizedName(name) : undefined;
       if (!match) {
         this.pendingFuzzyScreenChoices[screenSlot] = undefined;
+        if (this.pendingTeamCore) {
+          this.screenChoicesBySlot[screenSlot] = undefined;
+        }
         return;
       }
 
@@ -251,7 +254,8 @@ export class ArenaDraftEngine {
       return card ? { card, confidence: "exact" } : undefined;
     }
 
-    const longNameMaxDistance = this.acceptingTeamPreview
+    const isMatchingTeamPreview = this.acceptingTeamPreview && !this.pendingTeamCore;
+    const longNameMaxDistance = isMatchingTeamPreview
       ? Math.ceil(fuzzyName.length / 2)
       : Math.floor(fuzzyName.length / 2);
     const maxDistance = fuzzyName.length <= 5
@@ -295,7 +299,11 @@ export class ArenaDraftEngine {
     if (cardId.startsWith("HERO_")) {
       return false;
     }
-    const isLegendaryTeamHero = this.acceptingTeamPreview && card.cardType === "英雄" && card.rarity === "LEGENDARY";
+    const isLegendaryTeamHero =
+      this.acceptingTeamPreview &&
+      !this.pendingTeamCore &&
+      card.cardType === "英雄" &&
+      card.rarity === "LEGENDARY";
     if (isLegendaryTeamHero) {
       return true;
     }

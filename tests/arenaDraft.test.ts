@@ -1457,16 +1457,19 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ]);
   });
 
-  it("keeps the original fuzzy threshold for an ordinary seven-character draft card", () => {
+  it("keeps the original fuzzy threshold immediately after the team core is locked", () => {
     const ordinaryCardDb = createCardDatabase([
+      { dbfId: 125467, name: "灭世者死亡之翼", cardId: "CATA_190h", collectible: true, rarity: "LEGENDARY", cardType: "HERO" },
+      { dbfId: 160005, name: "测试团队核心甲", cardId: "TEAM_CORE_A", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 160006, name: "测试团队核心乙", cardId: "TEAM_CORE_B", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
       { dbfId: 160001, name: "普通七字测试卡", cardId: "ORDINARY_SEVEN", collectible: true, rarity: "COMMON", cardType: "MINION" },
-      { dbfId: 160002, name: "普通选牌已开始", cardId: "PREVIEW_DONE", collectible: true, rarity: "COMMON", cardType: "MINION" },
       { dbfId: 160003, name: "普通选牌测试甲", cardId: "ORDINARY_A", collectible: true, rarity: "COMMON", cardType: "MINION" },
       { dbfId: 160004, name: "普通选牌测试乙", cardId: "ORDINARY_B", collectible: true, rarity: "COMMON", cardType: "MINION" }
     ]);
     const engine = new ArenaDraftEngine({ cardDatabase: ordinaryCardDb });
     engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
-    engine.applyArenaLine("D 10:40:01.000 Client chooses: [PREVIEW_DONE]");
+    expect(engine.applyScreenChoices(["灭世者死亡之翼", "测试团队核心甲", "测试团队核心乙"])).toBe(true);
+    engine.applyArenaLine("D 10:40:01.000 Client chooses: 灭世者死亡之翼 (CATA_190h)");
 
     const frame = ["普同七宇侧式卡", "普通选牌测试甲", "普通选牌测试乙"];
     expect(engine.applyScreenChoices(frame)).toBe(true);
@@ -1477,16 +1480,18 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ]);
   });
 
-  it("rejects a hero-typed team core after leaving the team preview", () => {
+  it("rejects a hero-typed core after it is locked but before the first ordinary pick", () => {
     const postPreviewCardDb = createCardDatabase([
       { dbfId: 125467, name: "灭世者死亡之翼", cardId: "CATA_190h", collectible: true, rarity: "LEGENDARY", cardType: "HERO" },
-      { dbfId: 160002, name: "普通选牌已开始", cardId: "PREVIEW_DONE", collectible: true, rarity: "COMMON", cardType: "MINION" },
+      { dbfId: 160005, name: "测试团队核心甲", cardId: "TEAM_CORE_A", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
+      { dbfId: 160006, name: "测试团队核心乙", cardId: "TEAM_CORE_B", collectible: true, rarity: "LEGENDARY", cardType: "MINION" },
       { dbfId: 160003, name: "普通选牌测试甲", cardId: "ORDINARY_A", collectible: true, rarity: "COMMON", cardType: "MINION" },
       { dbfId: 160004, name: "普通选牌测试乙", cardId: "ORDINARY_B", collectible: true, rarity: "COMMON", cardType: "MINION" }
     ]);
     const engine = new ArenaDraftEngine({ cardDatabase: postPreviewCardDb });
     engine.applyArenaLine("D 10:40:00.000 Arena.SetDraftMode - DRAFTING");
-    engine.applyArenaLine("D 10:40:01.000 Client chooses: [PREVIEW_DONE]");
+    expect(engine.applyScreenChoices(["灭世者死亡之翼", "测试团队核心甲", "测试团队核心乙"])).toBe(true);
+    engine.applyArenaLine("D 10:40:01.000 Client chooses: 灭世者死亡之翼 (CATA_190h)");
 
     expect(engine.applyScreenChoices(["灭世者死亡之翼", "普通选牌测试甲", "普通选牌测试乙"])).toBe(true);
     expect(engine.getState().currentChoices.map((choice) => choice.cardId)).toEqual([
