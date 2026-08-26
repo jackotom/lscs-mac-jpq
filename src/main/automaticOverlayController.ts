@@ -21,6 +21,7 @@ export class AutomaticOverlayController {
   private refreshPromise: Promise<void> | undefined;
   private contextKey: string | undefined;
   private suppressedContextKey: string | undefined;
+  private lastPresentedKey: string | undefined;
   private lifecycleGeneration = 0;
 
   constructor(private readonly host: AutomaticOverlayHost) {}
@@ -39,6 +40,7 @@ export class AutomaticOverlayController {
 
   stop() {
     this.lifecycleGeneration += 1;
+    this.lastPresentedKey = undefined;
     if (this.monitor) {
       clearInterval(this.monitor);
       this.monitor = undefined;
@@ -79,6 +81,7 @@ export class AutomaticOverlayController {
     }
 
     if (!enabled) {
+      this.lastPresentedKey = undefined;
       if (this.host.shouldHideWhenDisabled?.() !== false && this.host.hasOverlayWindow()) {
         await this.host.hideOverlayWindow();
       }
@@ -96,6 +99,7 @@ export class AutomaticOverlayController {
     );
 
     if (!shouldShow) {
+      this.lastPresentedKey = undefined;
       if (this.host.hasOverlayWindow()) {
         await this.host.hideOverlayWindow();
       }
@@ -103,6 +107,7 @@ export class AutomaticOverlayController {
     }
 
     if (!this.host.hasOverlayWindow()) {
+      this.lastPresentedKey = undefined;
       try {
         await this.host.createOverlayWindow();
       } catch (error) {
@@ -126,8 +131,10 @@ export class AutomaticOverlayController {
       }
       return;
     }
-    if (!this.host.isOverlayVisible()) {
+    const latestPresentedKey = `${latestContextKey}:game-${latestState.gameActive === true ? "active" : "inactive"}`;
+    if (!this.host.isOverlayVisible() || this.lastPresentedKey !== latestPresentedKey) {
       this.host.showOverlayWindow();
+      this.lastPresentedKey = latestPresentedKey;
     }
   }
 }

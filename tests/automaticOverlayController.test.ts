@@ -75,6 +75,61 @@ function makeHost(initialState: PublicTrackerState) {
 }
 
 describe("AutomaticOverlayController", () => {
+  it("re-presents an allowed existing overlay once even when Electron reports it visible", async () => {
+    const showInactive = vi.fn();
+    const controller = new AutomaticOverlayController({
+      getState: () => makeState({ constructedScreenMode: "standard" }),
+      getFrontmostAppName: async () => "Hearthstone",
+      hasOverlayWindow: () => true,
+      isOverlayVisible: () => true,
+      isOverlayFocused: () => false,
+      createOverlayWindow: vi.fn(),
+      showOverlayWindow: showInactive,
+      hideOverlayWindow: vi.fn()
+    });
+
+    await controller.refresh();
+    await controller.refresh();
+
+    expect(showInactive).toHaveBeenCalledOnce();
+  });
+
+  it("re-presents both visible overlays without focus when a new game starts", async () => {
+    let state = makeState({
+      constructedScreenMode: "standard",
+      autoMatchedDeckId: "deck-a",
+      gameActive: false
+    });
+    const friendlyShowInactive = vi.fn();
+    const opponentShowInactive = vi.fn();
+    const makeExistingVisibleHost = (showOverlayWindow: () => void): AutomaticOverlayHost => ({
+      getState: () => state,
+      getFrontmostAppName: async () => "Hearthstone",
+      hasOverlayWindow: () => true,
+      isOverlayVisible: () => true,
+      isOverlayFocused: () => false,
+      createOverlayWindow: vi.fn(),
+      showOverlayWindow,
+      hideOverlayWindow: vi.fn()
+    });
+    const friendlyController = new AutomaticOverlayController(
+      makeExistingVisibleHost(friendlyShowInactive)
+    );
+    const opponentController = new AutomaticOverlayController(
+      makeExistingVisibleHost(opponentShowInactive)
+    );
+    await Promise.all([friendlyController.refresh(), opponentController.refresh()]);
+    friendlyShowInactive.mockClear();
+    opponentShowInactive.mockClear();
+
+    state = { ...state, gameActive: true };
+    await Promise.all([friendlyController.refresh(), opponentController.refresh()]);
+    await Promise.all([friendlyController.refresh(), opponentController.refresh()]);
+
+    expect(friendlyShowInactive).toHaveBeenCalledOnce();
+    expect(opponentShowInactive).toHaveBeenCalledOnce();
+  });
+
   it("uses only the inactive presentation path for an automatic friendly overlay", async () => {
     let overlayExists = false;
     let overlayVisible = false;

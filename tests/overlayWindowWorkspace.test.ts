@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   configureOverlayWorkspaceWindow,
-  getOverlayWindowPlatformOptions
+  getOverlayWindowPlatformOptions,
+  reassertOverlayWindowPresentation
 } from "../src/main/overlayWindowWorkspace";
 
 describe("overlay workspace windows", () => {
@@ -27,5 +28,29 @@ describe("overlay workspace windows", () => {
       visibleOnFullScreen: false,
       skipTransformProcessType: true
     });
+  });
+
+  it("reasserts workspace and screen-saver level before an inactive presentation", () => {
+    const setVisibleOnAllWorkspaces = vi.fn();
+    const setAlwaysOnTop = vi.fn();
+    const showInactive = vi.fn();
+    const focus = vi.fn();
+    const window = { setVisibleOnAllWorkspaces, setAlwaysOnTop, showInactive, focus };
+
+    reassertOverlayWindowPresentation(window, true);
+
+    expect(setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    });
+    expect(setAlwaysOnTop).toHaveBeenCalledWith(true, "screen-saver");
+    expect(showInactive).toHaveBeenCalledOnce();
+    expect(focus).not.toHaveBeenCalled();
+    expect(setVisibleOnAllWorkspaces.mock.invocationCallOrder[0]).toBeLessThan(
+      showInactive.mock.invocationCallOrder[0]
+    );
+    expect(setAlwaysOnTop.mock.invocationCallOrder[0]).toBeLessThan(
+      showInactive.mock.invocationCallOrder[0]
+    );
   });
 });

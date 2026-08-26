@@ -96,7 +96,8 @@ import { WindowBoundsPersistence } from "./windowBoundsPersistence.js";
 import { applyLaunchAtLoginSetting } from "./launchAtLogin.js";
 import {
   configureOverlayWorkspaceWindow,
-  getOverlayWindowPlatformOptions
+  getOverlayWindowPlatformOptions,
+  reassertOverlayWindowPresentation
 } from "./overlayWindowWorkspace.js";
 import {
   formatStartupHealthFailures,
@@ -395,7 +396,10 @@ const automaticOverlayController = new AutomaticOverlayController({
   },
   showOverlayWindow: () => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.showInactive();
+      reassertOverlayWindowPresentation(
+        overlayWindow,
+        !trackerSettings.overlay.hideInFullscreen
+      );
     }
   },
   hideOverlayWindow: async () => {
@@ -423,7 +427,14 @@ const automaticOpponentOverlayController = new AutomaticOverlayController({
     overlaySettingsPreviewWindows.opponent
   ),
   createOverlayWindow: async () => { await createOpponentOverlayWindow({ showWhenReady: false }); },
-  showOverlayWindow: () => opponentOverlayWindowController.showInactive(),
+  showOverlayWindow: () => {
+    if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
+      reassertOverlayWindowPresentation(
+        opponentOverlayWindow,
+        !trackerSettings.overlay.hideInFullscreen
+      );
+    }
+  },
   hideOverlayWindow: async () => {
     opponentOverlayRestoreCollapsed = opponentOverlayWindowState?.isCollapsed() ?? false;
     if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
