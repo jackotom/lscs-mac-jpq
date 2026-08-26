@@ -136,9 +136,12 @@ describe("window experience configuration", () => {
     expect(presenter).toContain("ensureWindow({ showWhenReady: false })");
     expect(presenter).not.toMatch(/\.show\(/);
     expect(presenter).not.toMatch(/\.focus\(/);
-    expect(friendlyAutomatic).toContain("overlayWindow.showInactive()");
+    expect(friendlyAutomatic).toContain("reassertOverlayWindowPresentation(");
+    expect(friendlyAutomatic).toContain("useQaAccessoryActivationPolicy");
     expect(friendlyAutomatic).not.toMatch(/overlayWindow\.(?:show|focus)\(/);
-    expect(opponentAutomatic).toContain("opponentOverlayWindowController.showInactive()");
+    expect(opponentAutomatic).toContain("reassertOverlayWindowPresentation(");
+    expect(opponentAutomatic).toContain("useQaAccessoryActivationPolicy");
+    expect(opponentAutomatic).not.toMatch(/opponentOverlayWindow\.(?:show|focus)\(/);
     expect(opponentAutomatic).not.toContain("expandOpponentOverlayWindow");
     expect(explicitOpponentToggle).toContain("expandOpponentOverlayWindow(true)");
     expect(explicitOpponentToggle).toContain("showWhenReady: true");

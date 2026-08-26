@@ -10,20 +10,32 @@ export interface OverlayPresentationWindowLike extends OverlayWorkspaceWindowLik
   showInactive(): void;
 }
 
-const appliedVisibility = new WeakMap<object, boolean>();
+const appliedConfiguration = new WeakMap<object, string>();
 
 export function configureOverlayWorkspaceWindow(
   window: OverlayWorkspaceWindowLike,
-  visibleOnFullScreen: boolean
+  visibleOnFullScreen: boolean,
+  skipTransformProcessType = false
 ): boolean {
-  return applyOverlayWorkspaceWindow(window, visibleOnFullScreen, false);
+  return applyOverlayWorkspaceWindow(
+    window,
+    visibleOnFullScreen,
+    skipTransformProcessType,
+    false
+  );
 }
 
 export function reassertOverlayWindowPresentation(
   window: OverlayPresentationWindowLike,
-  visibleOnFullScreen: boolean
+  visibleOnFullScreen: boolean,
+  skipTransformProcessType = false
 ): void {
-  applyOverlayWorkspaceWindow(window, visibleOnFullScreen, true);
+  applyOverlayWorkspaceWindow(
+    window,
+    visibleOnFullScreen,
+    skipTransformProcessType,
+    true
+  );
   window.setAlwaysOnTop(true, "screen-saver");
   window.showInactive();
 }
@@ -31,14 +43,16 @@ export function reassertOverlayWindowPresentation(
 function applyOverlayWorkspaceWindow(
   window: OverlayWorkspaceWindowLike,
   visibleOnFullScreen: boolean,
+  skipTransformProcessType: boolean,
   force: boolean
 ): boolean {
-  if (!force && appliedVisibility.get(window as object) === visibleOnFullScreen) return false;
+  const configurationKey = `${visibleOnFullScreen}:${skipTransformProcessType}`;
+  if (!force && appliedConfiguration.get(window as object) === configurationKey) return false;
   window.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen,
-    skipTransformProcessType: true
+    skipTransformProcessType
   });
-  appliedVisibility.set(window as object, visibleOnFullScreen);
+  appliedConfiguration.set(window as object, configurationKey);
   return true;
 }
 

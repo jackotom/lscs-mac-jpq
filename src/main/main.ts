@@ -398,7 +398,8 @@ const automaticOverlayController = new AutomaticOverlayController({
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       reassertOverlayWindowPresentation(
         overlayWindow,
-        !trackerSettings.overlay.hideInFullscreen
+        !trackerSettings.overlay.hideInFullscreen,
+        useQaAccessoryActivationPolicy
       );
     }
   },
@@ -431,7 +432,8 @@ const automaticOpponentOverlayController = new AutomaticOverlayController({
     if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
       reassertOverlayWindowPresentation(
         opponentOverlayWindow,
-        !trackerSettings.overlay.hideInFullscreen
+        !trackerSettings.overlay.hideInFullscreen,
+        useQaAccessoryActivationPolicy
       );
     }
   },
@@ -1328,7 +1330,11 @@ function releaseTransientWindow(window: BrowserWindow | undefined): void {
 function applyOverlayWindowAppearance(): void {
   for (const window of overlayWindows()) {
     window.setOpacity(trackerSettings.overlay.opacity / 100);
-    configureOverlayWorkspaceWindow(window, !trackerSettings.overlay.hideInFullscreen);
+    configureOverlayWorkspaceWindow(
+      window,
+      !trackerSettings.overlay.hideInFullscreen,
+      useQaAccessoryActivationPolicy
+    );
   }
 }
 
@@ -2224,9 +2230,13 @@ async function createAuxiliaryOverlayWindow(
   });
   installQaConsoleErrorListener(window);
   configureSecureNavigation(window);
-  configureBoardAttackOverlayWindow(window);
+  configureBoardAttackOverlayWindow(window, useQaAccessoryActivationPolicy);
   window.setOpacity(trackerSettings.overlay.opacity / 100);
-  configureOverlayWorkspaceWindow(window, !trackerSettings.overlay.hideInFullscreen);
+  configureOverlayWorkspaceWindow(
+    window,
+    !trackerSettings.overlay.hideInFullscreen,
+    useQaAccessoryActivationPolicy
+  );
   tracker.attachWindow(window);
   try {
     await loadRendererPage(window, query);
