@@ -48,6 +48,8 @@ export interface BoardAttackOverlayWindowLike {
 }
 
 const iconSize = 44;
+const healthOverlayWidth = 72;
+const healthOverlayHeight = 42;
 const horizontalRatio = 0.255;
 const opponentVerticalRatio = 0.2239;
 const friendlyVerticalRatio = 0.6762;
@@ -58,7 +60,13 @@ const smartCounterRightInset = 8;
 const smartCounterHorizontalStep = 64;
 const smartCounterVerticalStep = 66;
 
-export type AuxiliaryOverlayKind = "friendly-attack" | "opponent-attack" | "secret" | "smart-counter";
+export type HeroHealthOverlayKind = "friendly-health" | "opponent-health";
+export type AuxiliaryOverlayKind =
+  | "friendly-attack"
+  | "opponent-attack"
+  | HeroHealthOverlayKind
+  | "secret"
+  | "smart-counter";
 
 export function getBoardAttackIconBounds(display: DisplayBounds): { opponent: IconBounds; friendly: IconBounds } {
   const x = display.x + Math.round(display.width * horizontalRatio);
@@ -68,10 +76,25 @@ export function getBoardAttackIconBounds(display: DisplayBounds): { opponent: Ic
   };
 }
 
+export function getHeroHealthOverlayBounds(
+  display: DisplayBounds,
+  kind: HeroHealthOverlayKind
+): IconBounds {
+  return {
+    x: display.x + Math.round(display.width * (kind === "friendly-health" ? 0.19 : 0.625)),
+    y: display.y + Math.round(display.height * (kind === "friendly-health" ? 0.64 : 0.278)),
+    width: healthOverlayWidth,
+    height: healthOverlayHeight
+  };
+}
+
 export function getAuxiliaryOverlayBounds(display: DisplayBounds, kind: AuxiliaryOverlayKind): IconBounds {
   const attack = getBoardAttackIconBounds(display);
   if (kind === "friendly-attack") return attack.friendly;
   if (kind === "opponent-attack") return attack.opponent;
+  if (kind === "friendly-health" || kind === "opponent-health") {
+    return getHeroHealthOverlayBounds(display, kind);
+  }
   if (kind === "secret") return getSecretOverlayBounds(display, []);
   const preferredX = attack.friendly.x + attack.friendly.width + smartCounterStartGap;
   const maximumX = display.x + Math.max(0, display.width - smartCounterRightInset - smartCounterWidth);

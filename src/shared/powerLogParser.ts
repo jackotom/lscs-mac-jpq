@@ -286,6 +286,11 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
   const attack = parseTagValueNumber(line, "ATK");
   if (attack !== undefined) events.push({ type: "attack-change", entityId: entity.id, attack, raw: line });
 
+  const healthLimit = parseTagValueNumber(line, "HEALTH");
+  if (healthLimit !== undefined && entity.id) {
+    events.push({ type: "hero-health-limit-change", entity, value: healthLimit, raw: line });
+  }
+
   return events;
 }
 

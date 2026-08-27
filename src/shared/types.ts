@@ -91,6 +91,7 @@ export interface TrackerOverlaySettings {
   readonly showOpponentAttack: boolean;
   readonly secretPrediction: boolean;
   readonly smartCardCounters: boolean;
+  readonly healthChange: boolean;
   readonly hiddenSmartCounterIds?: readonly string[];
   readonly position: "left" | "right";
   readonly offsetX: number;
@@ -429,6 +430,7 @@ export interface PublicTrackerState {
   opponentPlayed: CardTrackerRow[];
   opponentSecrets?: OpponentSecretSlot[];
   boardAttack?: BoardAttackSummary;
+  heroHealthLimit?: HeroHealthLimitSummary;
   matchCounters?: MatchCounters;
   smartCounters?: readonly SmartCardCounter[];
   matchFlow?: MatchFlowSnapshot;
@@ -495,6 +497,7 @@ export interface EntitySnapshot {
   zone?: Zone;
   controller?: number;
   attack?: number;
+  healthLimit?: number;
   cardType?: string;
   cardClass?: string;
   attachedToEntityId?: string;
@@ -525,10 +528,22 @@ export interface BoardAttackSummary {
   readonly opponent: number;
 }
 
+export interface HeroHealthLimitSummary {
+  readonly friendly?: number;
+  readonly opponent?: number;
+}
+
 export interface AttackLogEvent {
   type: "attack-change";
   entityId?: string;
   attack: number;
+  raw: string;
+}
+
+export interface HeroHealthLimitLogEvent {
+  type: "hero-health-limit-change";
+  entity: EntitySnapshot;
+  value: number;
   raw: string;
 }
 
@@ -698,6 +713,7 @@ export type ParsedLogEvent =
   | ControllerLogEvent
   | EntityClassLogEvent
   | AttackLogEvent
+  | HeroHealthLimitLogEvent
   | ActionBoundaryLogEvent
   | BlockBoundaryLogEvent
   | CausalTriggerLogEvent

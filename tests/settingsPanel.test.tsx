@@ -26,6 +26,7 @@ const settings: TrackerSettings = {
     showOpponentAttack: true,
     secretPrediction: true,
     smartCardCounters: true,
+    healthChange: true,
     position: "right",
     offsetX: 20,
     offsetY: -10,
@@ -157,6 +158,20 @@ describe("software settings", () => {
     expect(onChange).toHaveBeenLastCalledWith({
       ...settings,
       overlay: { ...settings.overlay, arenaHeroWinRateRanking: true }
+    });
+  });
+
+  it("controls the health-change overlay independently", () => {
+    const onChange = vi.fn();
+    renderPanel({ onChange });
+
+    const healthChange = screen.getByRole("switch", { name: /血量变化/ });
+    expect(healthChange).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("显示双方可恢复到的总血量上限；普通受伤、回血和护甲变化不会改变。")).toBeInTheDocument();
+    fireEvent.click(healthChange);
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...settings,
+      overlay: { ...settings.overlay, healthChange: false }
     });
   });
 

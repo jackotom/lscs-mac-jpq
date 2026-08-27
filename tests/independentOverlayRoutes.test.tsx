@@ -16,6 +16,17 @@ function renderRoute(query: string) {
 
 describe("independent overlay renderer routes", () => {
   it.each(["friendly", "opponent"] as const)(
+    "does not flash the %s health counter before a real state is available",
+    (side) => {
+      window.history.replaceState({}, "", `/?${side}-health-overlay=1`);
+
+      const { container } = render(<App />);
+
+      expect(container.querySelector(".health-overlay")).not.toBeInTheDocument();
+    }
+  );
+
+  it.each(["friendly", "opponent"] as const)(
     "does not flash the %s attack counter before a real state is available",
     (side) => {
       window.history.replaceState({}, "", `/?${side}-attack-overlay=1`);
@@ -65,6 +76,18 @@ describe("independent overlay renderer routes", () => {
     expect(screen.getByLabelText("对手场攻 12")).toBeInTheDocument();
     expect(screen.queryByLabelText(/我方场攻/)).not.toBeInTheDocument();
     expect(container.querySelector(".secret-overlay, .smart-counter-overlay")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["friendly", "我方总血量上限 50"],
+    ["opponent", "对手总血量上限 32"]
+  ] as const)("renders only the %s health counter for its dedicated query", (side, label) => {
+    const { container } = renderRoute(`${side}-health-overlay=1`);
+
+    expect(container.querySelector(".health-overlay")).toBeInTheDocument();
+    expect(screen.getByLabelText(label)).toBeInTheDocument();
+    expect(container.querySelector(".single-attack-overlay, .secret-overlay, .smart-counter-overlay, .opponent-overlay-shell"))
+      .not.toBeInTheDocument();
   });
 
   it("renders the compact secret window only for the secret query", () => {

@@ -17,6 +17,7 @@ import { OpponentOverlayPanel } from "./components/OpponentOverlayPanel";
 import { BoardAttackOverlay } from "./components/BoardAttackOverlay";
 import { SecretOverlay } from "./components/SecretOverlay";
 import { SingleAttackOverlay } from "./components/SingleAttackOverlay";
+import { HealthOverlay } from "./components/HealthOverlay";
 import { SmartCounterOverlay } from "./components/SmartCounterOverlay";
 import { OverlayPanel } from "./components/OverlayPanel";
 import { LadderDeckRecommendationPanel } from "./components/LadderDeckRecommendationPanel";
@@ -271,6 +272,7 @@ const qaOpponentOverlayState: PublicTrackerState = {
   deck: [],
   [LEGACY_USED_ROWS_KEY]: [],
   boardAttack: { friendly: 7, opponent: 12 },
+  heroHealthLimit: { friendly: 50, opponent: 32 },
   matchCounters: {
     friendly: { nextFatigueDamage: 2, corpses: 6, spellsPlayed: 8 },
     opponent: { nextFatigueDamage: 3, corpses: 4, spellsPlayed: 5 }
@@ -537,6 +539,8 @@ function App() {
   const isBoardAttackOverlay = overlaySearchParams.get("board-attack-overlay") === "1";
   const isFriendlyAttackOverlay = overlaySearchParams.get("friendly-attack-overlay") === "1";
   const isOpponentAttackOverlay = overlaySearchParams.get("opponent-attack-overlay") === "1";
+  const isFriendlyHealthOverlay = overlaySearchParams.get("friendly-health-overlay") === "1";
+  const isOpponentHealthOverlay = overlaySearchParams.get("opponent-health-overlay") === "1";
   const isSecretOverlay = overlaySearchParams.get("secret-overlay") === "1";
   const isSmartCounterOverlay = overlaySearchParams.get("smart-counter-overlay") === "1";
   const isOverlay = overlaySearchParams.get("overlay") === "1";
@@ -1609,6 +1613,15 @@ function App() {
     return <SingleAttackOverlay side={side} value={boardState.boardAttack?.[side] ?? 0} />;
   }
 
+  if (isFriendlyHealthOverlay || isOpponentHealthOverlay) {
+    const isQaHealthOverlay = overlaySearchParams.get("qa-opponent-demo") === "1";
+    const healthState = isQaHealthOverlay ? qaOpponentOverlayState : state;
+    if (!isQaHealthOverlay && healthState.gameActive !== true) return null;
+    const side = isFriendlyHealthOverlay ? "friendly" : "opponent";
+    const value = healthState.heroHealthLimit?.[side];
+    return value === undefined ? null : <HealthOverlay side={side} value={value} />;
+  }
+
   if (isSecretOverlay) {
     const secretState = overlaySearchParams.get("qa-secret-dense") === "1"
       ? qaDenseSecretOverlayState
@@ -1979,7 +1992,7 @@ function DesktopSidebar({
         </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.6.8</small>
+          <small>v0.6.9</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

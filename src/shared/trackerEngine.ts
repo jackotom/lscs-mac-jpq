@@ -863,6 +863,7 @@ export class TrackerEngine {
       opponentPlayed: opponentPlayed.map((row) => this.withCardDetails(row, "opponent")),
       opponentSecrets: opponentSecretSlots,
       boardAttack: this.buildBoardAttack(),
+      heroHealthLimit: this.buildHeroHealthLimit(),
       matchCounters: this.buildMatchCounters(),
       smartCounters: buildSmartCardCounters({
         uses: this.cardUses,
@@ -1060,6 +1061,11 @@ export class TrackerEngine {
 
     if (event.type === "attack-change") {
       this.mergeEntity({ id: event.entityId, attack: event.attack });
+      return;
+    }
+
+    if (event.type === "hero-health-limit-change") {
+      this.mergeEntity({ ...event.entity, healthLimit: event.value });
       return;
     }
 
@@ -1468,6 +1474,13 @@ export class TrackerEngine {
       return;
     }
 
+    if (tagName === "HEALTH") {
+      const value = Number(tagValue);
+      if (!Number.isFinite(value)) return;
+      this.pendingEntityDetail = this.mergeEntity({ ...this.pendingEntityDetail, healthLimit: value });
+      return;
+    }
+
     if (tagName === "CARDTYPE") {
       this.pendingEntityDetail = this.mergeEntity({ ...this.pendingEntityDetail, cardType: tagValue });
       return;
@@ -1586,6 +1599,28 @@ export class TrackerEngine {
       else if (this.isKnownOpponentController(entity.controller)) opponent += entity.attack;
     }
     return { friendly, opponent };
+  }
+
+  private buildHeroHealthLimit(): PublicTrackerState["heroHealthLimit"] {
+    if (!this.gameActive || this.friendlyController === undefined) return undefined;
+
+    let friendly: number | undefined;
+    let opponent: number | undefined;
+    for (const entity of this.entities.values()) {
+      if (!isHeroEntity(entity) || entity.zone !== "PLAY" || entity.healthLimit === undefined) continue;
+      if (!Number.isFinite(entity.healthLimit) || !Number.isInteger(entity.controller) || entity.controller! <= 0) continue;
+
+      const healthLimit = Math.max(0, entity.healthLimit);
+      if (this.isFriendlyController(entity.controller)) friendly = healthLimit;
+      else if (this.isKnownOpponentController(entity.controller)) opponent = healthLimit;
+    }
+
+    return friendly === undefined && opponent === undefined
+      ? undefined
+      : {
+          ...(friendly !== undefined ? { friendly } : {}),
+          ...(opponent !== undefined ? { opponent } : {})
+        };
   }
 
   private observeFriendlyCard(observation: FriendlyObservation) {
@@ -3527,6 +3562,11 @@ function isCoinCard(card: CardInfo): boolean {
     /(?:^|_)coin\d*$/u.test(cardId) ||
     name === "幸运币" ||
     name === "the coin";
+}
+
+function isHeroEntity(entity: EntitySnapshot) {
+  const cardType = entity.cardType?.replace(/[\s_-]+/g, "").toLocaleUpperCase();
+  return cardType === "HERO" || cardType === "英雄" || cardType === "3";
 }
 
 function normalizeCardKey(name: string) {

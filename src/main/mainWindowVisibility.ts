@@ -7,6 +7,8 @@ export function isQaOverlayCapture(environment: Readonly<Record<string, string |
     environment.QA_OPEN_BOARD_ATTACK_OVERLAY === "1" ||
     environment.QA_OPEN_FRIENDLY_ATTACK_OVERLAY === "1" ||
     environment.QA_OPEN_OPPONENT_ATTACK_OVERLAY === "1" ||
+    environment.QA_OPEN_FRIENDLY_HEALTH_OVERLAY === "1" ||
+    environment.QA_OPEN_OPPONENT_HEALTH_OVERLAY === "1" ||
     environment.QA_OPEN_SECRET_OVERLAY === "1" ||
     environment.QA_OPEN_SMART_COUNTER_OVERLAY === "1" ||
     environment.QA_OPEN_ARENA_HERO_RANKING_OVERLAY === "1" ||

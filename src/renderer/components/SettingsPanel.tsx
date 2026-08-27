@@ -393,6 +393,7 @@ export function SettingsPanel({
             <ToggleControl label="对手场攻悬浮窗" description="独立打开或关闭对手场攻圆形计数窗" checked={settings.overlay.showOpponentAttack} disabled={controlsDisabled} onChange={(value) => updateOverlay({ showOpponentAttack: value })} />
             <ToggleControl label="奥秘预测悬浮窗" description="独立显示对手奥秘及仍可能的候选" checked={settings.overlay.secretPrediction} disabled={controlsDisabled} onChange={(value) => updateOverlay({ secretPrediction: value })} />
             <ToggleControl label="智能卡牌计数悬浮窗" description="显示龙牌触发进度、虚空灵魂等本局关键计数" checked={settings.overlay.smartCardCounters} disabled={controlsDisabled} onChange={(value) => updateOverlay({ smartCardCounters: value })} />
+            <ToggleControl label="血量变化" description="显示双方可恢复到的总血量上限；普通受伤、回血和护甲变化不会改变。" checked={settings.overlay.healthChange} disabled={controlsDisabled} onChange={(value) => updateOverlay({ healthChange: value })} />
             {smartCounters.map((counter) => {
               const hiddenIds = (settings.overlay as OverlaySettingsWithSmartCounterVisibility).hiddenSmartCounterIds ?? [];
               const valueLabel = counter.target ? `${counter.value}/${counter.target}` : String(counter.value);

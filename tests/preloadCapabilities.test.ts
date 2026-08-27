@@ -69,6 +69,8 @@ describe("preload capabilities", () => {
   it.each([
     "friendly-attack-overlay",
     "opponent-attack-overlay",
+    "friendly-health-overlay",
+    "opponent-health-overlay",
     "secret-overlay",
     "smart-counter-overlay"
   ])("gives %s read-only state capabilities", (route) => {
@@ -84,6 +86,8 @@ describe("preload capabilities", () => {
   it.each([
     "friendly-attack-overlay",
     "opponent-attack-overlay",
+    "friendly-health-overlay",
+    "opponent-health-overlay",
     "smart-counter-overlay"
   ])("gives %s a sender-scoped drag capability", async (route) => {
     window.history.replaceState({}, "", `/?${route}=1`);

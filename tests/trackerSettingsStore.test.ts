@@ -31,6 +31,7 @@ const expectedDefaults = {
     showOpponentAttack: false,
     secretPrediction: true,
     smartCardCounters: true,
+    healthChange: true,
     hiddenSmartCounterIds: [],
     position: "right",
     offsetX: 20,
@@ -170,6 +171,25 @@ describe("TrackerSettingsStore", () => {
 
     await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual(expectedDefaults);
     await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toEqual(expectedDefaults);
+  });
+
+  it("adds the health-change switch without losing existing overlay preferences", async () => {
+    const userDataDirectory = await createUserDataDirectory();
+    const filePath = path.join(userDataDirectory, "tracker-settings.json");
+    const { healthChange: _missing, ...oldOverlay } = expectedDefaults.overlay;
+    const saved = {
+      ...expectedDefaults,
+      overlay: { ...oldOverlay, secretPrediction: false }
+    };
+    await writeFile(filePath, JSON.stringify(saved), "utf8");
+
+    await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual({
+      ...expectedDefaults,
+      overlay: { ...expectedDefaults.overlay, secretPrediction: false }
+    });
+    await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toMatchObject({
+      overlay: { healthChange: true, secretPrediction: false }
+    });
   });
 
   it("adds the overlay appearance to settings saved by the previous version", async () => {

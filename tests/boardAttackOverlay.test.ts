@@ -6,6 +6,7 @@ import {
   getBoardAttackIconBounds,
   getBoardAttackOverlayQuery,
   getBoardAttackOverlayWindowOptions,
+  getHeroHealthOverlayBounds,
   getSecretOverlayBounds,
   getSmartCounterOverlayBounds,
   setAuxiliaryOverlayMouseInteractive,
@@ -45,6 +46,23 @@ describe("board attack overlay", () => {
       opponent: { x: 610, y: 274, width: 44, height: 44 },
       friendly: { x: 610, y: 726, width: 44, height: 44 }
     });
+  });
+
+  it("places compact health counters beside both heroes without covering them or the attack icons", () => {
+    const display = { x: 100, y: 50, width: 2000, height: 1000 };
+    const attack = getBoardAttackIconBounds(display);
+    const opponent = getHeroHealthOverlayBounds(display, "opponent-health");
+    const friendly = getHeroHealthOverlayBounds(display, "friendly-health");
+    const opponentHero = { x: 900, y: 70, width: 400, height: 280 };
+    const friendlyHero = { x: 900, y: 740, width: 400, height: 280 };
+
+    expect(opponent).toEqual({ x: 1350, y: 328, width: 72, height: 42 });
+    expect(friendly).toEqual({ x: 480, y: 690, width: 72, height: 42 });
+    expectPairwiseSeparate([opponent, friendly, attack.opponent, attack.friendly]);
+    expect(overlaps(opponent, opponentHero)).toBe(false);
+    expect(overlaps(friendly, friendlyHero)).toBe(false);
+    expectInsideDisplay(opponent, display);
+    expectInsideDisplay(friendly, display);
   });
 
   it("stays visible while Hearthstone or one of the tracker overlays is frontmost", () => {

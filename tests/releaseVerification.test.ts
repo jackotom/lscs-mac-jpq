@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.6.8");
+    expect(packageJson.version).toBe("0.6.9");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');
@@ -163,6 +163,8 @@ describe("release verification entrypoint", () => {
     const mainSource = read("src/main/main.ts");
 
     expect(script).toContain("run_capture smart-counter-overlay fixtures/logs/session-2026-07-10 QA_OPEN_SMART_COUNTER_OVERLAY");
+    expect(script).toContain("run_capture friendly-health-overlay fixtures/logs/session-2026-07-10 QA_OPEN_FRIENDLY_HEALTH_OVERLAY");
+    expect(script).toContain("run_capture opponent-health-overlay fixtures/logs/session-2026-07-10 QA_OPEN_OPPONENT_HEALTH_OVERLAY");
     expect(script).toContain('"smart-counter-overlay": "smart-counter-overlay=1"');
     expect(script).toContain('if [[ "$name" == "smart-counter-overlay" ]]');
     expect(script).toContain('QA_APPLY_TRACKER_SETTINGS_EFFECTS="$qa_apply_tracker_settings_effects"');

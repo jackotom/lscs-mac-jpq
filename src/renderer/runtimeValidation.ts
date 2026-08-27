@@ -41,6 +41,9 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isOptionalMatchCounters(value.matchCounters)) {
     throw new Error("本局公开计数数据无效，已拒绝更新界面。");
   }
+  if (!isOptionalHeroHealthLimit(value.heroHealthLimit)) {
+    throw new Error("英雄血量上限数据无效，已拒绝更新界面。");
+  }
   if (!isOptionalSmartCounters(value.smartCounters)) {
     throw new Error("智能卡牌计数数据无效，已拒绝更新界面。");
   }
@@ -91,6 +94,14 @@ function isOptionalTurnTimer(value: unknown): boolean {
     (value.activeSide === undefined || value.activeSide === "friendly" || value.activeSide === "opponent") &&
     (value.startedAt === undefined || (isNonEmptyString(value.startedAt) && Number.isFinite(Date.parse(value.startedAt)))) &&
     isNonNegativeInteger(value.durationSeconds)
+  );
+}
+
+function isOptionalHeroHealthLimit(value: unknown): boolean {
+  return value === undefined || (
+    isRecord(value) && hasOnlyKeys(value, ["friendly", "opponent"]) &&
+    (value.friendly === undefined || isNonNegativeInteger(value.friendly)) &&
+    (value.opponent === undefined || isNonNegativeInteger(value.opponent))
   );
 }
 
@@ -278,10 +289,10 @@ function isGeneralSettings(value: unknown): boolean {
 
 function isOverlaySettings(value: unknown): boolean {
   return isRecord(value) && hasOnlyKeys(value, [
-    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "healthChange", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen", "hiddenSmartCounterIds"
   ]) &&
-    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.healthChange, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
     isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&

@@ -32,6 +32,7 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettings = {
     showOpponentAttack: false,
     secretPrediction: true,
     smartCardCounters: true,
+    healthChange: true,
     hiddenSmartCounterIds: [],
     position: "right",
     offsetX: 20,
@@ -311,6 +312,9 @@ function migratePreviousOverlaySettings(
     smartCardCounters: typeof value.smartCardCounters === "boolean"
       ? value.smartCardCounters
       : true,
+    healthChange: typeof value.healthChange === "boolean"
+      ? value.healthChange
+      : true,
     hiddenSmartCounterIds: Array.isArray(value.hiddenSmartCounterIds)
       ? value.hiddenSmartCounterIds
       : []
@@ -324,10 +328,10 @@ function migratedOverlayTheme(value: unknown): TrackerOverlaySettings["theme"] {
 
 function isOverlaySettings(value: unknown): value is TrackerOverlaySettings {
   return hasExactKeys(value, [
-    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "hiddenSmartCounterIds", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "healthChange", "hiddenSmartCounterIds", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen"
   ]) &&
-    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.healthChange, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
     Array.isArray(value.hiddenSmartCounterIds) &&
     value.hiddenSmartCounterIds.length <= 200 &&

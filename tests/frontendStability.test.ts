@@ -48,6 +48,19 @@ describe("frontend stability helpers", () => {
     expect(parsePublicTrackerState(state)).toEqual(state);
   });
 
+  it("accepts independent hero health-limit values and rejects malformed limits", () => {
+    const state = createPublicTrackerState();
+
+    expect(parsePublicTrackerState({ ...state, heroHealthLimit: { friendly: 30 } }).heroHealthLimit)
+      .toEqual({ friendly: 30 });
+    expect(parsePublicTrackerState({ ...state, heroHealthLimit: { opponent: 42 } }).heroHealthLimit)
+      .toEqual({ opponent: 42 });
+    expect(() => parsePublicTrackerState({ ...state, heroHealthLimit: { friendly: -1 } }))
+      .toThrow(/英雄血量上限数据无效/);
+    expect(() => parsePublicTrackerState({ ...state, heroHealthLimit: { opponent: "30" } }))
+      .toThrow(/英雄血量上限数据无效/);
+  });
+
   it("accepts extensible smart-counter ids and scoped rule output", () => {
     const state = createPublicTrackerState({
       smartCounters: [{
@@ -132,6 +145,7 @@ describe("frontend stability helpers", () => {
         showOpponentAttack: true,
         secretPrediction: true,
         smartCardCounters: true,
+        healthChange: true,
         position: "left",
         offsetX: 20,
         offsetY: 0,

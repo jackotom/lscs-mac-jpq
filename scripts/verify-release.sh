@@ -324,6 +324,8 @@ run_capture() {
         if (String(group.gridTemplateRows).trim().split(/\s+/).length !== 2) process.exit(48);
       }
     }
+    if (scenario === "friendly-health-overlay" && !String(report.bodyText).includes("50")) process.exit(49);
+    if (scenario === "opponent-health-overlay" && !String(report.bodyText).includes("32")) process.exit(50);
     if (scenario.endsWith("-replay")) {
       if (!report.trackerState || !String(report.trackerState.logPath ?? "").includes(fixture)) process.exit(2);
       if (report.trackerState.status !== "watching") process.exit(3);
@@ -409,7 +411,7 @@ run_capture() {
         if (["选取率", "卡牌", "影响"].every((label) => body.includes(label))) process.exit(24);
       }
     }
-    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "friendly-attack-overlay=1", "smart-counter-overlay": "smart-counter-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
+    const routeByScenario = { "deck-overlay": "overlay=1", "constructed-duplicate-replay": "overlay=1", "arena-redraft-partial-replay": "overlay=1", "arena-redraft-exact-replay": "overlay=1", "arena-playing-replay": "overlay=1", "opponent-overlay": "opponent-overlay=1", "arena-choice-overlay": "arena-choice-overlay=1", "ladder-deck-overlay": "ladder-deck-overlay=1", "board-attack-overlay": "friendly-attack-overlay=1", "friendly-health-overlay": "friendly-health-overlay=1", "opponent-health-overlay": "opponent-health-overlay=1", "smart-counter-overlay": "smart-counter-overlay=1", "arena-hero-ranking-overlay": "arena-hero-ranking-overlay=1", "three-window-layout": "arena-hero-ranking-overlay=1" };
     if (candidateMatch) routeByScenario[scenario] = "overlay=1";
     if (routeByScenario[scenario] && !report.location.includes(routeByScenario[scenario])) process.exit(7);
     if (routeByScenario[scenario] && report.qaMainWindowVisible !== false) process.exit(36);
@@ -500,6 +502,8 @@ run_capture opponent-overlay fixtures/logs/session-2026-07-10 QA_OPEN_OPPONENT_O
 run_capture arena-choice-overlay fixtures/logs/arena-session QA_OPEN_ARENA_CHOICE_OVERLAY
 run_capture ladder-deck-overlay fixtures/logs/session-2026-07-10 QA_OPEN_LADDER_DECK_OVERLAY
 run_capture board-attack-overlay fixtures/logs/session-2026-07-10 QA_OPEN_BOARD_ATTACK_OVERLAY
+run_capture friendly-health-overlay fixtures/logs/session-2026-07-10 QA_OPEN_FRIENDLY_HEALTH_OVERLAY
+run_capture opponent-health-overlay fixtures/logs/session-2026-07-10 QA_OPEN_OPPONENT_HEALTH_OVERLAY
 run_capture smart-counter-overlay fixtures/logs/session-2026-07-10 QA_OPEN_SMART_COUNTER_OVERLAY
 run_capture arena-hero-ranking-overlay fixtures/logs/arena-session QA_OPEN_ARENA_HERO_RANKING_OVERLAY
 run_capture three-window-layout fixtures/logs/arena-session QA_OPEN_THREE_WINDOW_LAYOUT
@@ -507,6 +511,8 @@ require_file "$screenshots_dir/arena-redraft-partial-replay.png"
 require_file "$screenshots_dir/arena-redraft-exact-replay.png"
 require_file "$screenshots_dir/arena-playing-replay.png"
 require_file "$screenshots_dir/arena-choice-overlay.png"
+require_file "$screenshots_dir/friendly-health-overlay.png"
+require_file "$screenshots_dir/opponent-health-overlay.png"
 require_file "$screenshots_dir/smart-counter-overlay.png"
 require_file "$screenshots_dir/arena-hero-ranking-overlay.png"
 require_file "$screenshots_dir/three-window-layout.png"
@@ -514,6 +520,8 @@ require_file "$inspections_dir/arena-redraft-partial-replay.json"
 require_file "$inspections_dir/arena-redraft-exact-replay.json"
 require_file "$inspections_dir/arena-playing-replay.json"
 require_file "$inspections_dir/arena-choice-overlay.json"
+require_file "$inspections_dir/friendly-health-overlay.json"
+require_file "$inspections_dir/opponent-health-overlay.json"
 require_file "$inspections_dir/smart-counter-overlay.json"
 require_file "$inspections_dir/arena-hero-ranking-overlay.json"
 require_file "$inspections_dir/three-window-layout.json"

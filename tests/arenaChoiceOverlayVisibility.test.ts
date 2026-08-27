@@ -24,6 +24,12 @@ describe("arena choice overlay visibility", () => {
     expect(shouldShowArenaChoiceOverlay(draftingArena, "炉石记牌器")).toBe(false);
   });
 
+  it("stays visible while an auxiliary counter is being dragged", () => {
+    expect(shouldShowArenaChoiceOverlay(draftingArena, undefined, true)).toBe(true);
+    expect(shouldShowArenaChoiceOverlay(draftingArena, "ChatGPT", true)).toBe(true);
+    expect(shouldShowArenaChoiceOverlay({ ...draftingArena, status: "playing" }, undefined, true)).toBe(false);
+  });
+
   it("shows two reliable choices while the third card is still being recognized", () => {
     expect(shouldShowArenaChoiceOverlay({ ...draftingArena, currentChoices: draftingArena.currentChoices.slice(0, 2) }, "Hearthstone")).toBe(true);
     expect(shouldShowArenaChoiceOverlay({ ...draftingArena, currentChoices: draftingArena.currentChoices.slice(0, 1) }, "Hearthstone")).toBe(false);

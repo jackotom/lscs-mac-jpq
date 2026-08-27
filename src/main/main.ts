@@ -53,6 +53,7 @@ import {
   configureBoardAttackOverlayWindow,
   getAuxiliaryOverlayBounds,
   getBoardAttackOverlayWindowOptions,
+  getHeroHealthOverlayBounds,
   getSecretOverlayBounds,
   getSmartCounterOverlayBounds,
   setAuxiliaryOverlayMouseInteractive,
@@ -182,6 +183,8 @@ let opponentOverlayWindow: BrowserWindow | undefined;
 let opponentOverlayWindowCreationPromise: Promise<BrowserWindow> | undefined;
 let friendlyAttackOverlayWindow: BrowserWindow | undefined;
 let opponentAttackOverlayWindow: BrowserWindow | undefined;
+let friendlyHealthOverlayWindow: BrowserWindow | undefined;
+let opponentHealthOverlayWindow: BrowserWindow | undefined;
 let secretOverlayWindow: BrowserWindow | undefined;
 let secretOverlayExpandedBounds: AuxiliaryOverlayBounds | undefined;
 const smartCounterOverlayWindows = new Map<string, BrowserWindow>();
@@ -231,6 +234,8 @@ let boardAttackOverlayRefreshInFlight = false;
 const auxiliaryOverlayGenerations: Record<AuxiliaryOverlayKind, number> = {
   "friendly-attack": 0,
   "opponent-attack": 0,
+  "friendly-health": 0,
+  "opponent-health": 0,
   secret: 0,
   "smart-counter": 0
 };
@@ -575,6 +580,8 @@ async function createWindow(options: { showWhenReady?: boolean; focusWhenReady?:
     && process.env.QA_OPEN_BOARD_ATTACK_OVERLAY !== "1"
     && process.env.QA_OPEN_FRIENDLY_ATTACK_OVERLAY !== "1"
     && process.env.QA_OPEN_OPPONENT_ATTACK_OVERLAY !== "1"
+    && process.env.QA_OPEN_FRIENDLY_HEALTH_OVERLAY !== "1"
+    && process.env.QA_OPEN_OPPONENT_HEALTH_OVERLAY !== "1"
     && process.env.QA_OPEN_SECRET_OVERLAY !== "1"
     && process.env.QA_OPEN_SMART_COUNTER_OVERLAY !== "1"
     && process.env.QA_OPEN_ARENA_HERO_RANKING_OVERLAY !== "1"
@@ -726,6 +733,16 @@ if (hasSingleInstanceLock) {
     } else if (process.env.QA_OPEN_OPPONENT_ATTACK_OVERLAY === "1") {
       const window = await createOpponentAttackOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
       if (!window) throw new Error("对手场攻悬浮窗渲染验证失败");
+      window.showInactive();
+      await captureQaScreenshotIfRequested(window);
+    } else if (process.env.QA_OPEN_FRIENDLY_HEALTH_OVERLAY === "1") {
+      const window = await createFriendlyHealthOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+      if (!window) throw new Error("我方血量悬浮窗渲染验证失败");
+      window.showInactive();
+      await captureQaScreenshotIfRequested(window);
+    } else if (process.env.QA_OPEN_OPPONENT_HEALTH_OVERLAY === "1") {
+      const window = await createOpponentHealthOverlayWindow(screen.getPrimaryDisplay().bounds, { qaDemo: true });
+      if (!window) throw new Error("对手血量悬浮窗渲染验证失败");
       window.showInactive();
       await captureQaScreenshotIfRequested(window);
     } else if (process.env.QA_OPEN_SECRET_OVERLAY === "1") {
@@ -1180,6 +1197,8 @@ function getTrustedWebContents(): ReadonlySet<Electron.WebContents> {
       opponentOverlayWindow,
       friendlyAttackOverlayWindow,
       opponentAttackOverlayWindow,
+      friendlyHealthOverlayWindow,
+      opponentHealthOverlayWindow,
       secretOverlayWindow,
       ...smartCounterOverlayWindows.values(),
       ladderDeckOverlayWindow,
@@ -1237,6 +1256,11 @@ async function applyTrackerSettingsEffects(
       !trackerSettings.overlay.showOpponentAttack) {
     releaseOpponentAttackOverlayWindow();
   }
+  if (previous && previous.overlay.healthChange !== trackerSettings.overlay.healthChange &&
+      !trackerSettings.overlay.healthChange) {
+    releaseFriendlyHealthOverlayWindow();
+    releaseOpponentHealthOverlayWindow();
+  }
   if (previous && previous.overlay.secretPrediction !== trackerSettings.overlay.secretPrediction &&
       !trackerSettings.overlay.secretPrediction) {
     releaseSecretOverlayWindow();
@@ -1254,6 +1278,7 @@ async function applyTrackerSettingsEffects(
   const showAnyAuxiliaryOverlay = trackerSettings.overlay.enabled && (
     trackerSettings.overlay.showFriendlyAttack ||
     trackerSettings.overlay.showOpponentAttack ||
+    trackerSettings.overlay.healthChange ||
     trackerSettings.overlay.secretPrediction ||
     trackerSettings.overlay.smartCardCounters
   );
@@ -1314,6 +1339,8 @@ function overlayWindows(): BrowserWindow[] {
     opponentOverlayWindow,
     friendlyAttackOverlayWindow,
     opponentAttackOverlayWindow,
+    friendlyHealthOverlayWindow,
+    opponentHealthOverlayWindow,
     secretOverlayWindow,
     ...smartCounterOverlayWindows.values(),
     ladderDeckOverlayWindow,
@@ -1780,6 +1807,8 @@ function stopBoardAttackOverlayMonitor() {
   }
   releaseFriendlyAttackOverlayWindow();
   releaseOpponentAttackOverlayWindow();
+  releaseFriendlyHealthOverlayWindow();
+  releaseOpponentHealthOverlayWindow();
   releaseSecretOverlayWindow();
   releaseAllSmartCounterOverlayWindows();
 }
@@ -1793,6 +1822,8 @@ async function refreshBoardAttackOverlayWindow() {
     const hideAll = () => {
       releaseFriendlyAttackOverlayWindow();
       releaseOpponentAttackOverlayWindow();
+      releaseFriendlyHealthOverlayWindow();
+      releaseOpponentHealthOverlayWindow();
       releaseSecretOverlayWindow();
       releaseAllSmartCounterOverlayWindows();
     };
@@ -1822,6 +1853,16 @@ async function refreshBoardAttackOverlayWindow() {
       trackerSettings.overlay.showOpponentAttack,
       () => createOpponentAttackOverlayWindow(display.bounds),
       releaseOpponentAttackOverlayWindow
+    );
+    await refreshAuxiliaryOverlayWindow(
+      trackerSettings.overlay.healthChange && state.heroHealthLimit?.friendly !== undefined,
+      () => createFriendlyHealthOverlayWindow(display.bounds),
+      releaseFriendlyHealthOverlayWindow
+    );
+    await refreshAuxiliaryOverlayWindow(
+      trackerSettings.overlay.healthChange && state.heroHealthLimit?.opponent !== undefined,
+      () => createOpponentHealthOverlayWindow(display.bounds),
+      releaseOpponentHealthOverlayWindow
     );
     await refreshAuxiliaryOverlayWindow(
       trackerSettings.overlay.secretPrediction && (state.opponentSecrets?.length ?? 0) > 0,
@@ -1897,6 +1938,8 @@ function getMovableAuxiliaryOverlayWindow(
 ): BrowserWindow | undefined {
   if (kind === "friendly-attack") return friendlyAttackOverlayWindow;
   if (kind === "opponent-attack") return opponentAttackOverlayWindow;
+  if (kind === "friendly-health") return friendlyHealthOverlayWindow;
+  if (kind === "opponent-health") return opponentHealthOverlayWindow;
   if (kind === "secret") return secretOverlayWindow;
   const counterId = getSmartCounterIdFromOverlayKind(kind);
   return counterId ? smartCounterOverlayWindows.get(counterId) : undefined;
@@ -1907,6 +1950,8 @@ function resolveMovableAuxiliaryOverlayKind(sender: unknown): MovableAuxiliaryOv
   if (registered) return registered;
   if (sender === friendlyAttackOverlayWindow?.webContents) return "friendly-attack";
   if (sender === opponentAttackOverlayWindow?.webContents) return "opponent-attack";
+  if (sender === friendlyHealthOverlayWindow?.webContents) return "friendly-health";
+  if (sender === opponentHealthOverlayWindow?.webContents) return "opponent-health";
   if (sender === secretOverlayWindow?.webContents) return "secret";
   return undefined;
 }
@@ -2089,6 +2134,86 @@ function releaseOpponentAttackOverlayWindow(): void {
   auxiliaryOverlayDragSessions.delete("opponent-attack");
   opponentAttackOverlayWindow?.close();
   opponentAttackOverlayWindow = undefined;
+}
+
+async function createFriendlyHealthOverlayWindow(
+  displayBounds: { x: number; y: number; width: number; height: number },
+  options: { qaDemo?: boolean } = {}
+) {
+  const bounds = await resolveAuxiliaryOverlayBounds(
+    "friendly-health",
+    getHeroHealthOverlayBounds(displayBounds, "friendly-health")
+  );
+  if (friendlyHealthOverlayWindow && !friendlyHealthOverlayWindow.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(friendlyHealthOverlayWindow, bounds);
+    return friendlyHealthOverlayWindow;
+  }
+  const generation = beginAuxiliaryOverlayCreation("friendly-health");
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    "friendly-health",
+    bounds,
+    { "friendly-health-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
+    ".health-overlay"
+  );
+  if (!isAuxiliaryOverlayCreationCurrent("friendly-health", generation)) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  friendlyHealthOverlayWindow = createdWindow;
+  createdWindow?.on("closed", () => {
+    if (auxiliaryOverlayDragSessions.get("friendly-health")?.window === createdWindow) {
+      auxiliaryOverlayDragSessions.delete("friendly-health");
+    }
+    if (friendlyHealthOverlayWindow === createdWindow) friendlyHealthOverlayWindow = undefined;
+  });
+  return createdWindow;
+}
+
+function releaseFriendlyHealthOverlayWindow(): void {
+  cancelAuxiliaryOverlayCreation("friendly-health");
+  auxiliaryOverlayDragSessions.delete("friendly-health");
+  friendlyHealthOverlayWindow?.close();
+  friendlyHealthOverlayWindow = undefined;
+}
+
+async function createOpponentHealthOverlayWindow(
+  displayBounds: { x: number; y: number; width: number; height: number },
+  options: { qaDemo?: boolean } = {}
+) {
+  const bounds = await resolveAuxiliaryOverlayBounds(
+    "opponent-health",
+    getHeroHealthOverlayBounds(displayBounds, "opponent-health")
+  );
+  if (opponentHealthOverlayWindow && !opponentHealthOverlayWindow.isDestroyed()) {
+    updateAuxiliaryOverlayBounds(opponentHealthOverlayWindow, bounds);
+    return opponentHealthOverlayWindow;
+  }
+  const generation = beginAuxiliaryOverlayCreation("opponent-health");
+  const createdWindow = await createAuxiliaryOverlayWindow(
+    "opponent-health",
+    bounds,
+    { "opponent-health-overlay": "1", ...(options.qaDemo ? { "qa-opponent-demo": "1" } : {}) },
+    ".health-overlay"
+  );
+  if (!isAuxiliaryOverlayCreationCurrent("opponent-health", generation)) {
+    if (createdWindow && !createdWindow.isDestroyed()) createdWindow.destroy();
+    return undefined;
+  }
+  opponentHealthOverlayWindow = createdWindow;
+  createdWindow?.on("closed", () => {
+    if (auxiliaryOverlayDragSessions.get("opponent-health")?.window === createdWindow) {
+      auxiliaryOverlayDragSessions.delete("opponent-health");
+    }
+    if (opponentHealthOverlayWindow === createdWindow) opponentHealthOverlayWindow = undefined;
+  });
+  return createdWindow;
+}
+
+function releaseOpponentHealthOverlayWindow(): void {
+  cancelAuxiliaryOverlayCreation("opponent-health");
+  auxiliaryOverlayDragSessions.delete("opponent-health");
+  opponentHealthOverlayWindow?.close();
+  opponentHealthOverlayWindow = undefined;
 }
 
 async function createSecretOverlayWindow(
@@ -2623,7 +2748,11 @@ async function refreshArenaChoiceOverlayWindow() {
       !trackerSettings.overlay.enabled
     ) return;
     const arena = tracker.getState().arena;
-    const shouldShow = shouldShowArenaChoiceOverlay(arena, frontmostAppName);
+    const shouldShow = shouldShowArenaChoiceOverlay(
+      arena,
+      frontmostAppName,
+      isAuxiliaryOverlayInteractionActive()
+    );
     if (!shouldShow) {
       releaseTransientWindow(arenaChoiceOverlayWindow);
       return;
@@ -2713,7 +2842,8 @@ async function refreshArenaHeroRankingWindow() {
           overlaySettingsPreviewWindows.arenaHeroRanking
         ) ||
         rankingWindowFocused ||
-        isArenaHeroRankingInteractionActive()
+        isArenaHeroRankingInteractionActive() ||
+        isAuxiliaryOverlayInteractionActive()
       );
     if (!shouldShow) {
       releaseTransientWindow(arenaHeroRankingWindow);

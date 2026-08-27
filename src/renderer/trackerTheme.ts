@@ -6,6 +6,8 @@ const overlayQueryKeys = [
   "board-attack-overlay",
   "friendly-attack-overlay",
   "opponent-attack-overlay",
+  "friendly-health-overlay",
+  "opponent-health-overlay",
   "secret-overlay",
   "smart-counter-overlay",
   "arena-choice-overlay",

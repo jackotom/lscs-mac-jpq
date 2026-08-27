@@ -72,6 +72,8 @@ const overlaySearchParams = new URLSearchParams(window.location.search);
 const isBoardAttackOverlay = overlaySearchParams.get("board-attack-overlay") === "1";
 const isSingleAttackOverlay = overlaySearchParams.get("friendly-attack-overlay") === "1" ||
   overlaySearchParams.get("opponent-attack-overlay") === "1";
+const isHealthOverlay = overlaySearchParams.get("friendly-health-overlay") === "1" ||
+  overlaySearchParams.get("opponent-health-overlay") === "1";
 const isSecretOverlay = overlaySearchParams.get("secret-overlay") === "1";
 const isSmartCounterOverlay = overlaySearchParams.get("smart-counter-overlay") === "1";
 
@@ -81,6 +83,10 @@ if (isBoardAttackOverlay) {
 
 if (isSingleAttackOverlay) {
   document.documentElement.classList.add("single-attack-overlay-document");
+}
+
+if (isHealthOverlay) {
+  document.documentElement.classList.add("health-overlay-document");
 }
 
 if (isSecretOverlay) {

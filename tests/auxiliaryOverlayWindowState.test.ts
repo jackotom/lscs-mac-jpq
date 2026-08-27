@@ -104,6 +104,16 @@ describe("AuxiliaryOverlayWindowStateStore", () => {
       { x: 578, y: 278, width: 44, height: 44 },
       originalWorkArea
     );
+    await store.saveBounds(
+      "friendly-health",
+      { x: 108, y: 58, width: 72, height: 42 },
+      originalWorkArea
+    );
+    await store.saveBounds(
+      "opponent-health",
+      { x: 1020, y: 500, width: 72, height: 42 },
+      originalWorkArea
+    );
     await store.setSecretCollapsed(true);
 
     const restored = new AuxiliaryOverlayWindowStateStore(root);
@@ -123,6 +133,16 @@ describe("AuxiliaryOverlayWindowStateStore", () => {
       { x: 2100, y: 200, width: 44, height: 44 },
       currentWorkArea
     )).resolves.toEqual({ x: 2978, y: 578, width: 44, height: 44 });
+    await expect(restored.resolveBounds(
+      "friendly-health",
+      { x: 2100, y: 200, width: 72, height: 42 },
+      currentWorkArea
+    )).resolves.toEqual({ x: 2008, y: 108, width: 72, height: 42 });
+    await expect(restored.resolveBounds(
+      "opponent-health",
+      { x: 2100, y: 200, width: 72, height: 42 },
+      currentWorkArea
+    )).resolves.toEqual({ x: 3920, y: 1050, width: 72, height: 42 });
     await expect(restored.getSecretCollapsed()).resolves.toBe(true);
   });
 
@@ -155,6 +175,8 @@ describe("AuxiliaryOverlayWindowStateStore", () => {
     expect(parseAuxiliaryOverlayWindowState({
       positions: {
         "friendly-attack": { xRatio: 0.1, yRatio: 0.2 },
+        "friendly-health": { xRatio: 0.2, yRatio: 0.3 },
+        "opponent-health": { xRatio: 0.7, yRatio: 0.4 },
         "smart-counter:friendly-dragons-played": { xRatio: 0.3, yRatio: 0.4 },
         "smart-counter:../secret": { xRatio: 0.9, yRatio: 0.9 }
       },
@@ -162,6 +184,8 @@ describe("AuxiliaryOverlayWindowStateStore", () => {
     })).toEqual({
       positions: {
         "friendly-attack": { xRatio: 0.1, yRatio: 0.2 },
+        "friendly-health": { xRatio: 0.2, yRatio: 0.3 },
+        "opponent-health": { xRatio: 0.7, yRatio: 0.4 },
         "smart-counter:friendly-dragons-played": { xRatio: 0.3, yRatio: 0.4 }
       },
       secretCollapsed: false

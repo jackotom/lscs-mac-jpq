@@ -16,6 +16,8 @@ describe("auxiliary overlay main integration", () => {
   it.each([
     ["createFriendlyAttackOverlayWindow", "friendly-attack"],
     ["createOpponentAttackOverlayWindow", "opponent-attack"],
+    ["createFriendlyHealthOverlayWindow", "friendly-health"],
+    ["createOpponentHealthOverlayWindow", "opponent-health"],
     ["createSecretOverlayWindow", "secret"]
   ])("restores saved placement before refreshing %s", (functionName, kind) => {
     const source = functionSource(functionName);
@@ -57,6 +59,69 @@ describe("auxiliary overlay main integration", () => {
     expect(refreshSource).toMatch(
       /shouldShowBoardAttackOverlay\([\s\S]*?auxiliaryInteractionActive[\s\S]*?\)/u
     );
+    expect(refreshSource).toContain("createFriendlyHealthOverlayWindow");
+    expect(refreshSource).toContain("createOpponentHealthOverlayWindow");
+    expect(functionSource("isAnyOverlayInteractionActive")).toContain(
+      "isAuxiliaryOverlayInteractionActive()"
+    );
+  });
+
+  it("owns, refreshes, releases, and styles two independent health windows", () => {
+    expect(main).toContain("let friendlyHealthOverlayWindow");
+    expect(main).toContain("let opponentHealthOverlayWindow");
+    expect(functionSource("createFriendlyHealthOverlayWindow")).toContain(
+      '"friendly-health-overlay": "1"'
+    );
+    expect(functionSource("createOpponentHealthOverlayWindow")).toContain(
+      '"opponent-health-overlay": "1"'
+    );
+    expect(functionSource("stopBoardAttackOverlayMonitor")).toContain(
+      "releaseFriendlyHealthOverlayWindow"
+    );
+    expect(functionSource("stopBoardAttackOverlayMonitor")).toContain(
+      "releaseOpponentHealthOverlayWindow"
+    );
+    expect(functionSource("overlayWindows")).toContain("friendlyHealthOverlayWindow");
+    expect(functionSource("overlayWindows")).toContain("opponentHealthOverlayWindow");
+
+    const settingsEffects = functionSource("applyTrackerSettingsEffects");
+    expect(settingsEffects).toContain("previous.overlay.healthChange");
+    expect(settingsEffects).toContain("trackerSettings.overlay.healthChange");
+    expect(settingsEffects).toContain("releaseFriendlyHealthOverlayWindow");
+    expect(settingsEffects).toContain("releaseOpponentHealthOverlayWindow");
+  });
+
+  it("creates each health window only when that side has a total health limit, including zero", () => {
+    const refreshSource = functionSource("refreshBoardAttackOverlayWindow");
+
+    expect(refreshSource).toContain("state.heroHealthLimit?.friendly !== undefined");
+    expect(refreshSource).toContain("state.heroHealthLimit?.opponent !== undefined");
+    expect(refreshSource).not.toContain("state.heroHealth?.");
+  });
+
+  it("binds health senders to drag targets and clears only their own sessions on close", () => {
+    const resolveSource = functionSource("resolveMovableAuxiliaryOverlayKind");
+    const windowSource = functionSource("getMovableAuxiliaryOverlayWindow");
+    const friendlyCreate = functionSource("createFriendlyHealthOverlayWindow");
+    const opponentCreate = functionSource("createOpponentHealthOverlayWindow");
+
+    expect(resolveSource).toContain('return "friendly-health"');
+    expect(resolveSource).toContain('return "opponent-health"');
+    expect(windowSource).toContain("friendlyHealthOverlayWindow");
+    expect(windowSource).toContain("opponentHealthOverlayWindow");
+    expect(friendlyCreate).toContain(
+      'auxiliaryOverlayDragSessions.get("friendly-health")?.window === createdWindow'
+    );
+    expect(opponentCreate).toContain(
+      'auxiliaryOverlayDragSessions.get("opponent-health")?.window === createdWindow'
+    );
+  });
+
+  it("provides isolated QA launch routes for both health windows", () => {
+    expect(main).toContain('process.env.QA_OPEN_FRIENDLY_HEALTH_OVERLAY === "1"');
+    expect(main).toContain('process.env.QA_OPEN_OPPONENT_HEALTH_OVERLAY === "1"');
+    expect(main).toContain("createFriendlyHealthOverlayWindow(screen.getPrimaryDisplay().bounds");
+    expect(main).toContain("createOpponentHealthOverlayWindow(screen.getPrimaryDisplay().bounds");
   });
 
   it("binds each smart counter sender to its own persisted drag target", () => {

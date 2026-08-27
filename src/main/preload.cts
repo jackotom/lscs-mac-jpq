@@ -47,6 +47,8 @@ function getPreloadCapability(search: string): PreloadCapability {
   if (
     params.get("friendly-attack-overlay") === "1" ||
     params.get("opponent-attack-overlay") === "1" ||
+    params.get("friendly-health-overlay") === "1" ||
+    params.get("opponent-health-overlay") === "1" ||
     params.get("smart-counter-overlay") === "1"
   ) return "movable-state-display";
   if (

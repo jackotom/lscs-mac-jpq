@@ -173,7 +173,7 @@ The main process separately watches the number of active opponent-secret slots. 
 
 The opponent window is retained when its close control is used. It stores the expanded bounds under Electron `userData`, folds to a `52×38` draggable entry, and restores the saved bounds on the next manual toggle. Secret updates may show the folded entry inactive but never expand it automatically. The main process is the single source of truth for folded state: only the opponent window may call the set-state IPC, every fold/restore publishes `tracker:opponent-overlay-collapsed:update`, and the main-window toggle uses the same controller so the renderer cannot get out of sync.
 
-Board-attack totals remain in tracker state. New users start with both board-attack overlay switches disabled; the monitor starts only after the user explicitly enables either switch. Friendly attack, opponent attack, and secret windows persist separate display-relative positions under Electron `userData`; monitor refreshes do not overwrite an active drag, and restored bounds are clamped into the current Hearthstone display work area with an 8-pixel edge inset. The secret window stores collapsed intent in the same validated atomic state file, uses a real `44×44` BrowserWindow while collapsed, and preserves its top-left anchor across resize. Preload exposes drag IPC only to the three sender-scoped movable routes; main-process sender mapping and finite coordinates are revalidated for every gesture. Mouse input remains ignored by default and is enabled only while the renderer is over an authorized question, secret title, or attack control. `QA_OPEN_BOARD_ATTACK_OVERLAY=1` still opens the deterministic full-display layer for automated rendering acceptance.
+Board-attack totals remain in tracker state. New users start with both board-attack overlay switches disabled; the monitor starts only after the user explicitly enables either switch. Friendly attack, opponent attack, health-limit, secret, and smart-counter windows persist separate display-relative positions under Electron `userData`; monitor refreshes do not overwrite an active drag, and restored bounds are clamped into the current Hearthstone display work area with an 8-pixel edge inset. The secret window stores collapsed intent in the same validated atomic state file, uses a real `44×44` BrowserWindow while collapsed, and preserves its top-left anchor across resize. Preload exposes drag IPC only to sender-scoped movable routes; main-process sender mapping and finite coordinates are revalidated for every gesture. Mouse input remains ignored by default and is enabled only while the renderer is over an authorized question, secret title, attack control, health-limit control, or smart counter. `QA_OPEN_BOARD_ATTACK_OVERLAY=1` still opens the deterministic full-display layer for automated rendering acceptance.
 
 Board attack is the total attack shown by heroes and minions in `PLAY`. Weapons are excluded because their attack is already reflected on the hero; locations and other non-combat entities are also excluded. Card type comes from live `CARDTYPE` tags when available, with the local card database as a fallback.
 
@@ -340,3 +340,10 @@ Legacy shared fields remain for one compatibility version, but renderer state is
 - 活跃竞技场期间，构筑画面识别必须同时确认模式和唯一套牌；只有“标准/狂野”文字、识别失败或权限失败都不能销毁竞技场状态。
 - 炉石窗口截图必须在有限时间内结束。超时按可恢复失败处理，并释放当前识别占用，让下一轮 450ms 监控继续尝试。
 - 地下竞技场从 `REDRAFTING` 进入选完新牌后的 `ACTIVE_DRAFT_DECK` 时，`awaitingExactDeck`、5 张新牌和 30–35 张候选池继续保留；最终精确 30 张牌到达后再收口。
+
+## 2026-08-27 总血量上限日志契约
+
+- 只处理英雄实体的 `HEALTH` 上限。普通受伤与回血改变 `DAMAGE`，护甲改变 `ARMOR`，三者都不能改写计数器。
+- 阿马拉等效果把 `HEALTH` 从 30 改为 40 时发布 40；削减上限把 40 改为 39 时发布 39。
+- 直接 `TAG_CHANGE` 与多行 `FULL_ENTITY` 都要支持；玩家身份、控制者或英雄类型晚到后回填双方归属。
+- 新对局、对局结束和日志会话重置时清空旧上限；没有可靠值时不发布。

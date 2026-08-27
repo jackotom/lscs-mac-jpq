@@ -142,3 +142,9 @@
 - `cardTracking.contextDetailsBySideAndCardKey` 按双方隔离投影球等单局动态详情。
 - `cardTracking.deckInsertions` 独立发布来源剩余数量与置顶、置底位置，普通牌库行仍是牌名与数量的唯一列表。
 - `DISPLAYED_CREATOR` 关联来源，离开牌库实时减少来源数量；`SHUFFLE_DECK` 只使位置失效。
+
+## v0.6.9 总血量上限计数器
+
+- `TrackerEngine` 只把英雄实体的 `HEALTH` 作为总血量上限事实；`DAMAGE`、回血和 `ARMOR` 不参与。
+- `PublicTrackerState.heroHealthLimit` 按我方、对手隔离发布；身份或英雄类型证据不足时省略，不猜数字。
+- 双方计数器使用独立辅助窗口、独立位置和同一套安全拖动协议。

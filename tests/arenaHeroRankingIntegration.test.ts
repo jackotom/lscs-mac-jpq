@@ -5,6 +5,14 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "..");
 const source = (relativePath: string) => readFileSync(path.join(root, relativePath), "utf8");
 
+function functionSource(main: string, name: string): string {
+  const match = new RegExp(`(?:async\\s+)?function\\s+${name}\\b`, "u").exec(main);
+  if (!match) return "";
+  const tail = main.slice(match.index + match[0].length);
+  const next = /\n(?:async\s+)?function\s+[A-Za-z0-9_]+\b/u.exec(tail);
+  return main.slice(match.index, next ? match.index + match[0].length + next.index : undefined);
+}
+
 describe("Arena hero win-rate ranking integration", () => {
   it("keeps overlay control isolated while exposing read-only home ranking data", () => {
     const preload = source("src/main/preload.cts");
@@ -37,6 +45,8 @@ describe("Arena hero win-rate ranking integration", () => {
     expect(main).toContain("arenaHeroRankingInteractionActiveUntil");
     expect(main).toContain("markArenaHeroRankingInteraction");
     expect(main).toContain("isArenaHeroRankingInteractionActive()");
+    expect(functionSource(main, "refreshArenaHeroRankingWindow"))
+      .toContain("isAuxiliaryOverlayInteractionActive()");
     expect(main).toContain("isOverlayFrontmostAllowed(");
     expect(main).toContain("overlaySettingsPreviewWindows.arenaHeroRanking");
     expect(main).toContain("arenaHeroRankingWindow.isFocused()");

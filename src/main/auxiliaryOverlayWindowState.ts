@@ -5,6 +5,8 @@ export type SmartCounterAuxiliaryOverlayKind = `smart-counter:${string}`;
 export type MovableAuxiliaryOverlayKind =
   | "friendly-attack"
   | "opponent-attack"
+  | "friendly-health"
+  | "opponent-health"
   | "secret"
   | SmartCounterAuxiliaryOverlayKind;
 
@@ -284,6 +286,8 @@ function isRelativePosition(value: unknown): value is RelativeAuxiliaryOverlayPo
 function isMovableAuxiliaryOverlayKind(value: string): value is MovableAuxiliaryOverlayKind {
   return value === "friendly-attack"
     || value === "opponent-attack"
+    || value === "friendly-health"
+    || value === "opponent-health"
     || value === "secret"
     || getSmartCounterIdFromOverlayKind(value) !== undefined;
 }
