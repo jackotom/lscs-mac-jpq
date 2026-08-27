@@ -655,7 +655,7 @@ export interface GameSetupCompleteLogEvent {
 
 export interface GlobalEffectLogEvent {
   type: "global-effect";
-  source: "start-of-game" | "played";
+  source: "start-of-game" | "played" | "triggered";
   entity: EntitySnapshot;
   raw: string;
 }

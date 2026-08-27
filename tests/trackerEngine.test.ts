@@ -3,13 +3,58 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import sampleCardDb from "../fixtures/cards.sample.json";
 import { parseDeckText } from "../src/shared/deck";
-import { createCardDatabase, type CardDatabase } from "../src/shared/cardDatabase";
+import { createCardDatabase, type CardDatabase, type CardInfo } from "../src/shared/cardDatabase";
 import { parseLogLine } from "../src/shared/powerLogParser";
 import { TrackerEngine } from "../src/shared/trackerEngine";
 import { parsePublicTrackerState } from "../src/renderer/runtimeValidation";
 import type { CollectionDeck, DeckCard } from "../src/shared/types";
 
 const cardDb = sampleCardDb as CardDatabase;
+
+function engineWithCards(cards: readonly CardInfo[]) {
+  const engine = new TrackerEngine();
+  engine.setCardDatabase(createCardDatabase(cards));
+  return engine;
+}
+
+function establishPlayers(engine: TrackerEngine) {
+  engine.applyLine("D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME");
+  engine.applyLine("D 12:00:00.100 PowerTaskList.DebugPrintPower() - PlayerID=1, PlayerName=LocalPlayer");
+  engine.applyLine("D 12:00:00.200 PowerTaskList.DebugPrintPower() - PlayerID=2, PlayerName=Opponent");
+  engine.setFriendlyController(1);
+}
+
+function playLine(cardId: string, entityId: string, player: number) {
+  return `D 12:00:01.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=测试牌 id=${entityId} zone=HAND cardId=${cardId} player=${player}] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1`;
+}
+
+function deathrattleLine(cardId: string, entityId: string, player: number) {
+  return `D 12:00:02.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=测试牌 id=${entityId} zone=GRAVEYARD cardId=${cardId} player=${player}] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1 TriggerKeyword=DEATHRATTLE`;
+}
+
+const mend800: CardInfo = {
+  dbfId: 123620,
+  cardId: "MEND_800",
+  name: "莽撞的战场军官",
+  text: "突袭。亡语：在本局对战中，使你的白银之手新兵获得+1攻击力。",
+  mechanics: ["DEATHRATTLE"]
+};
+
+const cap406: CardInfo = {
+  dbfId: 127090,
+  cardId: "CAP_406",
+  name: "暗金教主谋",
+  text: "战吼：在本局对战中，每当你召唤一个卧底小鬼，使其获得+2/+2。",
+  mechanics: ["BATTLECRY"]
+};
+
+const etc382: CardInfo = {
+  dbfId: 94218,
+  cardId: "ETC_382",
+  name: "自由之魂",
+  text: "战吼，亡语：在本局对战中，你的英雄技能多获得1点护甲值。",
+  mechanics: ["BATTLECRY", "DEATHRATTLE"]
+};
 
 describe("parseDeckText", () => {
   it("parses manual deck lines", () => {
@@ -271,6 +316,24 @@ describe("parseLogLine", () => {
           cardId: "JAIL_122",
           controller: 1
         })
+      })
+    ]));
+  });
+
+  it.each([
+    ["EDR_895E", "EDR_895"],
+    ["MEND_801E", "MEND_801"],
+    ["SC_755E", "SC_753"]
+  ])("maps triggered global-effect alias %s to source %s", (aliasCardId, sourceCardId) => {
+    const events = parseLogLine(
+      `D 12:00:01.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=效果附魔 id=75 zone=SETASIDE cardId=${aliasCardId} player=1] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1`
+    );
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "global-effect",
+        source: "triggered",
+        entity: expect.objectContaining({ cardId: sourceCardId, controller: 1 })
       })
     ]));
   });
@@ -626,6 +689,72 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Enti
 
     engine.applyLine("D 17:30:00.0000000 GameState.DebugPrintPower() - CREATE_GAME");
     expect(engine.getState().globalEffects).toEqual([]);
+  });
+
+  it("records MEND_800 only after its deathrattle trigger", () => {
+    const engine = engineWithCards([mend800]);
+    establishPlayers(engine);
+    engine.applyLine(playLine("MEND_800", "101", 1));
+    expect(engine.getState().globalEffects).toEqual([]);
+    engine.applyLine(deathrattleLine("MEND_800", "101", 1));
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "MEND_800", name: "莽撞的战场军官", count: 1 })
+    ]);
+  });
+
+  it("records CAP_406 on play and keeps opponent ownership separate", () => {
+    const engine = engineWithCards([cap406]);
+    establishPlayers(engine);
+    engine.applyLine(playLine("CAP_406", "201", 2));
+    expect(engine.getState().globalEffects).toEqual([]);
+    expect(engine.getState().opponentGlobalEffects).toEqual([
+      expect.objectContaining({ cardId: "CAP_406", count: 1 })
+    ]);
+  });
+
+  it("deduplicates one activation and aggregates different card entities", () => {
+    const engine = engineWithCards([cap406]);
+    establishPlayers(engine);
+    const firstPlay = playLine("CAP_406", "201", 1);
+    engine.applyLine(firstPlay);
+    engine.applyLine(firstPlay);
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "CAP_406", count: 1 })
+    ]);
+
+    engine.applyLine(playLine("CAP_406", "202", 1));
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "CAP_406", count: 2 })
+    ]);
+  });
+
+  it("counts play and deathrattle activations from one entity separately", () => {
+    const engine = engineWithCards([etc382]);
+    establishPlayers(engine);
+    engine.applyLine(playLine("ETC_382", "250", 1));
+    engine.applyLine(deathrattleLine("ETC_382", "250", 1));
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "ETC_382", count: 2 })
+    ]);
+  });
+
+  it("clears card-driven effects for both sides on game start and game end", () => {
+    const engine = engineWithCards([cap406]);
+    establishPlayers(engine);
+    engine.applyLine(playLine("CAP_406", "301", 1));
+    engine.applyLine(playLine("CAP_406", "302", 2));
+    expect(engine.getState()).toMatchObject({
+      globalEffects: [expect.objectContaining({ cardId: "CAP_406" })],
+      opponentGlobalEffects: [expect.objectContaining({ cardId: "CAP_406" })]
+    });
+
+    engine.applyLine("D 12:05:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME");
+    expect(engine.getState()).toMatchObject({ globalEffects: [], opponentGlobalEffects: [] });
+
+    engine.applyLine(playLine("CAP_406", "303", 1));
+    engine.applyLine(playLine("CAP_406", "304", 2));
+    engine.applyLine("D 12:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=LocalPlayer id=1 zone=PLAY cardId= player=1] tag=PLAYSTATE value=LOST");
+    expect(engine.getState()).toMatchObject({ globalEffects: [], opponentGlobalEffects: [] });
   });
 
   it("在星空投影球详情中按施放顺序记录本局我方法术并忽略重复日志", () => {

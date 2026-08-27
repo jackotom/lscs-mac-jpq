@@ -39,6 +39,11 @@ import { SecretTracker } from "./secretTracker.js";
 import { resolveMatchCardRelations } from "./matchCardRelations.js";
 import { MatchFlow } from "./matchFlow.js";
 import { buildSmartCardCounters } from "./smartCounters.js";
+import {
+  canonicalGlobalEffectCardId,
+  inferGlobalEffectRule,
+  type GlobalEffectActivation
+} from "./globalEffectRules.js";
 
 interface EngineOptions {
   deckText?: string;
@@ -953,17 +958,17 @@ export class TrackerEngine {
     }
 
     if (event.type === "global-effect") {
-      const controller = event.entity.controller;
-      const target = this.isFriendlyController(controller)
-        ? this.globalEffects
-        : this.isKnownOpponentController(controller) ? this.opponentGlobalEffects : undefined;
-      if (!target) return;
-      const key = event.entity.id ?? `${controller}:${normalizeCardId(event.entity.cardId ?? "")}`;
-      target.set(key, event.entity);
+      this.storeGlobalEffect(
+        event.entity,
+        event.source === "played" ? "play" : event.source
+      );
       return;
     }
 
     if (event.type === "block-boundary") {
+      if (event.phase === "start" && /\bTriggerKeyword=START_OF_GAME_KEYWORD\b/i.test(event.raw)) {
+        this.recordGlobalEffectActivation(event.entity, "start-of-game");
+      }
       if (
         /\bTriggerKeyword=SECRET\b/i.test(event.raw) &&
         event.entity?.id &&
@@ -987,6 +992,9 @@ export class TrackerEngine {
         ? this.findKnownEntityStoredByAttachment(event.entity.id)
         : undefined;
       this.pendingKnownEntityReturnCandidateIds.clear();
+      if (event.trigger === "deathrattle") {
+        this.recordGlobalEffectActivation(event.entity, "deathrattle");
+      }
       return;
     }
 
@@ -1079,6 +1087,9 @@ export class TrackerEngine {
 
     if (event.type === "action-boundary") {
       if (event.phase === "start") {
+        if (event.action === "play") {
+          this.recordGlobalEffectActivation(event.entity, "play");
+        }
         const existing = event.entity?.id ? this.entities.get(event.entity.id) : undefined;
         const cardId = event.entity?.cardId ?? existing?.cardId;
         const controller = event.entity?.controller ?? existing?.controller;
@@ -2474,6 +2485,37 @@ export class TrackerEngine {
       }
     }
     return true;
+  }
+
+  private recordGlobalEffectActivation(
+    entity: EntitySnapshot | undefined,
+    activation: GlobalEffectActivation
+  ) {
+    if (!entity) return;
+    const known = entity.id ? this.entities.get(entity.id) : undefined;
+    const merged = { ...known, ...entity };
+    const card = this.findCardInfo(merged.cardId, merged.name);
+    const rule = card ? inferGlobalEffectRule(card) : undefined;
+    if (!rule?.activations.includes(activation)) return;
+    this.storeGlobalEffect(merged, activation);
+  }
+
+  private storeGlobalEffect(entity: EntitySnapshot, activation: GlobalEffectActivation) {
+    const controller = entity.controller;
+    const target = this.isFriendlyController(controller)
+      ? this.globalEffects
+      : this.isKnownOpponentController(controller) ? this.opponentGlobalEffects : undefined;
+    if (!target) return;
+
+    const cardId = canonicalGlobalEffectCardId(entity.cardId ?? "");
+    const card = this.findCardInfo(cardId, entity.name);
+    const stored = {
+      ...entity,
+      ...(cardId ? { cardId } : {}),
+      ...(card?.name ? { name: card.name } : {})
+    };
+    const identity = entity.id ?? `${controller}:${cardId || normalizeCardKey(entity.name ?? "")}`;
+    target.set(`${identity}:${activation}`, stored);
   }
 
   private buildGlobalEffects(effects: ReadonlyMap<string, EntitySnapshot>) {

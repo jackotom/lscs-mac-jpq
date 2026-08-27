@@ -1,0 +1,673 @@
+[
+  {
+    "id": "BAR_546",
+    "dbfId": 63062,
+    "name": "野火",
+    "text": "在本局对战中，你的英雄技能造成的伤害增加1点。",
+    "type": "SPELL",
+    "mechanics": null
+  },
+  {
+    "id": "BOT_238",
+    "dbfId": 48146,
+    "name": "“科学狂人”砰砰博士",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，你的所有机械拥有\n<b>突袭</b>。",
+    "type": "HERO",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "BT_020",
+    "dbfId": 56445,
+    "name": "奥尔多侍从",
+    "text": "<b>战吼：</b>在本局对战中，你的圣契的法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "BT_026",
+    "dbfId": 56556,
+    "name": "奥尔多真理追寻者",
+    "text": "<b>嘲讽，战吼：</b>\n在本局对战中，你的圣契的法力值消耗减少（2）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "CAP_406",
+    "dbfId": 127090,
+    "name": "暗金教主谋",
+    "text": "<b>嘲讽</b>。<b>战吼：</b>在本局对战中，每当你召唤一个卧底小鬼，使其获得+2/+2。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "CATA_216",
+    "dbfId": 123426,
+    "name": "净化祭司",
+    "text": "<b>战吼：</b>在本局对战中，你的治疗效果恢复的生命值增加2点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "CATA_553",
+    "dbfId": 122871,
+    "name": "艾比西安",
+    "text": "<b>战吼：</b>在本局对战中，你的龙拥有<b>突袭</b>。<i>（当本牌在你手中时，使用一张龙牌即可将本牌变为12/12的龙！）</i>",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "CFM_020",
+    "dbfId": 40323,
+    "name": "缚链者拉兹",
+    "text": "<b>战吼：</b>如果你的牌库里没有相同的牌，则在本局对战中，你的英雄技能的法力值消耗为（0）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "CS3_035",
+    "dbfId": 66870,
+    "name": "永恒者诺兹多姆",
+    "text": "<b>对战开始时：</b>如果双方玩家的套牌中都有这张随从牌，则每个回合只有15秒。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "DEEP_020",
+    "dbfId": 104528,
+    "name": "深岩矿工布莱恩",
+    "text": "<b>战吼：</b>如果你的套牌里没有相同的牌，则在本局对战的剩余时间内，你的<b>战吼</b>会触发两次。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "DEEP_036",
+    "dbfId": 104573,
+    "name": "塞拉赞恩",
+    "text": "<b>嘲讽</b>。<b>亡语：</b>使你手牌和牌库中的所有元素牌属性值翻倍。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "DINO_421",
+    "dbfId": 118617,
+    "name": "震地雷龙",
+    "text": "<b>嘲讽</b>。<b>扰魔</b>\n<b>亡语：</b>使你的手牌和牌库里的所有随从牌获得+3/+3。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE",
+      "ELUSIVE",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "DMF_254",
+    "dbfId": 61503,
+    "name": "克苏恩，破碎之劫",
+    "text": "<b>对战开始时：</b>破碎成片。<b>战吼：</b>造成30点伤害，随机分配到所有敌人身上。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "DRG_319",
+    "dbfId": 55031,
+    "name": "强力巨树格鲁",
+    "text": "<b>嘲讽，战吼：</b>在本局对战的剩余时间内，你的树人拥有+1/+1。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "EDR_000",
+    "dbfId": 113321,
+    "name": "伊瑟拉，翡翠守护巨龙",
+    "text": "<b>对战开始时：</b>双方玩家的法力值上限提高5点。<b>战吼：</b>获得3个法力水晶。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "EDR_845",
+    "dbfId": 114858,
+    "name": "哈缪尔·符文图腾",
+    "text": "<b>对战开始时：</b>\n如果你套牌中的每张法术牌均为自然法术，<b>灌注</b>你的英雄技能。你每施放3个法术，重复此效果。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "EDR_895",
+    "dbfId": 115264,
+    "name": "艾维娜，艾露恩钦选者",
+    "text": "<b>战吼：</b>开启为期三回合的月相演变。当满月升起时，在本局对战中你的卡牌法力值消耗为（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "ETC_330",
+    "dbfId": 90945,
+    "name": "星光节律",
+    "text": "使你的英雄获得<b>圣盾</b>。在本局对战的剩余时间内，使用神圣法术牌会复原此效果。",
+    "type": "SPELL",
+    "mechanics": null
+  },
+  {
+    "id": "ETC_371",
+    "dbfId": 92338,
+    "name": "因扎",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，你的<b>过载</b>牌法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "ETC_382",
+    "dbfId": 94218,
+    "name": "自由之魂",
+    "text": "<b>战吼，亡语：</b>在本局对战中，你的英雄技能多获得1点护甲值。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "ETC_385",
+    "dbfId": 94249,
+    "name": "潮流猎豹",
+    "text": "<b>战吼，亡语：</b>在本局对战中，你的英雄技能使你的英雄多获得1点攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "GDB_121",
+    "dbfId": 111133,
+    "name": "恶兆邪火",
+    "text": "<b>战吼：</b>在本局对战中，你套牌之外的恶魔的法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "GDB_234",
+    "dbfId": 110921,
+    "name": "孢子女皇摩尔达拉",
+    "text": "<b>对战开始时：</b>将7张\n复制孢子洗入你的牌库。<b>战吼：</b>施放其中一张。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "GDB_434",
+    "dbfId": 110743,
+    "name": "流彩巨岩",
+    "text": "<b>战吼：</b>在本局对战中，你的小行星造成的伤害增加1点。<b><b>法术迸发</b>：</b>将3张小行星洗入你的牌库。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "SPELLBURST"
+    ]
+  },
+  {
+    "id": "GDB_721",
+    "dbfId": 110562,
+    "name": "星际旅行者",
+    "text": "<b>圣盾</b>。<b>战吼，亡语：</b>在本局对战中，你的圣契的法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "DEATHRATTLE",
+      "DIVINE_SHIELD"
+    ]
+  },
+  {
+    "id": "GDB_726",
+    "dbfId": 110573,
+    "name": "斩星巨刃",
+    "text": "<b>战吼，亡语：</b>在本局对战中，你的圣契的法力值消耗减少（1）点。",
+    "type": "WEAPON",
+    "mechanics": [
+      "BATTLECRY",
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "GIL_692",
+    "dbfId": 47693,
+    "name": "吉恩·格雷迈恩",
+    "text": "<b>对战开始时：</b>如果你的套牌中只有法力值消耗为偶数的牌，你的初始英雄技能的法力值消耗变为（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "COLLECTIONMANAGER_FILTER_MANA_EVEN",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "GIL_826",
+    "dbfId": 48158,
+    "name": "噬月者巴库",
+    "text": "<b>对战开始时：</b>如果你的套牌中只有法力值消耗为奇数的牌，升级你的英雄技能。",
+    "type": "MINION",
+    "mechanics": [
+      "COLLECTIONMANAGER_FILTER_MANA_ODD",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "ICC_833",
+    "dbfId": 43419,
+    "name": "冰霜女巫吉安娜",
+    "text": "<b>战吼：</b>召唤一个3/6的水元素。在本局对战中，你的所有元素拥有<b>吸血</b>。",
+    "type": "HERO",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "JAIL_122",
+    "dbfId": 126353,
+    "name": "米尔牢斯·法力风暴",
+    "text": "<b>战吼：</b>在本局对战中，在你施放一个法术后，随机召唤一个法力值消耗相同的随从。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "JAIL_384",
+    "dbfId": 126002,
+    "name": "破链灾星霍格",
+    "text": "<b>嘲讽</b>。<b>对战开始时：</b>复制你套牌中所有其他<b>传说</b>卡牌。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "JAIL_397",
+    "dbfId": 126621,
+    "name": "指挥官碧阿崔克丝",
+    "text": "<b>嘲讽</b>。构筑套牌时，选择一张法力值消耗为（2）的随从牌。它的十张复制会加入你的套牌！",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "JAIL_430",
+    "dbfId": 126055,
+    "name": "裂魂者阿扎莉娜",
+    "text": "你的初始生命值为40点。\n你的套牌为20张牌，外加20张敌方卡牌的复制。<b>战吼：</b>抽牌，直到达到你的手牌上限。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "JAIL_504",
+    "dbfId": 125989,
+    "name": "艾雅，玉莲帮主",
+    "text": "你始终为后手。<b>战吼：</b>在本局对战中，将你的幸运币替换为所选的升级后的伪造幸运币，并获取3张。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "JAIL_509",
+    "dbfId": 126125,
+    "name": "背叛者高弗雷",
+    "text": "<b>对战开始时：</b>过量抽取的牌会在你手牌中有空位时返回手牌，且其法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "JAIL_800",
+    "dbfId": 126416,
+    "name": "穆格·兹伊",
+    "text": "<b>对战开始时：</b>如果你的套牌中没有其他随从牌，获得穆格的英雄技能。如果没有法术牌，获得兹伊的技能！",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "JAIL_860",
+    "dbfId": 126045,
+    "name": "主厨奈瑟雷克",
+    "text": "<b>对战开始时：</b>如果你的套牌中只有法力值消耗小于或等于（3）点的牌，在五回合后将你的法力值变为\n10点！",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "KAR_096",
+    "dbfId": 39840,
+    "name": "玛克扎尔王子",
+    "text": "<b>对战开始时：</b>额外将五张<b>传说</b>随从牌置入你的牌库。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "MAW_024",
+    "dbfId": 79748,
+    "name": "私法程序",
+    "text": "在本局对战的剩余时间内，玩家会在其回合开始时额外抽一张牌。",
+    "type": "SPELL",
+    "mechanics": null
+  },
+  {
+    "id": "MEND_304",
+    "dbfId": 123492,
+    "name": "塔雅·陆行",
+    "text": "<b>战吼：</b>在本局对战中，你的召唤动物伙伴的卡牌多召唤一个\n伙伴。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "MEND_501",
+    "dbfId": 123496,
+    "name": "魔力行者",
+    "text": "<b>战吼：</b>在本局对战中，你的魔网牌法力值消耗减少（1）点。<b>亡语：</b>随机获取一张魔网牌。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "MEND_503",
+    "dbfId": 123507,
+    "name": "湍流之针",
+    "text": "<b>战吼：</b>在本局对战中，你的魔网牌额外触发一次。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "MEND_506",
+    "dbfId": 123515,
+    "name": "秘魔刃豹",
+    "text": "<b>扰魔</b>。<b>战吼：</b>在本局对战中，你的魔网牌的效果提高1。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY",
+      "ELUSIVE"
+    ]
+  },
+  {
+    "id": "MEND_800",
+    "dbfId": 123620,
+    "name": "莽撞的战场军官",
+    "text": "<b>突袭</b>。<b>亡语：</b>在本局对战中，使你的白银之手新兵获得+1\n攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE",
+      "RUSH"
+    ]
+  },
+  {
+    "id": "MEND_801",
+    "dbfId": 123621,
+    "name": "坚定的救援者",
+    "text": "<b>圣盾</b>。在本随从失去<b>圣盾</b>后，在本局对战中，使你的白银之手新兵获得+1生命值。",
+    "type": "MINION",
+    "mechanics": [
+      "DIVINE_SHIELD",
+      "TRIGGER_VISUAL"
+    ]
+  },
+  {
+    "id": "MEND_803",
+    "dbfId": 123623,
+    "name": "砺胆重剑",
+    "text": "<b>战吼：</b>在本局对战中，使你的白银之手新兵获得+1/+1。",
+    "type": "WEAPON",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "REV_314",
+    "dbfId": 77679,
+    "name": "灌木巨龙托匹奥",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，在你施放一个自然法术后，召唤一条3/3并具有<b>突袭</b>的雏龙。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "REV_921",
+    "dbfId": 76977,
+    "name": "锻石师",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，你的图腾拥有+2攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "RLK_214",
+    "dbfId": 84245,
+    "name": "食魂者之镰",
+    "text": "<b>对战开始时：</b>吞食你套牌中3张不同的随从牌。留下灵魂，用以<b>发现</b>这些随从。",
+    "type": "WEAPON",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "RLK_591",
+    "dbfId": 86317,
+    "name": "白骨领主霜语",
+    "text": "<b>亡语：</b>在本局对战的剩余时间内，每回合中你的第一张牌法力值消耗为（0）点。你的英雄会在3回合后死亡。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "RLK_706",
+    "dbfId": 80644,
+    "name": "亚历山德罗斯·莫格莱尼",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，在你的回合结束时，对你的对手造成3点伤害。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "SC_002",
+    "dbfId": 112830,
+    "name": "感染者",
+    "text": "<b>亡语：</b>在本局对战的剩余时间内，你的异虫随从拥有+1攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "SC_753",
+    "dbfId": 113168,
+    "name": "光子炮台",
+    "text": "造成$3点伤害。\n如果本牌消灭了一个随从，则在本局对战中，你的星灵随从牌的法力值消耗\n减少（1）点。",
+    "type": "SPELL",
+    "mechanics": null
+  },
+  {
+    "id": "SC_754",
+    "dbfId": 113171,
+    "name": "阿塔尼斯",
+    "text": "<b>战吼：</b>召唤两个3/4\n并具有<b>冲锋</b>的狂热者。在本局对战中，你的星灵随从牌的法力值消耗减少（2）点。",
+    "type": "HERO",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "SC_764",
+    "dbfId": 113738,
+    "name": "机械哨兵",
+    "text": "<b>吸血</b>。<b>亡语：</b>在本局对战中，你的星灵随从牌的法力值消耗减少（1）点。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE",
+      "LIFESTEAL"
+    ]
+  },
+  {
+    "id": "SW_448",
+    "dbfId": 64443,
+    "name": "黑暗主教本尼迪塔斯",
+    "text": "<b>对战开始时：</b>如果你的套牌中所有法术牌都是暗影法术牌，则进入暗影形态。",
+    "type": "MINION",
+    "mechanics": [
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "TIME_020",
+    "dbfId": 120074,
+    "name": "布洛克斯加",
+    "text": "<b>奇闻\n冲锋。</b><b>对战开始时：</b>消失。\n消灭全部4个来自阿古斯的恶魔以重新出现在[x]手牌中。",
+    "type": "MINION",
+    "mechanics": [
+      "CHARGE",
+      "START_OF_GAME_KEYWORD"
+    ]
+  },
+  {
+    "id": "TLC_257",
+    "dbfId": 118575,
+    "name": "洛，在世传奇",
+    "text": "<b>战吼：</b>在本局对战中，你的随从牌的法力值消耗为（5）点。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "TTN_811",
+    "dbfId": 97061,
+    "name": "首席管理官奥丁",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，在你的英雄获得护甲值后，还会在当回合获得等量的攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "TTN_842",
+    "dbfId": 97478,
+    "name": "永恒者尤顿",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，对敌人施放你每回合抽到的第一张法术牌的复制。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "TTN_850",
+    "dbfId": 97683,
+    "name": "海拉",
+    "text": "<b>战吼：</b>将全部三种疫病牌洗入你对手的牌库。在本局对战中，对手抽到的疫病不会终结。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "ULD_168",
+    "dbfId": 53890,
+    "name": "黑暗法老塔卡恒",
+    "text": "<b>战吼：</b>在本局对战的剩余时间内，你的<b>跟班</b>变为4/4。",
+    "type": "MINION",
+    "mechanics": [
+      "BATTLECRY"
+    ]
+  },
+  {
+    "id": "VAC_426",
+    "dbfId": 107720,
+    "name": "伊丽扎·刺刃",
+    "text": "<b>亡语：</b>在本局对战的剩余时间内，你的随从拥有+1攻击力。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE"
+    ]
+  },
+  {
+    "id": "WW_367",
+    "dbfId": 101264,
+    "name": "倒霉的炸药师",
+    "text": "<b>嘲讽</b>。<b>亡语：</b>使你手牌和牌库中的<b>嘲讽</b>随从牌获得+1/+1。",
+    "type": "MINION",
+    "mechanics": [
+      "DEATHRATTLE",
+      "TAUNT"
+    ]
+  },
+  {
+    "id": "YOG_530",
+    "dbfId": 101841,
+    "name": "暮光头领古加尔",
+    "text": "<b>嘲讽</b>。<b>吸血</b>。<b>对战开始时：</b>有50%的几率用一项随机的畸变来腐蚀这局对战。",
+    "type": "MINION",
+    "mechanics": [
+      "LIFESTEAL",
+      "START_OF_GAME_KEYWORD",
+      "TAUNT"
+    ]
+  }
+]

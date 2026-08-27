@@ -36,7 +36,9 @@ const PLAYED_GLOBAL_EFFECT_CARD_IDS = new Set([
   "TSC_944", "YOG_505"
 ]);
 const TRIGGERED_GLOBAL_EFFECT_CARD_IDS = new Map([
-  ["EDR_895E", "EDR_895"]
+  ["EDR_895E", "EDR_895"],
+  ["MEND_801E", "MEND_801"],
+  ["SC_755E", "SC_753"]
 ]);
 
 export interface FriendlyDeckSnapshot {
@@ -128,7 +130,7 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
     if (sourceCardId) {
       events.push({
         type: "global-effect",
-        source: "played",
+        source: "triggered",
         entity: { ...entity, cardId: sourceCardId },
         raw: line
       });
