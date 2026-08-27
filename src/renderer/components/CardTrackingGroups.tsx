@@ -7,6 +7,7 @@ import {
 } from "react";
 import { ChevronDown, ChevronRight, ImageOff } from "lucide-react";
 import { cardArtworkSources } from "../../shared/cardDatabase";
+import { areCardDetailsRelated } from "../../shared/cardRelationRules";
 import type { PublicCardZone } from "../../shared/types";
 import {
   resolveFriendlyDefault,
@@ -330,6 +331,7 @@ function CurrentItems({
       {deckInsertions ? <DeckInsertionSummary tracking={deckInsertions} /> : null}
       <CardRows
         items={group.cards}
+        candidateGroup={candidateGroupFor(group.key)}
         activeCard={activeCard}
         onActiveCardChange={onActiveCardChange}
       />
@@ -547,10 +549,12 @@ function HistoryArtwork({
 
 function CardRows({
   items,
+  candidateGroup,
   activeCard,
   onActiveCardChange
 }: {
   readonly items: readonly OverlayCardItem[];
+  readonly candidateGroup: "deck" | "hand" | "board" | "other";
   readonly activeCard?: OverlayCardItem;
   readonly onActiveCardChange: (card: OverlayCardItem | undefined) => void;
 }) {
@@ -559,7 +563,9 @@ function CardRows({
       {items.map((item) => {
         const cost = item.cost ?? item.details?.manaCost;
         const count = item.count ?? 1;
-        const isRelated = activeCard ? areCardsRelated(activeCard, item) : false;
+        const isRelated = activeCard?.details && item.details
+          ? areCardDetailsRelated(activeCard.details, item.details, candidateGroup)
+          : false;
         return (
           <li key={item.id}>
             <CardHoverPreview
@@ -586,37 +592,11 @@ function CardRows({
   );
 }
 
-function areCardsRelated(activeCard: OverlayCardItem, candidateCard: OverlayCardItem): boolean {
-  const activeDetails = activeCard.details;
-  const candidateDetails = candidateCard.details;
-  if (!activeDetails || !candidateDetails || activeDetails.dbfId === candidateDetails.dbfId) {
-    return false;
-  }
-  return referencesCard(activeDetails, candidateDetails) || referencesCard(candidateDetails, activeDetails);
-}
-
-function referencesCard(
-  details: NonNullable<OverlayCardItem["details"]>,
-  candidate: NonNullable<OverlayCardItem["details"]>
-): boolean {
-  return details.relatedCards.some((card) => isSameCard(card, candidate)) ||
-    details.synergyCards?.some((card) => isSameCard(card, candidate)) === true;
-}
-
-function isSameCard(
-  referenced: NonNullable<OverlayCardItem["details"]>["relatedCards"][number],
-  candidate: NonNullable<OverlayCardItem["details"]>
-): boolean {
-  if (referenced.dbfId === candidate.dbfId) {
-    return true;
-  }
-  const referencedCardId = normalizeCardIdentity(referenced.cardId);
-  const candidateCardId = normalizeCardIdentity(candidate.cardId);
-  return Boolean(referencedCardId && candidateCardId && referencedCardId === candidateCardId);
-}
-
-function normalizeCardIdentity(cardId: string | undefined): string | undefined {
-  return cardId?.trim().toLocaleUpperCase().replace(/^CORE_/, "");
+function candidateGroupFor(groupKey: PublicCardZone): "deck" | "hand" | "board" | "other" {
+  if (groupKey === "deck") return "deck";
+  if (groupKey === "hand") return "hand";
+  if (groupKey === "play") return "board";
+  return "other";
 }
 
 function initialSelection(

@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, CircleCheck, Clock3, Hand, Layers3, Settings, X } from "lucide-react";
 import type { OverlayCardItem, OverlayPanelProps, OverlayStatusTone } from "../types";
+import { areCardDetailsRelated } from "../../shared/cardRelationRules";
 import { CardHoverPreview } from "./CardHoverPreview";
 import { CardTrackingGroups } from "./CardTrackingGroups";
 import { PublicMatchCounters } from "./PublicMatchCounters";
@@ -207,11 +208,13 @@ export function CollapsibleCardGroup({
 export function CompactCardList({
   items,
   emptyLabel,
+  candidateGroup = "other",
   activeCard,
   onActiveCardChange
 }: {
   items: readonly OverlayCardItem[];
   emptyLabel?: string;
+  candidateGroup?: "deck" | "hand" | "board" | "other";
   activeCard?: OverlayCardItem;
   onActiveCardChange?: (card: OverlayCardItem | undefined) => void;
 }) {
@@ -225,7 +228,9 @@ export function CompactCardList({
         const cost = resolveCardCost(item);
         const count = resolveCardCount(item);
         const costLabel = cost === undefined ? "?" : String(cost);
-        const isRelated = activeCard ? areCardsRelated(activeCard, item) : false;
+        const isRelated = activeCard?.details && item.details
+          ? areCardDetailsRelated(activeCard.details, item.details, candidateGroup)
+          : false;
 
         return (
           <li key={item.id}>
@@ -261,43 +266,6 @@ export function CompactCardList({
 
 function countCards(items: readonly OverlayCardItem[]): number {
   return items.reduce((total, item) => total + resolveCardCount(item), 0);
-}
-
-function areCardsRelated(activeCard: OverlayCardItem, candidateCard: OverlayCardItem): boolean {
-  const activeDetails = activeCard.details;
-  const candidateDetails = candidateCard.details;
-  if (!activeDetails || !candidateDetails || activeDetails.dbfId === candidateDetails.dbfId) {
-    return false;
-  }
-
-  return referencesCard(activeDetails, candidateDetails) || referencesCard(candidateDetails, activeDetails);
-}
-
-function referencesCard(
-  details: NonNullable<OverlayCardItem["details"]>,
-  candidate: NonNullable<OverlayCardItem["details"]>
-): boolean {
-  return (
-    details.relatedCards.some((card) => isSameCard(card, candidate)) ||
-    details.synergyCards?.some((card) => isSameCard(card, candidate)) === true
-  );
-}
-
-function isSameCard(
-  referenced: NonNullable<OverlayCardItem["details"]>["relatedCards"][number],
-  candidate: NonNullable<OverlayCardItem["details"]>
-): boolean {
-  if (referenced.dbfId === candidate.dbfId) {
-    return true;
-  }
-
-  const referencedCardId = normalizeCardIdentity(referenced.cardId);
-  const candidateCardId = normalizeCardIdentity(candidate.cardId);
-  return Boolean(referencedCardId && candidateCardId && referencedCardId === candidateCardId);
-}
-
-function normalizeCardIdentity(cardId: string | undefined): string | undefined {
-  return cardId?.trim().toLocaleUpperCase().replace(/^CORE_/, "");
 }
 
 function resolveCardCount(item: OverlayCardItem): number {

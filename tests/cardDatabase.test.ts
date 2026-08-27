@@ -56,6 +56,23 @@ describe("card database details", () => {
     });
   });
 
+  it("exposes parsed deck candidate selectors only when a card has an explicit rule", () => {
+    const database = createCardDatabase([
+      {
+        id: 2101,
+        name: "血色招募者",
+        card_type_id: 4,
+        text: "<b>战吼：</b>从你的牌库中召唤两个法力值消耗不高于（2）点的随从。"
+      },
+      { id: 2102, name: "普通随从", card_type_id: 4 }
+    ]);
+
+    expect(toCardDetails(database, getCardInfo(database, 2101)!)).toMatchObject({
+      relationSelectors: [{ source: "deck", cardTypes: ["随从"], manaCost: { max: 2 } }]
+    });
+    expect(toCardDetails(database, getCardInfo(database, 2102)!)).not.toHaveProperty("relationSelectors");
+  });
+
   it("lists collectible spells for cards that cast random spells without explicit child ids", () => {
     const database = createCardDatabase([
       {

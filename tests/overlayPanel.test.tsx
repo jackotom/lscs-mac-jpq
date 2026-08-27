@@ -621,4 +621,76 @@ describe("standard tracker overlay", () => {
     fireEvent.blur(target);
     expect(source).not.toHaveClass("is-synergy-related");
   });
+
+  it("highlights only eligible deck tutor candidates on hover and focus", () => {
+    const base = tracking();
+    const recruiterDetails = {
+      dbfId: 2001,
+      name: "血色招募者",
+      cardType: "随从",
+      manaCost: 5,
+      isSpell: false,
+      relatedCards: [],
+      relationSelectors: [{ source: "deck" as const, cardTypes: ["随从"], manaCost: { max: 2 } }]
+    };
+    const minion = (dbfId: number, name: string, manaCost: number) => ({
+      dbfId,
+      name,
+      cardType: "随从",
+      manaCost,
+      isSpell: false,
+      relatedCards: []
+    });
+    const lifecycle = {
+      ...base,
+      current: {
+        ...base.current,
+        deck: {
+          ...base.current.deck,
+          knownCount: 5,
+          totalCount: 5,
+          countLabel: "5",
+          cards: [
+            { id: "recruiter", name: "血色招募者", count: 1, details: recruiterDetails },
+            { id: "one-minion", name: "一费随从", count: 1, details: minion(2002, "一费随从", 1) },
+            { id: "two-minion", name: "二费随从", count: 1, details: minion(2003, "二费随从", 2) },
+            { id: "three-minion", name: "三费随从", count: 1, details: minion(2004, "三费随从", 3) },
+            {
+              id: "two-spell",
+              name: "二费法术",
+              count: 1,
+              details: { dbfId: 2005, name: "二费法术", cardType: "法术", manaCost: 2, isSpell: true, relatedCards: [] }
+            }
+          ]
+        },
+        hand: {
+          ...base.current.hand,
+          cards: [{ id: "hand-two-minion", name: "手牌二费随从", count: 1, details: minion(2006, "手牌二费随从", 2) }]
+        }
+      }
+    } satisfies OverlayCardTrackingView;
+    render(<OverlayPanel view={view({}, lifecycle)} />);
+
+    const recruiter = screen.getByText("血色招募者").closest(".overlay-compact-card-row") as HTMLElement;
+    const oneMinion = screen.getByText("一费随从").closest(".overlay-compact-card-row") as HTMLElement;
+    const twoMinion = screen.getByText("二费随从").closest(".overlay-compact-card-row") as HTMLElement;
+    const threeMinion = screen.getByText("三费随从").closest(".overlay-compact-card-row") as HTMLElement;
+    const twoSpell = screen.getByText("二费法术").closest(".overlay-compact-card-row") as HTMLElement;
+    const handTwoMinion = screen.getByText("手牌二费随从").closest(".overlay-compact-card-row") as HTMLElement;
+
+    fireEvent.mouseEnter(recruiter);
+    expect(oneMinion).toHaveClass("is-synergy-related");
+    expect(twoMinion).toHaveClass("is-synergy-related");
+    expect(threeMinion).not.toHaveClass("is-synergy-related");
+    expect(twoSpell).not.toHaveClass("is-synergy-related");
+    expect(handTwoMinion).not.toHaveClass("is-synergy-related");
+
+    fireEvent.mouseLeave(recruiter);
+    fireEvent.focus(recruiter);
+    expect(oneMinion).toHaveClass("is-synergy-related");
+    expect(twoMinion).toHaveClass("is-synergy-related");
+    expect(threeMinion).not.toHaveClass("is-synergy-related");
+    expect(twoSpell).not.toHaveClass("is-synergy-related");
+    expect(handTwoMinion).not.toHaveClass("is-synergy-related");
+  });
 });

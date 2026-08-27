@@ -1,4 +1,5 @@
 import type { CardLibraryResult, NormalizedCardLibraryQuery } from "./types.js";
+import { inferCardCandidateSelectors, type CardCandidateSelector } from "./cardRelationRules.js";
 
 export type CardRarity = "FREE" | "COMMON" | "RARE" | "EPIC" | "LEGENDARY" | "UNKNOWN";
 
@@ -48,6 +49,7 @@ export interface CardDetails extends CardInfo {
   readonly cardPoolSections?: readonly CardPoolSection[];
   readonly cardOutcomeSections?: readonly CardOutcomeSection[];
   readonly synergyCards?: readonly CardSynergyInfo[];
+  readonly relationSelectors?: readonly CardCandidateSelector[];
   readonly playedSpellsThisGame?: readonly RelatedCardInfo[];
   readonly gameContextSections?: readonly GameContextSection[];
 }
@@ -172,13 +174,15 @@ export function toCardDetails(cardDb: CardDatabase, card: CardInfo): CardDetails
     .map(toRelatedCardInfo);
   const cardPoolSections = inferCardPoolSections(cardDb, card);
   const synergyCards = inferCardSynergies(cardDb, card);
+  const relationSelectors = inferCardCandidateSelectors(card);
 
   return {
     ...card,
     isSpell: card.cardTypeId === 5 || card.cardType === "法术" || card.cardType?.toUpperCase() === "SPELL",
     relatedCards,
     ...(cardPoolSections.length > 0 ? { cardPoolSections } : {}),
-    ...(synergyCards.length > 0 ? { synergyCards } : {})
+    ...(synergyCards.length > 0 ? { synergyCards } : {}),
+    ...(relationSelectors.length > 0 ? { relationSelectors } : {})
   };
 }
 
