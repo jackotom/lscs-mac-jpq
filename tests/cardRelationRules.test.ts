@@ -43,6 +43,18 @@ describe("card relation rules", () => {
     })).toEqual([]);
   });
 
+  it("does not cross markup, line, or follow-up action boundaries", () => {
+    const inputs = [
+      "从你的牌库中抽一张牌<br>法力值消耗小于或等于（2）点的随从。",
+      "从你的牌库中抽一张牌\n法力值消耗小于或等于（2）点的随从。",
+      "从你的牌库中抽一张牌并使法力值消耗小于或等于（2）点的随从获得+1/+1。"
+    ];
+
+    for (const [index, text] of inputs.entries()) {
+      expect(inferCardCandidateSelectors({ dbfId: 20 + index, name: `分段反例 ${index}`, text })).toEqual([]);
+    }
+  });
+
   it("requires an action, cost, and card type in the same deck sentence", () => {
     expect(inferCardCandidateSelectors({
       dbfId: 6,

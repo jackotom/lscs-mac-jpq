@@ -9,12 +9,11 @@ export interface CardCandidateSelector {
 }
 
 const CARD_TYPES = ["随从", "法术", "武器", "英雄", "地标"] as const;
-const DECK_ACTION_PATTERN = /从你的牌库(?:中|里)?\s*(?:抽(?:取)?|召唤|检索|发现|置入|获取|获得|复制|选择)[^。；;！!?？\n，,]{0,80}?法力值消耗(?:小于或等于|不高于|大于或等于|不低于|等于|为)\s*\(?\s*(\d+)\s*\)?(?:点)?[^。；;！!?？\n，,]{0,32}?(随从|法术|武器|英雄|地标)/u;
+const SEGMENT_BOUNDARY = "\u0000";
+const DECK_ACTION_PATTERN = /从你的牌库(?:中|里)?\s*(?:抽(?:取)?|召唤|检索|发现|置入|获取|获得|复制|选择)\s*(?:(?:[一二三四五六七八九十两]|\d+)(?:张|个|只|名|把)?\s*)?法力值消耗(?:小于或等于|不高于|大于或等于|不低于|等于|为)\s*\(?\s*(\d+)\s*\)?(?:点)?(?:的)?\s*(随从|法术|武器|英雄|地标)/u;
 
 export function inferCardCandidateSelectors(card: CardInfo): readonly CardCandidateSelector[] {
-  const text = normalizeCardText(card.text);
-  const selector = text
-    .split(/[。；;！!?？\n]/u)
+  const selector = splitCardTextIntoSegments(card.text)
     .map(inferDeckCandidateSelector)
     .find((candidate): candidate is CardCandidateSelector => candidate !== undefined);
   return selector ? [selector] : [];
@@ -36,9 +35,17 @@ export function areCardDetailsRelated(
   return active.relationSelectors?.some((selector) => matchesSelector(selector, candidate, candidateGroup)) === true;
 }
 
-function normalizeCardText(text: string | undefined): string {
+function splitCardTextIntoSegments(text: string | undefined): readonly string[] {
   return (text ?? "")
-    .replace(/<br\s*\/?\s*>/giu, "\n")
+    .replace(/<br\s*\/?\s*>/giu, SEGMENT_BOUNDARY)
+    .replace(/\r\n?|\n|[。；;！!?？]/gu, SEGMENT_BOUNDARY)
+    .split(SEGMENT_BOUNDARY)
+    .map(normalizeCardText)
+    .filter(Boolean);
+}
+
+function normalizeCardText(text: string): string {
+  return text
     .replace(/<[^>]*>/gu, "")
     .replace(/&nbsp;/giu, " ")
     .replace(/[（]/gu, "(")
