@@ -13,6 +13,18 @@ const LEGACY_STRUCTURAL_EFFECT_CARD_IDS = new Set([
   "SCH_609", "TLC_828", "TOY_805", "TOY_877", "TSC_944", "YOG_505"
 ]);
 
+const AUDITED_PERSISTENT_EFFECT_CARD_IDS = new Set([
+  "BAR_546", "BOT_238", "BT_020", "BT_026", "CAP_406", "CATA_216", "CATA_553", "CFM_020",
+  "CS3_035", "DEEP_020", "DEEP_036", "DINO_421", "DMF_254", "DRG_319", "EDR_000", "EDR_845",
+  "EDR_895", "ETC_330", "ETC_371", "ETC_382", "ETC_385", "GDB_121", "GDB_234", "GDB_434",
+  "GDB_721", "GDB_726", "GIL_692", "GIL_826", "ICC_833", "JAIL_122", "JAIL_384", "JAIL_397",
+  "JAIL_430", "JAIL_504", "JAIL_509", "JAIL_800", "JAIL_860", "KAR_096", "MAW_024", "MEND_304",
+  "MEND_501", "MEND_503", "MEND_506", "MEND_800", "MEND_801", "MEND_803", "REV_314", "REV_921",
+  "RLK_214", "RLK_591", "RLK_706", "SC_002", "SC_753", "SC_754", "SC_764", "SW_448",
+  "TIME_020", "TLC_257", "TTN_811", "TTN_842", "TTN_850", "ULD_168", "VAC_426", "WW_367",
+  "YOG_530"
+]);
+
 const TRIGGERED_EFFECT_SOURCE_CARD_IDS = new Map([
   ["EDR_895E", "EDR_895"],
   ["MEND_801E", "MEND_801"],
@@ -55,7 +67,15 @@ function persistentClauseIndex(text: string) {
 
 export function canonicalGlobalEffectCardId(cardId: string): string {
   const normalized = cardId.trim().toUpperCase();
-  return TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(normalized) ?? normalized;
+  const aliasResolved = TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(normalized) ?? normalized;
+  if (!aliasResolved.startsWith("CORE_")) return aliasResolved;
+
+  const baseCardId = aliasResolved.slice("CORE_".length);
+  const baseAliasResolved = TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(baseCardId) ?? baseCardId;
+  return AUDITED_PERSISTENT_EFFECT_CARD_IDS.has(baseAliasResolved) ||
+    LEGACY_STRUCTURAL_EFFECT_CARD_IDS.has(baseAliasResolved)
+    ? baseAliasResolved
+    : aliasResolved;
 }
 
 export function inferGlobalEffectRule(card: CardInfo): GlobalEffectRule | undefined {
@@ -63,6 +83,7 @@ export function inferGlobalEffectRule(card: CardInfo): GlobalEffectRule | undefi
   if (LEGACY_STRUCTURAL_EFFECT_CARD_IDS.has(cardId)) {
     return { activations: ["play"], category: "structural" };
   }
+  if (!AUDITED_PERSISTENT_EFFECT_CARD_IDS.has(cardId)) return undefined;
 
   const mechanics = new Set((card.mechanics ?? []).map((mechanic) => mechanic.toUpperCase()));
   if (mechanics.has("START_OF_GAME_KEYWORD")) {

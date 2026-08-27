@@ -17,7 +17,10 @@ const fixtures = {
   NORMAL_AURA: { dbfId: 8, cardId: "NORMAL_AURA", name: "普通光环", text: "你的其他随从获得+1攻击力。", mechanics: ["AURA"] },
   MEND_801: { dbfId: 9, cardId: "MEND_801", name: "坚定的救援者", text: "圣盾。在本随从失去圣盾后，在本局对战中，使你的白银之手新兵获得+1生命值。", mechanics: ["DIVINE_SHIELD", "TRIGGER_VISUAL"] },
   ETC_382: { dbfId: 10, cardId: "ETC_382", name: "自由之魂", text: "战吼，亡语：在本局对战中，你的英雄技能多获得1点护甲值。", mechanics: ["BATTLECRY", "DEATHRATTLE"] },
-  MEND_501: { dbfId: 11, cardId: "MEND_501", name: "魔力行者", text: "战吼：在本局对战中，你的魔网牌法力值消耗减少（1）点。亡语：随机获取一张魔网牌。", mechanics: ["BATTLECRY", "DEATHRATTLE"] }
+  MEND_501: { dbfId: 11, cardId: "MEND_501", name: "魔力行者", text: "战吼：在本局对战中，你的魔网牌法力值消耗减少（1）点。亡语：随机获取一张魔网牌。", mechanics: ["BATTLECRY", "DEATHRATTLE"] },
+  AT_041: { dbfId: 12, cardId: "AT_041", name: "荒野骑士", text: "在本局对战中，你每召唤过一只野兽，本牌的法力值消耗便减少（1）点。" },
+  AT_120: { dbfId: 13, cardId: "AT_120", name: "冰霜巨人", text: "在本局对战中，你每使用一次英雄技能，本牌的法力值消耗便减少（1）点。" },
+  UNAUDITED_LONG_TEXT: { dbfId: 14, cardId: "UNAUDITED_LONG_TEXT", name: "未审计长期效果", text: "战吼：在本局对战中，你的随从获得+9/+9。", mechanics: ["BATTLECRY"] }
 } satisfies Record<string, CardInfo>;
 
 function cardFixture(cardId: keyof typeof fixtures, mechanic?: string): CardInfo {
@@ -49,8 +52,14 @@ describe("global effect rules", () => {
     expect(inferGlobalEffectRule(card)?.activations).toContain(activation);
   });
 
-  it.each(["AV_145", "CAP_806", "NORMAL_AURA"] as const)("rejects non-persistent %s", (cardId) => {
+  it.each(["AT_041", "AT_120", "AV_145", "CAP_806", "NORMAL_AURA", "UNAUDITED_LONG_TEXT"] as const)("rejects non-persistent or unaudited %s", (cardId) => {
     expect(inferGlobalEffectRule(cardFixture(cardId))).toBeUndefined();
+  });
+
+  it("canonicalizes CORE reprints only when their base card is audited", () => {
+    expect(canonicalGlobalEffectCardId("CORE_GIL_692")).toBe("GIL_692");
+    expect(inferGlobalEffectRule({ ...fixtures.GIL_692, cardId: "CORE_GIL_692" })?.category).toBe("persistent");
+    expect(canonicalGlobalEffectCardId("CORE_AT_041")).toBe("CORE_AT_041");
   });
 
   it("classifies audited conditional aliases as triggered source effects", () => {
