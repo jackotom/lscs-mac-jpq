@@ -42,6 +42,7 @@ import { buildSmartCardCounters } from "./smartCounters.js";
 import {
   canonicalGlobalEffectCardId,
   inferGlobalEffectRule,
+  triggeredGlobalEffectSourceCardId,
   type GlobalEffectActivation
 } from "./globalEffectRules.js";
 
@@ -234,6 +235,8 @@ export class TrackerEngine {
   private outcomesByUsageId = new Map<string, CompletedCardOutcome[]>();
   private completedCardOutcomeDedupKeys = new Set<string>();
   private cardOutcomeOccurrencesBySource = new Map<string, number>();
+  private globalEffectTriggerOccurrencesBySource = new Map<string, number>();
+  private recordedGlobalEffectTriggerDedupKeys = new Set<string>();
   private cardOutcomeFrameSequence = 0;
   private lastBlockBoundary:
     | { readonly fingerprint: string; readonly source: string }
@@ -993,7 +996,7 @@ export class TrackerEngine {
         : undefined;
       this.pendingKnownEntityReturnCandidateIds.clear();
       if (event.trigger === "deathrattle") {
-        this.recordGlobalEffectActivation(event.entity, "deathrattle");
+        this.recordDeathrattleGlobalEffect(event);
       }
       return;
     }
@@ -1050,6 +1053,7 @@ export class TrackerEngine {
         this.pendingKnownEntityReturnCandidateIds.add(merged.id);
       }
       if (merged?.id) {
+        this.recordTriggeredGlobalEffectEntity(merged);
         this.reconcileInsertedDeckEntity(merged.id);
         this.resolvePendingUnknownDeckExit(merged, event.raw);
         this.resolveCurrentCardOutcomeFrame(merged);
@@ -1112,6 +1116,7 @@ export class TrackerEngine {
     if (event.type === "controller") {
       const merged = this.mergeEntity({ id: event.entityId, controller: event.controller });
       if (merged?.id) {
+        this.recordTriggeredGlobalEffectEntity(merged);
         this.reconcileInsertedDeckEntity(merged.id);
         this.flushPendingControllerEvents(merged.id);
       }
@@ -2489,7 +2494,8 @@ export class TrackerEngine {
 
   private recordGlobalEffectActivation(
     entity: EntitySnapshot | undefined,
-    activation: GlobalEffectActivation
+    activation: GlobalEffectActivation,
+    occurrenceKey?: string
   ) {
     if (!entity) return;
     const known = entity.id ? this.entities.get(entity.id) : undefined;
@@ -2497,10 +2503,35 @@ export class TrackerEngine {
     const card = this.findCardInfo(merged.cardId, merged.name);
     const rule = card ? inferGlobalEffectRule(card) : undefined;
     if (!rule?.activations.includes(activation)) return;
-    this.storeGlobalEffect(merged, activation);
+    this.storeGlobalEffect(merged, activation, occurrenceKey);
   }
 
-  private storeGlobalEffect(entity: EntitySnapshot, activation: GlobalEffectActivation) {
+  private recordTriggeredGlobalEffectEntity(entity: EntitySnapshot) {
+    const sourceCardId = triggeredGlobalEffectSourceCardId(entity.cardId ?? "");
+    if (!sourceCardId) return;
+    this.storeGlobalEffect({ ...entity, cardId: sourceCardId }, "triggered");
+  }
+
+  private recordDeathrattleGlobalEffect(
+    event: Extract<ParsedLogEvent, { type: "causal-trigger" }>
+  ) {
+    if (!event.entity?.id) return;
+    const source = cardOutcomeLogSource(event.raw);
+    const semanticKey = `deathrattle:${event.entity.id}`;
+    const sourceOccurrenceKey = `${source.counterKey}:${semanticKey}`;
+    const occurrence = (this.globalEffectTriggerOccurrencesBySource.get(sourceOccurrenceKey) ?? 0) + 1;
+    this.globalEffectTriggerOccurrencesBySource.set(sourceOccurrenceKey, occurrence);
+    const dedupKey = `${source.dedupGroup}:${semanticKey}:occurrence:${occurrence}`;
+    if (this.recordedGlobalEffectTriggerDedupKeys.has(dedupKey)) return;
+    this.recordedGlobalEffectTriggerDedupKeys.add(dedupKey);
+    this.recordGlobalEffectActivation(event.entity, "deathrattle", dedupKey);
+  }
+
+  private storeGlobalEffect(
+    entity: EntitySnapshot,
+    activation: GlobalEffectActivation,
+    occurrenceKey?: string
+  ) {
     if (!this.gameActive) return;
     const controller = entity.controller;
     const target = this.isFriendlyController(controller)
@@ -2517,7 +2548,7 @@ export class TrackerEngine {
     };
     const usageId = entity.id ? this.activeUsageIdByEntity.get(entity.id) : undefined;
     const identity = usageId ?? entity.id ?? `${controller}:${cardId || normalizeCardKey(entity.name ?? "")}`;
-    target.set(`${identity}:${activation}`, stored);
+    target.set(`${identity}:${activation}${occurrenceKey ? `:${occurrenceKey}` : ""}`, stored);
   }
 
   private buildGlobalEffects(effects: ReadonlyMap<string, EntitySnapshot>) {
@@ -2933,6 +2964,8 @@ export class TrackerEngine {
     this.outcomesByUsageId.clear();
     this.completedCardOutcomeDedupKeys.clear();
     this.cardOutcomeOccurrencesBySource.clear();
+    this.globalEffectTriggerOccurrencesBySource.clear();
+    this.recordedGlobalEffectTriggerDedupKeys.clear();
     this.cardOutcomeFrameSequence = 0;
     this.lastBlockBoundary = undefined;
   }

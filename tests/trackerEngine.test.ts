@@ -780,6 +780,66 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Enti
     ]);
   });
 
+  it("counts two real deathrattle triggers from one use while deduplicating mirrored log sources", () => {
+    const engine = engineWithCards([mend800]);
+    establishPlayers(engine);
+    engine.applyLine(playLine("MEND_800", "260", 1));
+    const firstTaskListTrigger = deathrattleLine("MEND_800", "260", 1);
+    const firstGameStateTrigger = firstTaskListTrigger.replace("PowerTaskList", "GameState");
+
+    engine.applyText([
+      firstGameStateTrigger,
+      firstTaskListTrigger,
+      "D 12:00:02.100 GameState.DebugPrintPower() - BLOCK_END",
+      "D 12:00:02.100 PowerTaskList.DebugPrintPower() - BLOCK_END",
+      firstGameStateTrigger,
+      firstTaskListTrigger,
+      "D 12:00:02.100 GameState.DebugPrintPower() - BLOCK_END",
+      "D 12:00:02.100 PowerTaskList.DebugPrintPower() - BLOCK_END"
+    ].join("\n"));
+
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "MEND_800", count: 2 })
+    ]);
+  });
+
+  it("records audited enchantment entities once after ownership is known and rejects stale copies outside games", () => {
+    const fixture = readFileSync(
+      join(process.cwd(), "fixtures/logs/triggered-global-effect-enchantments/Power.log"),
+      "utf8"
+    ).trim().split(/\r?\n/u);
+    const [gameStart, cfmPlay, deepPlay, ...enchantmentLines] = fixture;
+    const cfmEntityLines = enchantmentLines.filter((line) => line.includes("CFM_020E"));
+    const deepEntityLines = enchantmentLines.filter((line) => line.includes("DEEP_020E"));
+    const delayedControllerLines = enchantmentLines.filter((line) => line.includes("tag=CONTROLLER"));
+    const engine = engineWithCards([cfm020, deep020]);
+    engine.setFriendlyController(1);
+
+    engine.applyText([gameStart, cfmPlay, deepPlay].join("\n"));
+    expect(engine.getState().globalEffects).toEqual([]);
+
+    engine.applyText(cfmEntityLines.join("\n"));
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "CFM_020", name: "缚链者拉兹", count: 1 })
+    ]);
+
+    engine.applyText(deepEntityLines.join("\n"));
+    expect(engine.getState().globalEffects).toHaveLength(1);
+
+    engine.applyText(delayedControllerLines.join("\n"));
+    expect(engine.getState().globalEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "CFM_020", count: 1 }),
+      expect.objectContaining({ cardId: "DEEP_020", name: "深岩矿工布莱恩", count: 1 })
+    ]));
+    expect(engine.getState().globalEffects).toHaveLength(2);
+
+    engine.applyLine(
+      "D 12:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=LocalPlayer id=1 zone=PLAY cardId= player=1] tag=PLAYSTATE value=LOST"
+    );
+    engine.applyText([...cfmEntityLines, ...deepEntityLines, ...delayedControllerLines].join("\n"));
+    expect(engine.getState().globalEffects).toEqual([]);
+  });
+
   it.each([
     ["CFM_020", cfm020, "CFM_020E", "401"],
     ["DEEP_020", deep020, "DEEP_020E", "402"]

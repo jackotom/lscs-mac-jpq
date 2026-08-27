@@ -35,6 +35,10 @@ const TRIGGERED_EFFECT_SOURCE_CARD_IDS = new Map([
 
 const TRIGGERED_EFFECT_CARD_IDS = new Set(TRIGGERED_EFFECT_SOURCE_CARD_IDS.values());
 
+export function triggeredGlobalEffectSourceCardId(cardId: string): string | undefined {
+  return TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(cardId.trim().toUpperCase());
+}
+
 function normalizeRulesText(text = "") {
   return text
     .replace(/<i>[\s\S]*?<\/i>/giu, "")
@@ -69,11 +73,11 @@ function persistentClauseIndex(text: string) {
 
 export function canonicalGlobalEffectCardId(cardId: string): string {
   const normalized = cardId.trim().toUpperCase();
-  const aliasResolved = TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(normalized) ?? normalized;
+  const aliasResolved = triggeredGlobalEffectSourceCardId(normalized) ?? normalized;
   if (!aliasResolved.startsWith("CORE_")) return aliasResolved;
 
   const baseCardId = aliasResolved.slice("CORE_".length);
-  const baseAliasResolved = TRIGGERED_EFFECT_SOURCE_CARD_IDS.get(baseCardId) ?? baseCardId;
+  const baseAliasResolved = triggeredGlobalEffectSourceCardId(baseCardId) ?? baseCardId;
   return AUDITED_PERSISTENT_EFFECT_CARD_IDS.has(baseAliasResolved) ||
     LEGACY_STRUCTURAL_EFFECT_CARD_IDS.has(baseAliasResolved)
     ? baseAliasResolved

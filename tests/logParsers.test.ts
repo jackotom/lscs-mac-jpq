@@ -12,6 +12,7 @@ import {
 
 const fixtureDir = resolve("fixtures/logs/session-2026-07-10");
 const duplicateFixtureDir = resolve("fixtures/logs/constructed-duplicate-create");
+const triggeredEnchantmentsFixtureDir = resolve("fixtures/logs/triggered-global-effect-enchantments");
 
 describe("log parsers", () => {
   it("parses generated-card sources, deck positions, and deck shuffles", () => {
@@ -36,6 +37,25 @@ describe("log parsers", () => {
       type: "deck-shuffle",
       playerId: 1
     })]);
+  });
+
+  it("parses sanitized triggered-enchantment FULL_ENTITY, SHOW_ENTITY, and delayed controller lines", async () => {
+    const content = await readFile(resolve(triggeredEnchantmentsFixtureDir, "Power.log"), "utf8");
+    const events = content.trim().split(/\r?\n/u).flatMap(parseLogLine);
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "entity",
+        creating: true,
+        entity: expect.objectContaining({ id: "701", cardId: "CFM_020E", controller: 1 })
+      }),
+      expect.objectContaining({
+        type: "entity",
+        creating: false,
+        entity: expect.objectContaining({ id: "702", cardId: "DEEP_020E", controller: undefined })
+      }),
+      expect.objectContaining({ type: "controller", entityId: "702", controller: 1 })
+    ]));
   });
 
   it("keeps entity-detail match-flow tags available for later entity binding", () => {

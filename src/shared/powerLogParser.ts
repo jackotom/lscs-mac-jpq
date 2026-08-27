@@ -6,6 +6,7 @@ import type {
   ParsedLogEvent,
   Zone
 } from "./types.js";
+import { triggeredGlobalEffectSourceCardId } from "./globalEffectRules.js";
 
 const KNOWN_ZONES = new Set(["DECK", "HAND", "PLAY", "GRAVEYARD", "REMOVEDFROMGAME", "SETASIDE", "SECRET"]);
 const MATCH_FLOW_TAGS = new Set<MatchFlowTag>([
@@ -35,14 +36,6 @@ const PLAYED_GLOBAL_EFFECT_CARD_IDS = new Set([
   "TLC_828", "TOY_805", "TOY_877",
   "TSC_944", "YOG_505"
 ]);
-const TRIGGERED_GLOBAL_EFFECT_CARD_IDS = new Map([
-  ["CFM_020E", "CFM_020"],
-  ["DEEP_020E", "DEEP_020"],
-  ["EDR_895E", "EDR_895"],
-  ["MEND_801E", "MEND_801"],
-  ["SC_755E", "SC_753"]
-]);
-
 export interface FriendlyDeckSnapshot {
   /** Total cards actually present in the local deck after game-start effects resolve. */
   readonly initialDeckSize: number;
@@ -127,7 +120,7 @@ export function parseLogLine(line: string): ParsedLogEvent[] {
       return events;
     }
     const sourceCardId = normalizedCardId
-      ? TRIGGERED_GLOBAL_EFFECT_CARD_IDS.get(normalizedCardId)
+      ? triggeredGlobalEffectSourceCardId(normalizedCardId)
       : undefined;
     if (sourceCardId) {
       events.push({
