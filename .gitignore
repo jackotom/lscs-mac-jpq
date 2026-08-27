@@ -8,6 +8,7 @@ native/bin/
 coverage/
 outputs/
 .superpowers/
+.worktrees/
 
 # Local configuration and runtime data
 .env
