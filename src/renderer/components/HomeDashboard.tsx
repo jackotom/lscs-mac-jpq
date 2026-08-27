@@ -39,6 +39,7 @@ export interface HomeDashboardProps {
 }
 
 const heroImageUrl = new URL("../assets/home-emerald-hero-v1.png", import.meta.url).href;
+const appIconUrl = new URL("../../../assets/icons/hearthstone-deck-tracker-icon-v1.png", import.meta.url).href;
 const resultLabels = { win: "胜利", loss: "失败", tie: "平局" } as const;
 const matchModeLabels = { standard: "标准", wild: "狂野", arena: "竞技场", unknown: "未知模式" } as const;
 const modeOrder = ["standard", "wild", "arena", "unknown"] as const;
@@ -102,7 +103,9 @@ export function HomeDashboard({
     >
       <header className="home-product-header" aria-label="产品状态栏">
         <div className="home-product-brand">
-          <span className="home-product-mark" aria-hidden="true"><Crown size={24} /></span>
+          <span className="home-product-mark" aria-hidden="true">
+            <img src={appIconUrl} alt="" />
+          </span>
           <span>
             <strong>炉石记牌器</strong>
             <small className={`status-${state.status}`}><i aria-hidden="true" />{getServiceLabel(state)}</small>

@@ -88,6 +88,7 @@ npx --offline @electron/packager "$runtime_source" "炉石记牌器" \
   --no-prune \
   --app-bundle-id="cc.acyg.hearthstonemactracker" \
   --helper-bundle-id="cc.acyg.hearthstonemactracker.helper" \
+  --icon="$root_dir/assets/icons/hearthstone-deck-tracker.icns" \
   --extra-resource="$root_dir/native/bin/arena-ocr" \
   --extra-resource="$root_dir/native/bin/frontmost-app" \
   ${electron_zip_args[@]+"${electron_zip_args[@]}"} \

@@ -218,11 +218,10 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
   flex: 0 0 40px;
   place-items: center;
   border: 1px solid #c88c25;
-  border-radius: 50%;
+  border-radius: 9px;
   color: #176ec8;
-  background:
-    radial-gradient(circle at 50% 48%, #6ec6ee 0 18%, #2377bd 20% 42%, #d2a242 44% 56%, #f1c96f 58% 65%, #6a461f 67% 100%);
-  box-shadow: 0 0 0 3px #f7ead0, inset 0 1px rgba(255, 255, 255, .65);
+  background: none;
+  box-shadow: none;
 }
 
 .home-product-mark svg {
@@ -230,6 +229,13 @@ html body:has(.desktop-frame):has(.app-shell.view-home) .app-shell.view-home {
   height: 19px;
   stroke-width: 2.2;
   filter: drop-shadow(0 1px 1px rgba(255, 255, 255, .5));
+}
+
+.home-product-mark img {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 .home-product-brand > span:last-child {

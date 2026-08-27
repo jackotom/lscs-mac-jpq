@@ -97,13 +97,18 @@ html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand-mark {
   flex: 0 0 45px;
   place-items: center;
   border: 1px solid #d7a23d;
-  border-radius: 50%;
+  border-radius: 9px;
   color: #f0bd55;
-  background:
-    radial-gradient(circle at 50% 45%, #d89b31 0 20%, #5c340d 22% 42%, transparent 44%),
-    conic-gradient(from 20deg, #f0bf59, #6f410f, #f0bf59, #6f410f, #f0bf59);
-  box-shadow: 0 0 16px rgba(212, 139, 35, 0.22), inset 0 0 0 4px #20160b;
-  transform: rotate(-5deg);
+  background: none;
+  box-shadow: none;
+  transform: none;
+}
+
+html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand-mark img {
+  width: 39px;
+  height: 39px;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 html body:has(.desktop-frame):not(:has(.overlay-shell)) .sidebar-brand > span:last-child {

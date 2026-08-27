@@ -1974,10 +1974,12 @@ function DesktopSidebar({
   return (
     <aside className="app-sidebar workbench-sidebar" aria-label="二级工作台导航">
       <section className="sidebar-brand" aria-label="炉石记牌器品牌">
-        <span className="sidebar-brand-mark" aria-hidden="true"><Layers3 size={27} /></span>
+        <span className="sidebar-brand-mark" aria-hidden="true">
+          <img src={new URL("../../assets/icons/hearthstone-deck-tracker-icon-v1.png", import.meta.url).href} alt="" />
+        </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.6.7</small>
+          <small>v0.6.8</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
