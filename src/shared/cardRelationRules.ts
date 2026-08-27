@@ -9,18 +9,15 @@ export interface CardCandidateSelector {
 }
 
 const CARD_TYPES = ["随从", "法术", "武器", "英雄", "地标"] as const;
+const DECK_ACTION_PATTERN = /从你的牌库(?:中|里)?\s*(?:抽(?:取)?|召唤|检索|发现|置入|获取|获得|复制|选择)[^。；;！!?？\n，,]{0,80}?法力值消耗(?:小于或等于|不高于|大于或等于|不低于|等于|为)\s*\(?\s*(\d+)\s*\)?(?:点)?[^。；;！!?？\n，,]{0,32}?(随从|法术|武器|英雄|地标)/u;
 
 export function inferCardCandidateSelectors(card: CardInfo): readonly CardCandidateSelector[] {
   const text = normalizeCardText(card.text);
-  const source = inferSource(text);
-  const cardType = CARD_TYPES.find((value) => text.includes(value));
-  const manaCost = inferManaCost(text);
-
-  if (!source || !cardType || !manaCost) {
-    return [];
-  }
-
-  return [{ source, cardTypes: [cardType], manaCost }];
+  const selector = text
+    .split(/[。；;！!?？\n]/u)
+    .map(inferDeckCandidateSelector)
+    .find((candidate): candidate is CardCandidateSelector => candidate !== undefined);
+  return selector ? [selector] : [];
 }
 
 export function areCardDetailsRelated(
@@ -50,23 +47,19 @@ function normalizeCardText(text: string | undefined): string {
     .trim();
 }
 
-function inferSource(text: string): CardCandidateSelector["source"] | undefined {
-  if (/(?:从|在)你的牌库(?:中|里)?/u.test(text)) {
-    return "deck";
-  }
-  if (/(?:从|在)你的手牌(?:中|里)?/u.test(text)) {
-    return "visible";
-  }
-  return undefined;
+function inferDeckCandidateSelector(fragment: string): CardCandidateSelector | undefined {
+  const match = fragment.match(DECK_ACTION_PATTERN);
+  const cardType = CARD_TYPES.find((type) => type === match?.[2]);
+  const manaCost = match ? inferManaCost(match[0]) : undefined;
+  if (!match || !cardType || !manaCost) return undefined;
+  return { source: "deck", cardTypes: [cardType], manaCost };
 }
 
 function inferManaCost(text: string): CardCandidateSelector["manaCost"] | undefined {
   const comparison = text.match(/法力值消耗(?:小于或等于|不高于)\s*\(?\s*(\d+)\s*\)?(?:点)?/u);
   if (comparison) return { max: Number(comparison[1]) };
-
   const minimum = text.match(/法力值消耗(?:大于或等于|不低于)\s*\(?\s*(\d+)\s*\)?(?:点)?/u);
   if (minimum) return { min: Number(minimum[1]) };
-
   const exact = text.match(/法力值消耗(?:等于|为)\s*\(?\s*(\d+)\s*\)?(?:点)?/u);
   return exact ? { exact: Number(exact[1]) } : undefined;
 }

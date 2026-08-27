@@ -195,6 +195,7 @@ export function CollapsibleCardGroup({
           <CompactCardList
             items={items}
             emptyLabel={children ? undefined : emptyLabel}
+            candidateGroup="other"
             activeCard={activeCard}
             onActiveCardChange={onActiveCardChange}
           />
@@ -208,13 +209,13 @@ export function CollapsibleCardGroup({
 export function CompactCardList({
   items,
   emptyLabel,
-  candidateGroup = "other",
+  candidateGroup,
   activeCard,
   onActiveCardChange
 }: {
   items: readonly OverlayCardItem[];
   emptyLabel?: string;
-  candidateGroup?: "deck" | "hand" | "board" | "other";
+  candidateGroup: "deck" | "hand" | "board" | "other";
   activeCard?: OverlayCardItem;
   onActiveCardChange?: (card: OverlayCardItem | undefined) => void;
 }) {
