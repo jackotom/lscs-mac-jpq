@@ -351,7 +351,8 @@ function isOptionalZoneCards(value: unknown): boolean {
 
 function isZoneCard(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.name) && isPositiveInteger(value.count) &&
-    isOptionalString(value.cardId) && (value.details === undefined || isRecord(value.details));
+    isOptionalString(value.cardId) &&
+    (value.details === undefined || (isRecord(value.details) && isOptionalRelationSelectors(value.details.relationSelectors)));
 }
 
 function isPublicCardTracking(value: unknown): boolean {
@@ -505,7 +506,30 @@ function isSecretCandidate(value: unknown): boolean {
 function isCardDetails(value: unknown): boolean {
   return isRecord(value) && isNonNegativeInteger(value.dbfId) && isNonEmptyString(value.name) &&
     typeof value.isSpell === "boolean" && Array.isArray(value.relatedCards) &&
-    value.relatedCards.every(isRelatedCard) && !("cardOutcomeSections" in value);
+    value.relatedCards.every(isRelatedCard) && isOptionalRelationSelectors(value.relationSelectors) &&
+    !("cardOutcomeSections" in value);
+}
+
+function isOptionalRelationSelectors(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isRelationSelector));
+}
+
+function isRelationSelector(value: unknown): boolean {
+  return isRecord(value) && hasOnlyKeys(value, [
+    "source", "cardTypes", "manaCost", "racesAny", "mechanicsAll"
+  ]) && isOneOf(value.source, ["deck", "visible"]) &&
+    isOptionalStringArray(value.cardTypes) && isOptionalStringArray(value.racesAny) &&
+    isOptionalStringArray(value.mechanicsAll) &&
+    (value.manaCost === undefined || (
+      isRecord(value.manaCost) && hasOnlyKeys(value.manaCost, ["min", "max", "exact"]) &&
+      isOptionalNonNegativeNumber(value.manaCost.min) &&
+      isOptionalNonNegativeNumber(value.manaCost.max) &&
+      isOptionalNonNegativeNumber(value.manaCost.exact)
+    ));
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
 }
 
 function isRelatedCard(value: unknown): boolean {
@@ -702,7 +726,7 @@ function isDeckCard(value: unknown): value is Record<string, unknown> & { name: 
   return isRecord(value) && isNonEmptyString(value.name) && isPositiveInteger(value.count) &&
     isOptionalString(value.cardId) && isOptionalString(value.rawLine) &&
     isOptionalPercentage(value.pickRate) && isOptionalFiniteNumber(value.deckImpact) &&
-    (value.details === undefined || isRecord(value.details)) &&
+    (value.details === undefined || (isRecord(value.details) && isOptionalRelationSelectors(value.details.relationSelectors))) &&
     (value.unresolved === undefined || value.unresolved === true);
 }
 

@@ -26,6 +26,8 @@ const AUDITED_PERSISTENT_EFFECT_CARD_IDS = new Set([
 ]);
 
 const TRIGGERED_EFFECT_SOURCE_CARD_IDS = new Map([
+  ["CFM_020E", "CFM_020"],
+  ["DEEP_020E", "DEEP_020"],
   ["EDR_895E", "EDR_895"],
   ["MEND_801E", "MEND_801"],
   ["SC_755E", "SC_753"]

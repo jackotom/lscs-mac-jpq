@@ -20,7 +20,9 @@ const fixtures = {
   MEND_501: { dbfId: 11, cardId: "MEND_501", name: "魔力行者", text: "战吼：在本局对战中，你的魔网牌法力值消耗减少（1）点。亡语：随机获取一张魔网牌。", mechanics: ["BATTLECRY", "DEATHRATTLE"] },
   AT_041: { dbfId: 12, cardId: "AT_041", name: "荒野骑士", text: "在本局对战中，你每召唤过一只野兽，本牌的法力值消耗便减少（1）点。" },
   AT_120: { dbfId: 13, cardId: "AT_120", name: "冰霜巨人", text: "在本局对战中，你每使用一次英雄技能，本牌的法力值消耗便减少（1）点。" },
-  UNAUDITED_LONG_TEXT: { dbfId: 14, cardId: "UNAUDITED_LONG_TEXT", name: "未审计长期效果", text: "战吼：在本局对战中，你的随从获得+9/+9。", mechanics: ["BATTLECRY"] }
+  UNAUDITED_LONG_TEXT: { dbfId: 14, cardId: "UNAUDITED_LONG_TEXT", name: "未审计长期效果", text: "战吼：在本局对战中，你的随从获得+9/+9。", mechanics: ["BATTLECRY"] },
+  CFM_020: { dbfId: 15, cardId: "CFM_020", name: "缚链者拉兹", text: "战吼：如果你的牌库里没有相同的牌，则在本局对战中，你的英雄技能的法力值消耗为（0）点。", mechanics: ["BATTLECRY"] },
+  DEEP_020: { dbfId: 16, cardId: "DEEP_020", name: "深岩矿工布莱恩", text: "战吼：如果你的套牌里没有相同的牌，则在本局对战的剩余时间内，你的战吼会触发两次。", mechanics: ["BATTLECRY"] }
 } satisfies Record<string, CardInfo>;
 
 function cardFixture(cardId: keyof typeof fixtures, mechanic?: string): CardInfo {
@@ -64,9 +66,13 @@ describe("global effect rules", () => {
 
   it("classifies audited conditional aliases as triggered source effects", () => {
     expect(inferGlobalEffectRule(cardFixture("MEND_801"))?.activations).toEqual(["triggered"]);
+    expect(inferGlobalEffectRule(cardFixture("CFM_020"))?.activations).toEqual(["triggered"]);
+    expect(inferGlobalEffectRule(cardFixture("DEEP_020"))?.activations).toEqual(["triggered"]);
     expect(canonicalGlobalEffectCardId("EDR_895E")).toBe("EDR_895");
     expect(canonicalGlobalEffectCardId("MEND_801E")).toBe("MEND_801");
     expect(canonicalGlobalEffectCardId("SC_755E")).toBe("SC_753");
+    expect(canonicalGlobalEffectCardId("CFM_020E")).toBe("CFM_020");
+    expect(canonicalGlobalEffectCardId("DEEP_020E")).toBe("DEEP_020");
   });
 
   it("uses both activations only when the persistent clause belongs to battlecry and deathrattle", () => {

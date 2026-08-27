@@ -91,6 +91,83 @@ describe("frontend stability helpers", () => {
       .toEqual([{ name: "全场效果", count: 1 }]);
   });
 
+  it("accepts valid relation selectors in public card details", () => {
+    const base = createPublicTrackerState();
+    const details = {
+      dbfId: 1,
+      name: "关系来源牌",
+      isSpell: false,
+      relatedCards: [],
+      relationSelectors: [
+        {
+          source: "deck",
+          cardTypes: ["随从"],
+          racesAny: ["野兽"],
+          mechanicsAll: ["战吼"],
+          manaCost: { min: 0, max: 2, exact: 1 }
+        },
+        { source: "visible" }
+      ]
+    };
+    const state = {
+      ...base,
+      cardTracking: {
+        ...base.cardTracking!,
+        detailsByCardKey: { "id:1": details }
+      }
+    };
+
+    expect(parsePublicTrackerState(state).cardTracking?.detailsByCardKey["id:1"])
+      .toEqual(details);
+  });
+
+  it.each([
+    { source: "graveyard" },
+    { source: "deck", cardTypes: "随从" },
+    { source: "deck", cardTypes: ["随从", 1] },
+    { source: "visible", racesAny: [null] },
+    { source: "visible", mechanicsAll: {} },
+    { source: "deck", manaCost: [] },
+    { source: "deck", manaCost: { min: -1 } },
+    { source: "deck", manaCost: { max: Number.POSITIVE_INFINITY } },
+    { source: "deck", manaCost: { exact: "0" } }
+  ])("rejects malformed relation selector %#", (selector) => {
+    const base = createPublicTrackerState();
+    const state = {
+      ...base,
+      cardTracking: {
+        ...base.cardTracking!,
+        detailsByCardKey: {
+          "id:1": {
+            dbfId: 1,
+            name: "关系来源牌",
+            isSpell: false,
+            relatedCards: [],
+            relationSelectors: [selector]
+          }
+        }
+      }
+    };
+
+    expect(() => parsePublicTrackerState(state)).toThrow(/卡牌生命周期数据无效/);
+  });
+
+  it("rejects a non-array relationSelectors payload before renderer matching", () => {
+    const base = createPublicTrackerState();
+    const malformedDetails = {
+      dbfId: 1,
+      name: "关系来源牌",
+      isSpell: false,
+      relatedCards: [],
+      relationSelectors: { source: "deck" }
+    };
+
+    expect(() => parsePublicTrackerState({
+      ...base,
+      globalEffects: [{ name: "全场效果", count: 1, details: malformedDetails }]
+    })).toThrow(/全局影响数据无效/);
+  });
+
   it("accepts public match counters and rejects malformed or negative values", () => {
     const base = createPublicTrackerState({
       status: "watching",

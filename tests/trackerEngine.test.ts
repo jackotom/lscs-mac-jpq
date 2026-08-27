@@ -56,6 +56,22 @@ const etc382: CardInfo = {
   mechanics: ["BATTLECRY", "DEATHRATTLE"]
 };
 
+const cfm020: CardInfo = {
+  dbfId: 40323,
+  cardId: "CFM_020",
+  name: "缚链者拉兹",
+  text: "战吼：如果你的牌库里没有相同的牌，则在本局对战中，你的英雄技能的法力值消耗为（0）点。",
+  mechanics: ["BATTLECRY"]
+};
+
+const deep020: CardInfo = {
+  dbfId: 104528,
+  cardId: "DEEP_020",
+  name: "深岩矿工布莱恩",
+  text: "战吼：如果你的套牌里没有相同的牌，则在本局对战的剩余时间内，你的战吼会触发两次。",
+  mechanics: ["BATTLECRY"]
+};
+
 describe("parseDeckText", () => {
   it("parses manual deck lines", () => {
     const deck = parseDeckText("2x Fireball\n1 Yogg-Saron, Unleashed\nMiracle Salesman");
@@ -323,7 +339,9 @@ describe("parseLogLine", () => {
   it.each([
     ["EDR_895E", "EDR_895"],
     ["MEND_801E", "MEND_801"],
-    ["SC_755E", "SC_753"]
+    ["SC_755E", "SC_753"],
+    ["CFM_020E", "CFM_020"],
+    ["DEEP_020E", "DEEP_020"]
   ])("maps triggered global-effect alias %s to source %s", (aliasCardId, sourceCardId) => {
     const events = parseLogLine(
       `D 12:00:01.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=效果附魔 id=75 zone=SETASIDE cardId=${aliasCardId} player=1] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1`
@@ -728,6 +746,30 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Enti
     ]);
   });
 
+  it("counts the same entity again only after it returns to hand and is replayed", () => {
+    const engine = engineWithCards([cap406]);
+    establishPlayers(engine);
+    const taskListPlay = playLine("CAP_406", "220", 1);
+    const gameStatePlay = taskListPlay.replace("PowerTaskList", "GameState");
+
+    engine.applyText([gameStatePlay, taskListPlay].join("\n"));
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "CAP_406", count: 1 })
+    ]);
+
+    engine.applyLine(
+      "D 12:00:02.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=测试牌 id=220 zone=PLAY cardId=CAP_406 player=1] tag=ZONE value=HAND"
+    );
+    engine.applyText([
+      gameStatePlay.replace("12:00:01.000", "12:00:03.000"),
+      taskListPlay.replace("12:00:01.000", "12:00:03.000")
+    ].join("\n"));
+
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: "CAP_406", count: 2 })
+    ]);
+  });
+
   it("counts play and deathrattle activations from one entity separately", () => {
     const engine = engineWithCards([etc382]);
     establishPlayers(engine);
@@ -736,6 +778,64 @@ D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Enti
     expect(engine.getState().globalEffects).toEqual([
       expect.objectContaining({ cardId: "ETC_382", count: 2 })
     ]);
+  });
+
+  it.each([
+    ["CFM_020", cfm020, "CFM_020E", "401"],
+    ["DEEP_020", deep020, "DEEP_020E", "402"]
+  ] as const)("records %s only when its conditional battlecry trigger fires", (_cardId, card, effectCardId, effectEntityId) => {
+    const engine = engineWithCards([card]);
+    establishPlayers(engine);
+
+    engine.applyLine(playLine(card.cardId!, effectEntityId, 1));
+    expect(engine.getState().globalEffects).toEqual([]);
+
+    engine.applyLine(
+      `D 12:00:02.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=条件战吼附魔 id=${effectEntityId}0 zone=SETASIDE cardId=${effectCardId} player=1] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1`
+    );
+    expect(engine.getState().globalEffects).toEqual([
+      expect.objectContaining({ cardId: card.cardId, name: card.name, count: 1 })
+    ]);
+  });
+
+  it("ignores every global-effect activation outside an active game", () => {
+    const mend801: CardInfo = {
+      dbfId: 123621,
+      cardId: "MEND_801",
+      name: "坚定的救援者",
+      text: "圣盾。在本随从失去圣盾后，在本局对战中，使你的白银之手新兵获得+1生命值。",
+      mechanics: ["DIVINE_SHIELD", "TRIGGER_VISUAL"]
+    };
+    const gil692: CardInfo = {
+      dbfId: 47070,
+      cardId: "GIL_692",
+      name: "格恩·灰鬃",
+      text: "对战开始时：如果你的套牌中只有法力值消耗为偶数的牌，你的初始英雄技能的法力值消耗为（1）点。",
+      mechanics: ["START_OF_GAME_KEYWORD"]
+    };
+    const engine = engineWithCards([cap406, mend800, mend801, gil692]);
+    engine.setFriendlyController(1);
+    const activationLines = [
+      playLine("CAP_406", "501", 1),
+      deathrattleLine("MEND_800", "502", 1),
+      "D 12:00:03.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=触发附魔 id=503 zone=SETASIDE cardId=MEND_801E player=1] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1",
+      "D 12:00:04.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=TRIGGER Entity=[entityName=格恩·灰鬃 id=504 zone=SETASIDE cardId=GIL_692 player=1] EffectCardId=0 EffectIndex=0 Target=0 SubOption=-1 TriggerKeyword=START_OF_GAME_KEYWORD"
+    ];
+
+    engine.applyText(activationLines.join("\n"));
+    expect(engine.getState().globalEffects).toEqual([]);
+
+    establishPlayers(engine);
+    engine.applyText(activationLines.join("\n"));
+    expect(engine.getState().globalEffects).toHaveLength(4);
+
+    engine.applyLine(
+      "D 12:10:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=LocalPlayer id=1 zone=PLAY cardId= player=1] tag=PLAYSTATE value=LOST"
+    );
+    expect(engine.getState().globalEffects).toEqual([]);
+
+    engine.applyText(activationLines.join("\n"));
+    expect(engine.getState().globalEffects).toEqual([]);
   });
 
   it("clears card-driven effects for both sides on game start and game end", () => {

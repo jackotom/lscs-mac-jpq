@@ -1087,9 +1087,6 @@ export class TrackerEngine {
 
     if (event.type === "action-boundary") {
       if (event.phase === "start") {
-        if (event.action === "play") {
-          this.recordGlobalEffectActivation(event.entity, "play");
-        }
         const existing = event.entity?.id ? this.entities.get(event.entity.id) : undefined;
         const cardId = event.entity?.cardId ?? existing?.cardId;
         const controller = event.entity?.controller ?? existing?.controller;
@@ -1104,6 +1101,9 @@ export class TrackerEngine {
             event.entity.name ?? existing?.name
           );
           this.bindPendingCardOutcomeFrame(use);
+        }
+        if (event.action === "play") {
+          this.recordGlobalEffectActivation(event.entity, "play");
         }
       }
       return;
@@ -2501,6 +2501,7 @@ export class TrackerEngine {
   }
 
   private storeGlobalEffect(entity: EntitySnapshot, activation: GlobalEffectActivation) {
+    if (!this.gameActive) return;
     const controller = entity.controller;
     const target = this.isFriendlyController(controller)
       ? this.globalEffects
@@ -2514,7 +2515,8 @@ export class TrackerEngine {
       ...(cardId ? { cardId } : {}),
       ...(card?.name ? { name: card.name } : {})
     };
-    const identity = entity.id ?? `${controller}:${cardId || normalizeCardKey(entity.name ?? "")}`;
+    const usageId = entity.id ? this.activeUsageIdByEntity.get(entity.id) : undefined;
+    const identity = usageId ?? entity.id ?? `${controller}:${cardId || normalizeCardKey(entity.name ?? "")}`;
     target.set(`${identity}:${activation}`, stored);
   }
 

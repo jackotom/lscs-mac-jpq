@@ -22,6 +22,7 @@ const recruiter = toDetails({
   cardType: "随从",
   manaCost: 5
 });
+const zeroCostMinion = toDetails({ dbfId: 5, name: "零费随从", cardType: "随从", manaCost: 0 });
 const twoCostMinion = toDetails({ dbfId: 2, name: "二费随从", cardType: "随从", manaCost: 2 });
 const threeCostMinion = toDetails({ dbfId: 3, name: "三费随从", cardType: "随从", manaCost: 3 });
 const twoCostSpell = toDetails({ dbfId: 4, name: "二费法术", cardType: "法术", manaCost: 2 });
@@ -74,6 +75,7 @@ describe("card relation rules", () => {
   });
 
   it("matches only eligible deck minions", () => {
+    expect(areCardDetailsRelated(recruiter, zeroCostMinion, "deck")).toBe(true);
     expect(areCardDetailsRelated(recruiter, twoCostMinion, "deck")).toBe(true);
     expect(areCardDetailsRelated(recruiter, threeCostMinion, "deck")).toBe(false);
     expect(areCardDetailsRelated(recruiter, twoCostSpell, "deck")).toBe(false);
