@@ -8,6 +8,13 @@ function source(relativePath: string) {
   return fs.readFileSync(path.join(projectRoot, relativePath), "utf8");
 }
 
+function cssDeclarations(styles: string, selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = styles.match(new RegExp(`(?:^|})\\s*${escapedSelector}\\s*\\{([^}]*)\\}`));
+  if (!match) throw new Error(`找不到样式规则：${selector}`);
+  return match[1];
+}
+
 describe("window experience configuration", () => {
   it("allows the main window to reach the supported narrow history layout", () => {
     expect(source("src/main/main.ts")).toMatch(
@@ -225,6 +232,61 @@ describe("window experience configuration", () => {
     expect(styles).toMatch(
       /\.overlay-compact-card-row\s*\{[\s\S]*?height:\s*20px;[\s\S]*?overflow:\s*hidden;/
     );
+  });
+
+  it("keeps synergy decoration behind card names instead of tinting over text", () => {
+    const styles = source("src/renderer/overlayStyles.css");
+    const relatedOverlay = cssDeclarations(styles, ".overlay-compact-card-row.is-synergy-related::before");
+
+    expect(relatedOverlay).not.toMatch(/background(?:-color)?\s*:/);
+    expect(relatedOverlay).toMatch(/box-shadow:[\s\S]*?inset 2px 0 0[\s\S]*?inset -2px 0 0/);
+  });
+
+  it("gives related and selected cards explicit, distinct dark and light states", () => {
+    const darkStyles = source("src/renderer/overlayStyles.css");
+    const lightStyles = source("src/renderer/lightOverlayStyles.css");
+
+    expect(cssDeclarations(darkStyles, '.overlay-compact-card-row[data-card-selected="true"]')).toMatch(
+      /background:\s*rgba\(64,\s*119,\s*156,\s*0\.2\);[\s\S]*?box-shadow:\s*inset 2px 0 0 #79c0e6/
+    );
+    expect(lightStyles).toMatch(
+      /html\[data-tracker-theme="light"\] \.overlay-compact-card-row\.is-synergy-related\s*\{[\s\S]*?background:\s*#fff4df;[\s\S]*?box-shadow:[\s\S]*?inset 2px 0 0 #9a5b00[\s\S]*?inset -2px 0 0 #9a5b00/
+    );
+    expect(lightStyles).toMatch(
+      /html\[data-tracker-theme="light"\] \.overlay-compact-card-row\[data-card-selected="true"\]\s*\{[\s\S]*?background:\s*#eaf4ff;[\s\S]*?box-shadow:\s*inset 2px 0 0 #176fd7/
+    );
+  });
+
+  it("reserves narrow-row space for long names, quantities, and synergy markers", () => {
+    const styles = source("src/renderer/overlayStyles.css");
+    const narrowStyles = styles.slice(
+      styles.indexOf("@media (max-width: 120px)"),
+      styles.indexOf("/* Arena pregame: Firestone-style pick rate / card / deck impact table. */")
+    );
+
+    expect(narrowStyles).toMatch(
+      /\.overlay-compact-card-row\.is-synergy-related \.overlay-card-art > strong\s*\{\s*padding-right:\s*16px;/
+    );
+    expect(narrowStyles).toMatch(
+      /\.overlay-compact-card-row\.is-synergy-related:has\(\.overlay-card-quantity\) \.overlay-card-art > strong\s*\{\s*padding-right:\s*32px;/
+    );
+    expect(narrowStyles).toMatch(
+      /\.overlay-compact-card-row\.is-synergy-related:has\(\.overlay-card-quantity\)::after\s*\{\s*right:\s*18px;/
+    );
+    expect(narrowStyles).toMatch(/\.overlay-card-art > strong\s*\{[\s\S]*?text-overflow:\s*ellipsis;/);
+  });
+
+  it("keeps empty card rows inside the 100px overlay content box", () => {
+    const styles = source("src/renderer/overlayStyles.css");
+    const emptyRow = cssDeclarations(styles, ".overlay-card-group-empty");
+
+    expect(emptyRow).toMatch(/box-sizing:\s*border-box;/);
+    expect(emptyRow).toMatch(/width:\s*100%;/);
+    expect(emptyRow).toMatch(/max-width:\s*100%;/);
+    expect(emptyRow).toMatch(/min-width:\s*0;/);
+    expect(emptyRow).toMatch(/overflow:\s*hidden;/);
+    expect(emptyRow).toMatch(/overflow-wrap:\s*anywhere;/);
+    expect(emptyRow).toMatch(/white-space:\s*normal;/);
   });
 
   it("keeps the opponent title, status, and collapse control in the 100px layout", () => {

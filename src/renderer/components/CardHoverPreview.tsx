@@ -1,5 +1,13 @@
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode
+} from "react";
 import type { CardDetails } from "../../shared/cardDatabase";
 import type { CardPreviewAnchorRect } from "../../shared/types";
 import { CardDetailBody } from "./CardDetailBody";
@@ -9,7 +17,10 @@ interface CardHoverPreviewProps {
   children: ReactNode;
   className?: string;
   isRelated?: boolean;
-  onActiveChange?: (isActive: boolean) => void;
+  selected?: boolean;
+  onHoverChange?: (isActive: boolean) => void;
+  onFocusChange?: (isActive: boolean) => void;
+  onSelectedChange?: (selected: boolean) => void;
 }
 
 const previewGap = 10;
@@ -20,7 +31,16 @@ let nextExternalPreviewOwnerId = 1;
 let activeExternalPreviewOwnerId: number | undefined;
 let activeInlinePreview: { readonly ownerId: number; readonly clear: () => void } | undefined;
 
-export function CardHoverPreview({ details, children, className, isRelated = false, onActiveChange }: CardHoverPreviewProps) {
+export function CardHoverPreview({
+  details,
+  children,
+  className,
+  isRelated = false,
+  selected = false,
+  onHoverChange,
+  onFocusChange,
+  onSelectedChange
+}: CardHoverPreviewProps) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const externalRefreshTimerRef = useRef<number>();
   const externalHideTimerRef = useRef<number>();
@@ -38,12 +58,11 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
   }
 
   useEffect(() => {
-    if (!usesExternalCardPreview()) {
-      return undefined;
-    }
+    const externalPreview = usesExternalCardPreview();
 
     function hideWhenWindowLosesFocus() {
-      if (!isActiveExternalPreviewOwner()) {
+      endTransientActivity();
+      if (!externalPreview || !isActiveExternalPreviewOwner()) {
         return;
       }
 
@@ -65,32 +84,44 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
     }
 
     function hideWhenDocumentIsHidden() {
-      if (document.hidden && isActiveExternalPreviewOwner()) {
+      if (!document.hidden) {
+        return;
+      }
+      endTransientActivity();
+      if (externalPreview && isActiveExternalPreviewOwner()) {
         clearPinnedPreview();
         hidePreview();
       }
     }
 
     window.addEventListener("blur", hideWhenWindowLosesFocus);
-    window.addEventListener("mouseleave", hideWhenWindowIsLeft);
+    if (externalPreview) {
+      window.addEventListener("mouseleave", hideWhenWindowIsLeft);
+    }
     document.addEventListener("visibilitychange", hideWhenDocumentIsHidden);
-    const unsubscribePinnedChange = window.hearthstoneTracker?.onCardPreviewPinnedChange?.((pinned) => {
-      if (!isActiveExternalPreviewOwner()) {
-        return;
-      }
-      isPinnedRef.current = pinned;
-      setIsPinned(pinned);
-      if (pinned) {
-        clearExternalHideTimer();
-      }
-    });
+    const unsubscribePinnedChange = externalPreview
+      ? window.hearthstoneTracker?.onCardPreviewPinnedChange?.((pinned) => {
+          if (!isActiveExternalPreviewOwner()) {
+            return;
+          }
+          isPinnedRef.current = pinned;
+          setIsPinned(pinned);
+          if (pinned) {
+            clearExternalHideTimer();
+          }
+        })
+      : undefined;
 
     return () => {
       window.removeEventListener("blur", hideWhenWindowLosesFocus);
-      window.removeEventListener("mouseleave", hideWhenWindowIsLeft);
+      if (externalPreview) {
+        window.removeEventListener("mouseleave", hideWhenWindowIsLeft);
+      }
       document.removeEventListener("visibilitychange", hideWhenDocumentIsHidden);
       unsubscribePinnedChange?.();
-      stopExternalPreview();
+      if (externalPreview) {
+        stopExternalPreview();
+      }
     };
   }, []);
 
@@ -155,8 +186,6 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
       return;
     }
 
-    onActiveChange?.(true);
-
     const rect = anchorRef.current.getBoundingClientRect();
     if (usesExternalCardPreview() && window.hearthstoneTracker?.showCardPreview) {
       showExternalPreview(details, rect);
@@ -191,7 +220,6 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
   }
 
   function hidePreview() {
-    onActiveChange?.(false);
     if (usesExternalCardPreview()) {
       stopExternalPreview();
     } else if (activeInlinePreview?.ownerId === externalPreviewOwnerIdRef.current) {
@@ -246,7 +274,7 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
 
   function handlePointerLeave() {
     lastPointerRef.current = undefined;
-    onActiveChange?.(false);
+    onHoverChange?.(false);
     if (!isPinnedRef.current) {
       if (usesExternalCardPreview()) {
         scheduleExternalHide();
@@ -362,9 +390,46 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
   }
 
   function handleBlur() {
+    onFocusChange?.(false);
     if (!isPinnedRef.current) {
       hidePreview();
     }
+  }
+
+  function endTransientActivity() {
+    onHoverChange?.(false);
+    onFocusChange?.(false);
+  }
+
+  function handlePointerEnter(event: ReactMouseEvent<HTMLDivElement>) {
+    if (canPreview) {
+      onHoverChange?.(true);
+    }
+    showPreview(event);
+  }
+
+  function handleFocus() {
+    if (canPreview) {
+      onFocusChange?.(true);
+    }
+    showPreview();
+  }
+
+  function handleSelect() {
+    if (canPreview && onSelectedChange) {
+      onSelectedChange(!selected);
+    }
+  }
+
+  function handleSelectionKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    if (!canPreview || !onSelectedChange) {
+      return;
+    }
+    event.preventDefault();
+    onSelectedChange(!selected);
   }
 
   const preview = details && position && typeof document !== "undefined"
@@ -394,14 +459,20 @@ export function CardHoverPreview({ details, children, className, isRelated = fal
       className={className ? `card-hover-target ${className}` : "card-hover-target"}
       data-preview-pinned={isPinned}
       data-card-related={isRelated ? "true" : undefined}
+      data-card-selected={onSelectedChange ? String(selected) : undefined}
       data-synergy-marker={isRelated ? "配" : undefined}
+      aria-description={isRelated ? "与当前卡牌有配合" : undefined}
       title={isRelated ? "与当前卡牌有配合" : undefined}
       aria-keyshortcuts="Alt+Q"
+      aria-pressed={onSelectedChange ? selected : undefined}
+      role={onSelectedChange ? "button" : undefined}
       tabIndex={canPreview ? 0 : undefined}
-      onMouseEnter={showPreview}
+      onClick={onSelectedChange ? handleSelect : undefined}
+      onKeyDown={onSelectedChange ? handleSelectionKeyDown : undefined}
+      onMouseEnter={handlePointerEnter}
       onMouseMove={handlePointerMove}
       onMouseLeave={handlePointerLeave}
-      onFocus={() => showPreview()}
+      onFocus={handleFocus}
       onBlur={handleBlur}
     >
       {children}

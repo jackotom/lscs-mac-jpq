@@ -515,17 +515,38 @@ function isOptionalRelationSelectors(value: unknown): boolean {
 }
 
 function isRelationSelector(value: unknown): boolean {
+  const restrictionKeys = [
+    "cardTypes", "manaCost", "attack", "health", "racesAny",
+    "spellSchoolsAny", "mechanicsAny", "mechanicsAll", "raritiesAny"
+  ] as const;
   return isRecord(value) && hasOnlyKeys(value, [
-    "source", "cardTypes", "manaCost", "racesAny", "mechanicsAll"
+    "source", "cardTypes", "manaCost", "attack", "health", "racesAny",
+    "spellSchoolsAny", "mechanicsAny", "mechanicsAll", "raritiesAny"
   ]) && isOneOf(value.source, ["deck", "visible"]) &&
-    isOptionalStringArray(value.cardTypes) && isOptionalStringArray(value.racesAny) &&
-    isOptionalStringArray(value.mechanicsAll) &&
-    (value.manaCost === undefined || (
-      isRecord(value.manaCost) && hasOnlyKeys(value.manaCost, ["min", "max", "exact"]) &&
-      isOptionalNonNegativeNumber(value.manaCost.min) &&
-      isOptionalNonNegativeNumber(value.manaCost.max) &&
-      isOptionalNonNegativeNumber(value.manaCost.exact)
-    ));
+    restrictionKeys.some((key) => value[key] !== undefined) &&
+    isOptionalNonEmptyStringArray(value.cardTypes) && isOptionalNonEmptyStringArray(value.racesAny) &&
+    isOptionalNonEmptyStringArray(value.spellSchoolsAny) && isOptionalNonEmptyStringArray(value.mechanicsAny) &&
+    isOptionalNonEmptyStringArray(value.mechanicsAll) && isOptionalNonEmptyStringArray(value.raritiesAny) &&
+    isOptionalCardNumericConstraint(value.manaCost) &&
+    isOptionalCardNumericConstraint(value.attack) &&
+    isOptionalCardNumericConstraint(value.health);
+}
+
+function isOptionalCardNumericConstraint(value: unknown): boolean {
+  return value === undefined || (
+    isRecord(value) && hasOnlyKeys(value, ["min", "max", "exact", "oneOf"]) &&
+    [value.min, value.max, value.exact, value.oneOf].some((entry) => entry !== undefined) &&
+    isOptionalNonNegativeNumber(value.min) &&
+    isOptionalNonNegativeNumber(value.max) &&
+    isOptionalNonNegativeNumber(value.exact) &&
+    (value.oneOf === undefined || (
+      Array.isArray(value.oneOf) && value.oneOf.length > 0 && value.oneOf.every(isNonNegativeNumber)
+    ))
+  );
+}
+
+function isOptionalNonEmptyStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string"));
 }
 
 function isOptionalStringArray(value: unknown): boolean {
@@ -805,7 +826,11 @@ function isOptionalPercentage(value: unknown): boolean {
 }
 
 function isOptionalNonNegativeNumber(value: unknown): boolean {
-  return value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= 0);
+  return value === undefined || isNonNegativeNumber(value);
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function isMatchHistorySummary(value: unknown): value is Record<"total" | "wins" | "losses" | "ties" | "winRate", number> {

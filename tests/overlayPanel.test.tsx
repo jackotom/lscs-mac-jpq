@@ -599,11 +599,14 @@ describe("standard tracker overlay", () => {
         ...base.current,
         deck: {
           ...base.current.deck,
-          cards: [{ id: "source", name: "关联来源卡", count: 1, details: sourceDetails }]
+          cards: [{ id: "target", name: "关联目标卡", count: 1, details: targetDetails }]
         },
         hand: {
           ...base.current.hand,
-          cards: [{ id: "target", name: "关联目标卡", count: 1, details: targetDetails }]
+          cards: [
+            { id: "source", name: "关联来源卡", count: 1, details: sourceDetails },
+            { id: "hand-target", name: "手牌关联目标卡", count: 1, details: targetDetails }
+          ]
         }
       }
     } satisfies OverlayCardTrackingView;
@@ -611,15 +614,220 @@ describe("standard tracker overlay", () => {
 
     const source = screen.getByText("关联来源卡").closest(".overlay-compact-card-row") as HTMLElement;
     const target = screen.getByText("关联目标卡").closest(".overlay-compact-card-row") as HTMLElement;
+    const handTarget = screen.getByText("手牌关联目标卡").closest(".overlay-compact-card-row") as HTMLElement;
     fireEvent.mouseEnter(source);
     expect(target).toHaveClass("is-synergy-related");
+    expect(target).toHaveAttribute("aria-description", "与当前卡牌有配合");
+    expect(handTarget).not.toHaveClass("is-synergy-related");
     fireEvent.mouseLeave(source);
     expect(target).not.toHaveClass("is-synergy-related");
 
-    fireEvent.focus(target);
-    expect(source).toHaveClass("is-synergy-related");
-    fireEvent.blur(target);
-    expect(source).not.toHaveClass("is-synergy-related");
+    fireEvent.focus(source);
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.blur(source);
+    expect(target).not.toHaveClass("is-synergy-related");
+  });
+
+  it("clears only interactions from the group being collapsed", () => {
+    const base = tracking();
+    const sourceDetails = {
+      dbfId: 5001,
+      name: "分组来源",
+      isSpell: true,
+      relatedCards: [{ dbfId: 5002, name: "分组目标" }]
+    };
+    const targetDetails = {
+      dbfId: 5002,
+      name: "分组目标",
+      isSpell: false,
+      relatedCards: []
+    };
+    const globalDetails = {
+      dbfId: 5003,
+      name: "全局分组来源",
+      isSpell: true,
+      relatedCards: [{ dbfId: 5002, name: "分组目标" }]
+    };
+    const lifecycle = {
+      ...base,
+      current: {
+        ...base.current,
+        deck: {
+          ...base.current.deck,
+          cards: [{ id: "group-target", name: "分组目标", count: 1, details: targetDetails }]
+        },
+        hand: {
+          ...base.current.hand,
+          cards: [{ id: "group-source", name: "分组来源", count: 1, details: sourceDetails }]
+        }
+      }
+    } satisfies OverlayCardTrackingView;
+    render(<OverlayPanel view={view({
+      globalEffects: [{ id: "global-group-source", name: "全局分组来源", count: 1, details: globalDetails }]
+    }, lifecycle)} />);
+
+    const target = screen.getByText("分组目标").closest(".overlay-compact-card-row") as HTMLElement;
+    const source = screen.getByText("分组来源").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.click(source);
+    expect(target).toHaveClass("is-synergy-related");
+
+    fireEvent.click(screen.getByRole("button", { name: /场上.*0/ }));
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.click(screen.getByRole("button", { name: /场上.*0/ }));
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.click(screen.getByRole("button", { name: /手牌.*1/ }));
+    expect(target).not.toHaveClass("is-synergy-related");
+
+    const globalSource = screen.getByText("全局分组来源").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.click(globalSource);
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.click(screen.getByRole("button", { name: /墓地.*1/ }));
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.click(screen.getByRole("button", { name: "影响全局 (1)" }));
+    expect(target).not.toHaveClass("is-synergy-related");
+  });
+
+  it("keeps a clicked source selected while hover temporarily overrides it", () => {
+    const base = tracking();
+    const selectedTarget = {
+      dbfId: 3002,
+      name: "已选配合牌",
+      isSpell: false,
+      relatedCards: []
+    };
+    const hoverTarget = {
+      dbfId: 3004,
+      name: "悬停配合牌",
+      isSpell: false,
+      relatedCards: []
+    };
+    const selectedSource = {
+      dbfId: 3001,
+      name: "已选来源牌",
+      isSpell: true,
+      relatedCards: [{ dbfId: 3002, name: "已选配合牌" }]
+    };
+    const hoverSource = {
+      dbfId: 3003,
+      name: "全局悬停来源",
+      isSpell: true,
+      relatedCards: [{ dbfId: 3004, name: "悬停配合牌" }]
+    };
+    const lifecycle = {
+      ...base,
+      current: {
+        ...base.current,
+        deck: {
+          ...base.current.deck,
+          cards: [
+            { id: "selected-target", name: "已选配合牌", count: 1, details: selectedTarget },
+            { id: "hover-target", name: "悬停配合牌", count: 1, details: hoverTarget }
+          ]
+        },
+        hand: {
+          ...base.current.hand,
+          cards: [{ id: "selected-source", name: "已选来源牌", count: 1, details: selectedSource }]
+        }
+      }
+    } satisfies OverlayCardTrackingView;
+    render(<OverlayPanel view={view({
+      globalEffects: [{ id: "global-source", name: "全局悬停来源", count: 1, details: hoverSource }]
+    }, lifecycle)} />);
+
+    const source = screen.getByText("已选来源牌").closest(".overlay-compact-card-row") as HTMLElement;
+    const globalSource = screen.getByText("全局悬停来源").closest(".overlay-compact-card-row") as HTMLElement;
+    const selected = screen.getByText("已选配合牌").closest(".overlay-compact-card-row") as HTMLElement;
+    const hovered = screen.getByText("悬停配合牌").closest(".overlay-compact-card-row") as HTMLElement;
+
+    fireEvent.click(source);
+    expect(source).toHaveAttribute("data-card-selected", "true");
+    expect(selected).toHaveClass("is-synergy-related");
+    expect(hovered).not.toHaveClass("is-synergy-related");
+
+    fireEvent.mouseEnter(globalSource);
+    expect(selected).not.toHaveClass("is-synergy-related");
+    expect(hovered).toHaveClass("is-synergy-related");
+    fireEvent.mouseLeave(source);
+    expect(hovered).toHaveClass("is-synergy-related");
+    fireEvent.mouseLeave(globalSource);
+    expect(selected).toHaveClass("is-synergy-related");
+    expect(hovered).not.toHaveClass("is-synergy-related");
+
+    fireEvent.click(source);
+    expect(source).toHaveAttribute("data-card-selected", "false");
+    expect(selected).not.toHaveClass("is-synergy-related");
+
+    fireEvent.keyDown(source, { key: "Enter" });
+    expect(source).toHaveAttribute("data-card-selected", "true");
+    expect(selected).toHaveClass("is-synergy-related");
+    fireEvent.keyDown(source, { key: " " });
+    expect(source).toHaveAttribute("data-card-selected", "false");
+    expect(selected).not.toHaveClass("is-synergy-related");
+  });
+
+  it("clears selected synergy when its source is hidden, removed, or enters a new game", () => {
+    const base = tracking();
+    const sourceDetails = {
+      dbfId: 4001,
+      name: "待清理来源",
+      isSpell: true,
+      relatedCards: [{ dbfId: 4002, name: "待清理目标" }]
+    };
+    const targetDetails = {
+      dbfId: 4002,
+      name: "待清理目标",
+      isSpell: false,
+      relatedCards: []
+    };
+    const withSource = {
+      ...base,
+      current: {
+        ...base.current,
+        deck: {
+          ...base.current.deck,
+          cards: [{ id: "cleanup-target", name: "待清理目标", count: 1, details: targetDetails }]
+        },
+        hand: {
+          ...base.current.hand,
+          cards: [{ id: "cleanup-source", name: "待清理来源", count: 1, details: sourceDetails }]
+        }
+      }
+    } satisfies OverlayCardTrackingView;
+    const preview = render(<OverlayPanel view={view({}, withSource)} />);
+    let source = screen.getByText("待清理来源").closest(".overlay-compact-card-row") as HTMLElement;
+    let target = screen.getByText("待清理目标").closest(".overlay-compact-card-row") as HTMLElement;
+
+    fireEvent.click(source);
+    expect(target).toHaveClass("is-synergy-related");
+    fireEvent.click(screen.getByRole("button", { name: /手牌.*1/ }));
+    expect(target).not.toHaveClass("is-synergy-related");
+
+    fireEvent.click(screen.getByRole("button", { name: /手牌.*1/ }));
+    source = screen.getByText("待清理来源").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.click(source);
+    fireEvent.click(screen.getByRole("button", { name: "历史" }));
+    fireEvent.click(screen.getByRole("button", { name: "当前" }));
+    target = screen.getByText("待清理目标").closest(".overlay-compact-card-row") as HTMLElement;
+    expect(target).not.toHaveClass("is-synergy-related");
+
+    source = screen.getByText("待清理来源").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.click(source);
+    preview.rerender(<OverlayPanel view={view({}, {
+      ...withSource,
+      current: {
+        ...withSource.current,
+        hand: { ...withSource.current.hand, knownCount: 0, totalCount: 0, countLabel: "0", cards: [] }
+      }
+    })} />);
+    target = screen.getByText("待清理目标").closest(".overlay-compact-card-row") as HTMLElement;
+    expect(target).not.toHaveClass("is-synergy-related");
+
+    preview.rerender(<OverlayPanel view={view({}, { ...withSource, gameKey: "game-2" })} />);
+    source = screen.getByText("待清理来源").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.click(source);
+    expect(screen.getByText("待清理目标").closest(".overlay-compact-card-row")).toHaveClass("is-synergy-related");
+    preview.rerender(<OverlayPanel view={view({}, { ...withSource, gameKey: "game-3" })} />);
+    expect(screen.getByText("待清理目标").closest(".overlay-compact-card-row")).not.toHaveClass("is-synergy-related");
   });
 
   it("highlights only eligible deck tutor candidates on hover and focus", () => {

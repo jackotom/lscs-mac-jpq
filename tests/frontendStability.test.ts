@@ -103,10 +103,15 @@ describe("frontend stability helpers", () => {
           source: "deck",
           cardTypes: ["随从"],
           racesAny: ["野兽"],
+          spellSchoolsAny: ["自然"],
+          mechanicsAny: ["突袭"],
           mechanicsAll: ["战吼"],
-          manaCost: { min: 0, max: 2, exact: 1 }
+          raritiesAny: ["RARE"],
+          manaCost: { min: 0, max: 2, exact: 1, oneOf: [1] },
+          attack: { min: 0, max: 2 },
+          health: { exact: 1 }
         },
-        { source: "visible" }
+        { source: "visible", cardTypes: ["法术"] }
       ]
     };
     const state = {
@@ -122,15 +127,25 @@ describe("frontend stability helpers", () => {
   });
 
   it.each([
+    { source: "deck" },
     { source: "graveyard" },
+    { source: "deck", cardTypes: [] },
     { source: "deck", cardTypes: "随从" },
     { source: "deck", cardTypes: ["随从", 1] },
     { source: "visible", racesAny: [null] },
+    { source: "deck", spellSchoolsAny: "自然" },
+    { source: "deck", mechanicsAny: {} },
     { source: "visible", mechanicsAll: {} },
+    { source: "deck", mechanicsAll: [] },
+    { source: "deck", raritiesAny: [1] },
     { source: "deck", manaCost: [] },
+    { source: "deck", manaCost: {} },
     { source: "deck", manaCost: { min: -1 } },
     { source: "deck", manaCost: { max: Number.POSITIVE_INFINITY } },
-    { source: "deck", manaCost: { exact: "0" } }
+    { source: "deck", manaCost: { exact: "0" } },
+    { source: "deck", manaCost: { oneOf: [0, -1] } },
+    { source: "deck", attack: { min: Number.NaN } },
+    { source: "deck", health: { oneOf: "1" } }
   ])("rejects malformed relation selector %#", (selector) => {
     const base = createPublicTrackerState();
     const state = {

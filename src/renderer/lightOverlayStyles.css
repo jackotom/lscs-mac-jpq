@@ -110,6 +110,30 @@ html[data-tracker-theme="light"] .overlay-shell :is(
   box-shadow: none;
 }
 
+html[data-tracker-theme="light"] .overlay-compact-card-row.is-synergy-related {
+  background: #fff4df;
+  box-shadow:
+    inset 2px 0 0 #9a5b00,
+    inset -2px 0 0 #9a5b00;
+}
+
+html[data-tracker-theme="light"] .overlay-compact-card-row.is-synergy-related::before {
+  box-shadow:
+    inset 2px 0 0 #9a5b00,
+    inset -2px 0 0 #9a5b00;
+}
+
+html[data-tracker-theme="light"] .overlay-compact-card-row.is-synergy-related::after {
+  border-color: #b7791f;
+  color: #fff8ea;
+  background: #8a4d00;
+}
+
+html[data-tracker-theme="light"] .overlay-compact-card-row[data-card-selected="true"] {
+  background: #eaf4ff;
+  box-shadow: inset 2px 0 0 #176fd7;
+}
+
 html[data-tracker-theme="light"] .overlay-arena-stats,
 html[data-tracker-theme="light"] .overlay-arena-stats-header,
 html[data-tracker-theme="light"] .overlay-arena-stats-list,

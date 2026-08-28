@@ -1,9 +1,13 @@
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, CircleCheck, Clock3, Hand, Layers3, Settings, X } from "lucide-react";
-import type { OverlayCardItem, OverlayPanelProps, OverlayStatusTone } from "../types";
+import type { OverlayCardItem, OverlayCardTrackingView, OverlayPanelProps, OverlayStatusTone } from "../types";
 import { areCardDetailsRelated } from "../../shared/cardRelationRules";
 import { CardHoverPreview } from "./CardHoverPreview";
-import { CardTrackingGroups } from "./CardTrackingGroups";
+import {
+  CardTrackingGroups,
+  trackingCardRowKey,
+  type CardSynergyInteractionController
+} from "./CardTrackingGroups";
 import { PublicMatchCounters } from "./PublicMatchCounters";
 import { MatchPulse } from "./MatchPulse";
 
@@ -70,9 +74,73 @@ export function OverlayPanel({ view, className = "overlay-shell", style, onClose
   );
 }
 
+const synergySourceGroupKeys = ["deck", "hand", "play", "secret", "graveyard", "removed"] as const;
+
+function useCardSynergyInteraction(
+  tracking: OverlayCardTrackingView,
+  globalEffects: readonly OverlayCardItem[]
+): CardSynergyInteractionController {
+  const [hoveredRowKey, setHoveredRowKey] = useState<string>();
+  const [focusedRowKey, setFocusedRowKey] = useState<string>();
+  const [selectedRowKey, setSelectedRowKey] = useState<string>();
+  const previousGameKeyRef = useRef(tracking.gameKey);
+  const cardsByRowKey = new Map<string, OverlayCardItem>();
+  for (const item of globalEffects) {
+    cardsByRowKey.set(`global:${item.id}`, item);
+  }
+  for (const groupKey of synergySourceGroupKeys) {
+    for (const item of tracking.current[groupKey].cards) {
+      cardsByRowKey.set(trackingCardRowKey(groupKey, item.id), item);
+    }
+  }
+  const sourceSignature = [...cardsByRowKey.keys()].join("\n");
+
+  const clear = (rowKeyPrefix?: string) => {
+    setHoveredRowKey((current) => shouldClearInteractionRow(current, rowKeyPrefix) ? undefined : current);
+    setFocusedRowKey((current) => shouldClearInteractionRow(current, rowKeyPrefix) ? undefined : current);
+    setSelectedRowKey((current) => shouldClearInteractionRow(current, rowKeyPrefix) ? undefined : current);
+  };
+
+  useEffect(() => {
+    if (previousGameKeyRef.current === tracking.gameKey) {
+      return;
+    }
+    previousGameKeyRef.current = tracking.gameKey;
+    clear();
+  }, [tracking.gameKey]);
+
+  useEffect(() => {
+    const available = new Set(cardsByRowKey.keys());
+    setHoveredRowKey((current) => current && !available.has(current) ? undefined : current);
+    setFocusedRowKey((current) => current && !available.has(current) ? undefined : current);
+    setSelectedRowKey((current) => current && !available.has(current) ? undefined : current);
+  }, [sourceSignature]);
+
+  const activeRowKey = hoveredRowKey ?? focusedRowKey ?? selectedRowKey;
+  return {
+    activeCard: activeRowKey ? cardsByRowKey.get(activeRowKey) : undefined,
+    selectedRowKey,
+    onHoverChange: (rowKey, active) => setHoveredRowKey((current) => active
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    onFocusChange: (rowKey, active) => setFocusedRowKey((current) => active
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    onSelectedChange: (rowKey, selected) => setSelectedRowKey((current) => selected
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    clear
+  };
+}
+
+function shouldClearInteractionRow(rowKey: string | undefined, rowKeyPrefix: string | undefined): boolean {
+  return Boolean(rowKey && (!rowKeyPrefix || rowKey.startsWith(rowKeyPrefix)));
+}
+
 function NormalOverlay({ view }: { view: OverlayPanelProps["view"] }) {
   const deckIdentity = resolveDeckIdentity(view);
   const globalEffects = view.globalEffects ?? [];
+  const cardInteraction = useCardSynergyInteraction(view.cardTracking, globalEffects);
   const handCount = view.cardTracking.current.hand.countLabel;
   const remainingDeckCount = view.cardTracking.current.deck.countLabel;
   const unknownDeck = resolveUnknownDeckPresentation(view);
@@ -132,9 +200,14 @@ function NormalOverlay({ view }: { view: OverlayPanelProps["view"] }) {
             count={countCards(globalEffects)}
             items={globalEffects}
             emptyLabel="暂无全局影响"
+            interaction={cardInteraction}
           />
         ) : null}
-        <CardTrackingGroups view={view.cardTracking} unknownDeck={unknownDeck} />
+        <CardTrackingGroups
+          view={view.cardTracking}
+          unknownDeck={unknownDeck}
+          interaction={cardInteraction}
+        />
       </div>
     </div>
   );
@@ -161,16 +234,14 @@ export function CollapsibleCardGroup({
   items,
   emptyLabel,
   children,
-  activeCard,
-  onActiveCardChange
+  interaction
 }: {
   label: string;
   count: number | string;
   items: readonly OverlayCardItem[];
   emptyLabel: string;
   children?: ReactNode;
-  activeCard?: OverlayCardItem;
-  onActiveCardChange?: (card: OverlayCardItem | undefined) => void;
+  interaction?: CardSynergyInteractionController;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const contentId = useId();
@@ -183,7 +254,10 @@ export function CollapsibleCardGroup({
         className="overlay-card-group-toggle"
         aria-expanded={isExpanded}
         aria-controls={contentId}
-        onClick={() => setIsExpanded((current) => !current)}
+        onClick={() => {
+          if (isExpanded) interaction?.clear("global:");
+          setIsExpanded((current) => !current);
+        }}
       >
         <span>
           {label} <em>({count})</em>
@@ -196,8 +270,8 @@ export function CollapsibleCardGroup({
             items={items}
             emptyLabel={children ? undefined : emptyLabel}
             candidateGroup="other"
-            activeCard={activeCard}
-            onActiveCardChange={onActiveCardChange}
+            rowKeyPrefix="global"
+            interaction={interaction}
           />
           {children}
         </div>
@@ -210,14 +284,14 @@ export function CompactCardList({
   items,
   emptyLabel,
   candidateGroup,
-  activeCard,
-  onActiveCardChange
+  rowKeyPrefix = "compact",
+  interaction
 }: {
   items: readonly OverlayCardItem[];
   emptyLabel?: string;
   candidateGroup: "deck" | "hand" | "board" | "other";
-  activeCard?: OverlayCardItem;
-  onActiveCardChange?: (card: OverlayCardItem | undefined) => void;
+  rowKeyPrefix?: string;
+  interaction?: CardSynergyInteractionController;
 }) {
   if (items.length === 0) {
     return emptyLabel ? <p className="overlay-card-group-empty">{emptyLabel}</p> : null;
@@ -229,8 +303,9 @@ export function CompactCardList({
         const cost = resolveCardCost(item);
         const count = resolveCardCount(item);
         const costLabel = cost === undefined ? "?" : String(cost);
-        const isRelated = activeCard?.details && item.details
-          ? areCardDetailsRelated(activeCard.details, item.details, candidateGroup)
+        const rowKey = `${rowKeyPrefix}:${item.id}`;
+        const isRelated = candidateGroup === "deck" && interaction?.activeCard?.details && item.details
+          ? areCardDetailsRelated(interaction.activeCard.details, item.details, candidateGroup)
           : false;
 
         return (
@@ -239,7 +314,10 @@ export function CompactCardList({
               details={item.details}
               className={`overlay-compact-card-row${isRelated ? " is-synergy-related" : ""}`}
               isRelated={isRelated}
-              onActiveChange={(isActive) => onActiveCardChange?.(isActive ? item : undefined)}
+              selected={interaction?.selectedRowKey === rowKey}
+              onHoverChange={interaction ? (active) => interaction.onHoverChange(rowKey, active) : undefined}
+              onFocusChange={interaction ? (active) => interaction.onFocusChange(rowKey, active) : undefined}
+              onSelectedChange={interaction ? (selected) => interaction.onSelectedChange(rowKey, selected) : undefined}
             >
               <span className={`overlay-card-cost ${rarityClassName(item.details?.rarity)}`} aria-label={`费用 ${costLabel}`}>
                 {costLabel}

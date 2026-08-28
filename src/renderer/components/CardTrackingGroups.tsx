@@ -50,12 +50,30 @@ const labels: Record<TrackingGroupKey, string> = {
   "confirmed-hand": "已确认手牌"
 };
 
+export interface CardSynergyInteractionController {
+  readonly activeCard?: OverlayCardItem;
+  readonly selectedRowKey?: string;
+  readonly onHoverChange: (rowKey: string, active: boolean) => void;
+  readonly onFocusChange: (rowKey: string, active: boolean) => void;
+  readonly onSelectedChange: (rowKey: string, selected: boolean) => void;
+  readonly clear: (rowKeyPrefix?: string) => void;
+}
+
+export function trackingCardRowKey(groupKey: PublicCardZone, itemId: string): string {
+  return `${trackingCardGroupPrefix(groupKey)}${itemId}`;
+}
+
+export function trackingCardGroupPrefix(groupKey: TrackingGroupKey): string {
+  return `tracking:${groupKey}:`;
+}
+
 export function CardTrackingGroups({
   view,
   opponent = false,
   hideSecret = false,
   unknownDeck,
-  afterCurrentGroups
+  afterCurrentGroups,
+  interaction
 }: {
   readonly view: OverlayCardTrackingView;
   readonly opponent?: boolean;
@@ -68,6 +86,7 @@ export function CardTrackingGroups({
     readonly expanded: boolean;
     readonly onToggle: () => void;
   }) => ReactNode;
+  readonly interaction?: CardSynergyInteractionController;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const initialMode = opponent
@@ -78,19 +97,49 @@ export function CardTrackingGroups({
   const [page, setPage] = useState<TrackingPage>(initial.page);
   const [expanded, setExpanded] = useState<ReadonlySet<TrackingGroupKey>>(initial.expanded);
   const [origin, setOrigin] = useState<SelectionOrigin>("system");
-  const [activeCardId, setActiveCardId] = useState<string>();
+  const [hoveredRowKey, setHoveredRowKey] = useState<string>();
+  const [focusedRowKey, setFocusedRowKey] = useState<string>();
+  const [selectedRowKey, setSelectedRowKey] = useState<string>();
   const lastActivatedRef = useRef<TrackingGroupKey>(firstExpanded(initial.expanded, initial.page));
   const previousModeRef = useRef<TrackingLayoutMode>(initialMode);
   const previousGameKeyRef = useRef(view.gameKey);
   const previousSecretCountRef = useRef(view.secretSlots.length);
-  const currentCards = currentKeys.flatMap((key) => view.current[key].cards);
-  const activeCard = currentCards.find((card) => card.id === activeCardId);
+  const currentCardEntries = currentKeys.flatMap((key) => view.current[key].cards.map((card) => ({
+    card,
+    rowKey: trackingCardRowKey(key, card.id)
+  })));
+  const currentCardsByRowKey = new Map(currentCardEntries.map(({ card, rowKey }) => [rowKey, card]));
+  const internalActiveRowKey = hoveredRowKey ?? focusedRowKey ?? selectedRowKey;
+  const internalActiveCard = internalActiveRowKey
+    ? currentCardsByRowKey.get(internalActiveRowKey)
+    : undefined;
+  const internalInteraction: CardSynergyInteractionController = {
+    activeCard: internalActiveCard,
+    selectedRowKey,
+    onHoverChange: (rowKey, active) => setHoveredRowKey((current) => active
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    onFocusChange: (rowKey, active) => setFocusedRowKey((current) => active
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    onSelectedChange: (rowKey, selected) => setSelectedRowKey((current) => selected
+      ? rowKey
+      : current === rowKey ? undefined : current),
+    clear: (rowKeyPrefix) => {
+      setHoveredRowKey((current) => shouldClearRowKey(current, rowKeyPrefix) ? undefined : current);
+      setFocusedRowKey((current) => shouldClearRowKey(current, rowKeyPrefix) ? undefined : current);
+      setSelectedRowKey((current) => shouldClearRowKey(current, rowKeyPrefix) ? undefined : current);
+    }
+  };
+  const activeInteraction = interaction ?? internalInteraction;
+  const currentRowKeysSignature = currentCardEntries.map(({ rowKey }) => rowKey).join("\n");
 
   useEffect(() => {
-    if (activeCardId && !activeCard) {
-      setActiveCardId(undefined);
-    }
-  }, [activeCard, activeCardId]);
+    const available = new Set(currentCardEntries.map(({ rowKey }) => rowKey));
+    setHoveredRowKey((current) => current && !available.has(current) ? undefined : current);
+    setFocusedRowKey((current) => current && !available.has(current) ? undefined : current);
+    setSelectedRowKey((current) => current && !available.has(current) ? undefined : current);
+  }, [currentRowKeysSignature]);
 
   useEffect(() => {
     if (opponent || typeof ResizeObserver === "undefined") return;
@@ -117,6 +166,7 @@ export function CardTrackingGroups({
     setPage(next.page);
     setExpanded(next.expanded);
     setOrigin("system");
+    activeInteraction.clear();
     lastActivatedRef.current = firstExpanded(next.expanded, next.page);
   }, [layoutMode, view]);
 
@@ -128,6 +178,9 @@ export function CardTrackingGroups({
       const preferred = belongsToPage(lastActivatedRef.current, page)
         ? lastActivatedRef.current
         : firstExpanded(expanded, page);
+      for (const key of expanded) {
+        if (key !== preferred) activeInteraction.clear(trackingCardGroupPrefix(key));
+      }
       setExpanded(new Set([preferred]));
       return;
     }
@@ -141,6 +194,9 @@ export function CardTrackingGroups({
     const gainedFirstSecret = previousSecretCountRef.current === 0 && secretCount > 0;
     previousSecretCountRef.current = secretCount;
     if (!gainedFirstSecret || origin === "user") return;
+    for (const key of expanded) {
+      if (key !== "secret") activeInteraction.clear(trackingCardGroupPrefix(key));
+    }
     setPage("current");
     setExpanded(new Set(["secret"]));
     lastActivatedRef.current = "secret";
@@ -158,6 +214,7 @@ export function CardTrackingGroups({
   const handlePageChange = (nextPage: TrackingPage) => {
     setOrigin("user");
     if (nextPage === page) return;
+    activeInteraction.clear();
     const mode = layoutMode === "opponent" ? "short" : layoutMode;
     const next = resolveFriendlyDefault(mode, nextPage);
     setPage(nextPage);
@@ -169,8 +226,14 @@ export function CardTrackingGroups({
     setOrigin("user");
     lastActivatedRef.current = key;
     if (layoutMode !== "tall") {
+      for (const expandedKey of expanded) {
+        if (expandedKey !== key) activeInteraction.clear(trackingCardGroupPrefix(expandedKey));
+      }
       setExpanded(new Set([key]));
       return;
+    }
+    if (expanded.has(key)) {
+      activeInteraction.clear(trackingCardGroupPrefix(key));
     }
     setExpanded((current) => {
       const next = new Set(current);
@@ -201,8 +264,8 @@ export function CardTrackingGroups({
             onToggle={() => handleGroupToggle(key)}
             showHistoryArtwork={opponent && key === "used"}
             unknownDeck={unknownDeck}
-            activeCard={activeCard}
-            onActiveCardChange={(card) => setActiveCardId(card?.id)}
+            interaction={activeInteraction}
+            selectable={!opponent || interaction !== undefined}
           />
         ))}
         {page === "current" && afterCurrentGroups
@@ -241,8 +304,8 @@ function TrackingGroup({
   onToggle,
   showHistoryArtwork,
   unknownDeck,
-  activeCard,
-  onActiveCardChange
+  interaction,
+  selectable
 }: {
   readonly groupKey: BuiltInTrackingGroupKey;
   readonly view: OverlayCardTrackingView;
@@ -253,8 +316,8 @@ function TrackingGroup({
     readonly label: "待识别" | "识别中" | "不可用";
     readonly emptyLabel: string;
   };
-  readonly activeCard?: OverlayCardItem;
-  readonly onActiveCardChange: (card: OverlayCardItem | undefined) => void;
+  readonly interaction: CardSynergyInteractionController;
+  readonly selectable: boolean;
 }) {
   const contentId = useId();
   const group = groupKey === "burned" || groupKey === "used"
@@ -295,8 +358,8 @@ function TrackingGroup({
                 secretSlots={groupKey === "secret" ? view.secretSlots : []}
                 deckInsertions={groupKey === "deck" ? view.deckInsertions : undefined}
                 emptyLabel={deckPresentation?.emptyLabel}
-                activeCard={activeCard}
-                onActiveCardChange={onActiveCardChange}
+                interaction={interaction}
+                selectable={selectable}
               />}
         </div>
       ) : null}
@@ -309,15 +372,15 @@ function CurrentItems({
   secretSlots,
   deckInsertions,
   emptyLabel,
-  activeCard,
-  onActiveCardChange
+  interaction,
+  selectable
 }: {
   readonly group: OverlayCardZoneView;
   readonly secretSlots: OverlayCardTrackingView["secretSlots"];
   readonly deckInsertions?: OverlayCardTrackingView["deckInsertions"];
   readonly emptyLabel?: string;
-  readonly activeCard?: OverlayCardItem;
-  readonly onActiveCardChange: (card: OverlayCardItem | undefined) => void;
+  readonly interaction: CardSynergyInteractionController;
+  readonly selectable: boolean;
 }) {
   const undisclosed = group.key === "hand" && group.totalCount !== undefined
     ? Math.max(0, group.totalCount - group.knownCount)
@@ -331,9 +394,9 @@ function CurrentItems({
       {deckInsertions ? <DeckInsertionSummary tracking={deckInsertions} /> : null}
       <CardRows
         items={group.cards}
-        candidateGroup={candidateGroupFor(group.key)}
-        activeCard={activeCard}
-        onActiveCardChange={onActiveCardChange}
+        groupKey={group.key}
+        interaction={interaction}
+        selectable={selectable}
       />
       {undisclosed > 0 ? <p className="overlay-undisclosed-row">未公开 ×{undisclosed}</p> : null}
       {secretSlots.map((slot, index) => (
@@ -549,22 +612,24 @@ function HistoryArtwork({
 
 function CardRows({
   items,
-  candidateGroup,
-  activeCard,
-  onActiveCardChange
+  groupKey,
+  interaction,
+  selectable
 }: {
   readonly items: readonly OverlayCardItem[];
-  readonly candidateGroup: "deck" | "hand" | "board" | "other";
-  readonly activeCard?: OverlayCardItem;
-  readonly onActiveCardChange: (card: OverlayCardItem | undefined) => void;
+  readonly groupKey: PublicCardZone;
+  readonly interaction: CardSynergyInteractionController;
+  readonly selectable: boolean;
 }) {
+  const candidateGroup = candidateGroupFor(groupKey);
   return (
     <ul className="overlay-compact-card-list">
       {items.map((item) => {
         const cost = item.cost ?? item.details?.manaCost;
         const count = item.count ?? 1;
-        const isRelated = activeCard?.details && item.details
-          ? areCardDetailsRelated(activeCard.details, item.details, candidateGroup)
+        const rowKey = trackingCardRowKey(groupKey, item.id);
+        const isRelated = selectable && candidateGroup === "deck" && interaction.activeCard?.details && item.details
+          ? areCardDetailsRelated(interaction.activeCard.details, item.details, candidateGroup)
           : false;
         return (
           <li key={item.id}>
@@ -572,7 +637,12 @@ function CardRows({
               details={item.details}
               className={`overlay-compact-card-row${isRelated ? " is-synergy-related" : ""}`}
               isRelated={isRelated}
-              onActiveChange={(isActive) => onActiveCardChange(isActive ? item : undefined)}
+              selected={selectable ? interaction.selectedRowKey === rowKey : undefined}
+              onHoverChange={selectable ? (active) => interaction.onHoverChange(rowKey, active) : undefined}
+              onFocusChange={selectable ? (active) => interaction.onFocusChange(rowKey, active) : undefined}
+              onSelectedChange={selectable
+                ? (selected) => interaction.onSelectedChange(rowKey, selected)
+                : undefined}
             >
               <span className="overlay-card-cost" aria-label={`费用 ${cost ?? "?"}`}>
                 {cost ?? "?"}
@@ -597,6 +667,10 @@ function candidateGroupFor(groupKey: PublicCardZone): "deck" | "hand" | "board" 
   if (groupKey === "hand") return "hand";
   if (groupKey === "play") return "board";
   return "other";
+}
+
+function shouldClearRowKey(rowKey: string | undefined, rowKeyPrefix: string | undefined): boolean {
+  return Boolean(rowKey && (!rowKeyPrefix || rowKey.startsWith(rowKeyPrefix)));
 }
 
 function initialSelection(

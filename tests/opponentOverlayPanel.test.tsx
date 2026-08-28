@@ -291,10 +291,71 @@ describe("opponent overlay", () => {
     } satisfies OverlayCardTrackingView;
     render(<OpponentOverlayPanel view={view(cardTracking)} isCollapsed={false} />);
 
-    fireEvent.mouseEnter(screen.getByText("火球术").closest(".overlay-compact-card-row") as HTMLElement);
+    const row = screen.getByText("火球术").closest(".overlay-compact-card-row") as HTMLElement;
+    expect(row).not.toHaveAttribute("role", "button");
+    expect(row).not.toHaveAttribute("aria-pressed");
+    expect(row).not.toHaveAttribute("data-card-selected");
+    fireEvent.click(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+    fireEvent.keyDown(row, { key: " " });
+    expect(row).not.toHaveAttribute("data-card-selected");
+
+    fireEvent.mouseEnter(row);
 
     expect(screen.getByRole("tooltip")).toHaveTextContent("造成 6 点伤害。");
     expect(screen.getByText("未公开 ×1")).toBeInTheDocument();
+  });
+
+  it("keeps opponent card rows preview-only without hover or focus synergy", () => {
+    const base = opponentTracking();
+    const sourceDetails = {
+      dbfId: 7001,
+      name: "对手检索来源",
+      cardType: "随从",
+      manaCost: 5,
+      text: "从你的牌库中召唤一个法力值消耗不高于（2）点的随从。",
+      isSpell: false,
+      relatedCards: [],
+      relationSelectors: [{ source: "deck" as const, cardTypes: ["随从"], manaCost: { max: 2 } }]
+    };
+    const targetDetails = {
+      dbfId: 7002,
+      name: "对手二费目标",
+      cardType: "随从",
+      manaCost: 2,
+      text: "战吼：获得+1攻击力。",
+      isSpell: false,
+      relatedCards: []
+    };
+    const cardTracking = {
+      ...base,
+      current: {
+        ...base.current,
+        deck: {
+          ...base.current.deck,
+          status: "known" as const,
+          knownCount: 2,
+          totalCount: 2,
+          countLabel: "2",
+          cards: [
+            { id: "opponent-source", name: "对手检索来源", count: 1, details: sourceDetails },
+            { id: "opponent-target", name: "对手二费目标", count: 1, details: targetDetails }
+          ]
+        }
+      }
+    } satisfies OverlayCardTrackingView;
+    render(<OpponentOverlayPanel view={view(cardTracking)} isCollapsed={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /牌库.*2/ }));
+
+    const source = screen.getByText("对手检索来源").closest(".overlay-compact-card-row") as HTMLElement;
+    const target = screen.getByText("对手二费目标").closest(".overlay-compact-card-row") as HTMLElement;
+    fireEvent.mouseEnter(source);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("从你的牌库中召唤");
+    expect(target).not.toHaveClass("is-synergy-related");
+    fireEvent.mouseLeave(source);
+
+    fireEvent.focus(source);
+    expect(target).not.toHaveClass("is-synergy-related");
   });
 
   it("shows artwork for every revealed used-card row and keeps names when artwork is unavailable", () => {

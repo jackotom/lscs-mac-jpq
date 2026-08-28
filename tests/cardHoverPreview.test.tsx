@@ -18,6 +18,7 @@ describe("CardHoverPreview", () => {
   afterEach(() => {
     vi.useRealTimers();
     window.history.pushState({}, "", "/");
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
     Object.defineProperty(window, "hearthstoneTracker", {
       configurable: true,
       value: undefined
@@ -62,6 +63,143 @@ describe("CardHoverPreview", () => {
     expect(hideCardPreview).not.toHaveBeenCalled();
     vi.advanceTimersByTime(130);
     expect(hideCardPreview).toHaveBeenCalled();
+  });
+
+  it("reports hover and focus independently", () => {
+    const onHoverChange = vi.fn();
+    const onFocusChange = vi.fn();
+    render(
+      <CardHoverPreview
+        details={cardDetails}
+        onHoverChange={onHoverChange}
+        onFocusChange={onFocusChange}
+      >
+        <span>火球术</span>
+      </CardHoverPreview>
+    );
+
+    const target = screen.getByText("火球术").closest(".card-hover-target") as HTMLElement;
+    fireEvent.mouseEnter(target);
+    fireEvent.focus(target);
+    fireEvent.mouseLeave(target);
+
+    expect(onHoverChange.mock.calls).toEqual([[true], [false]]);
+    expect(onFocusChange.mock.calls).toEqual([[true]]);
+
+    fireEvent.blur(target);
+    expect(onFocusChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("toggles controlled selection with click, Enter, and Space", () => {
+    const onSelectedChange = vi.fn();
+    const preview = render(
+      <CardHoverPreview
+        details={cardDetails}
+        selected={false}
+        onSelectedChange={onSelectedChange}
+      >
+        <span>火球术</span>
+      </CardHoverPreview>
+    );
+
+    let target = screen.getByText("火球术").closest(".card-hover-target") as HTMLElement;
+    expect(target).toHaveAttribute("data-card-selected", "false");
+    fireEvent.click(target);
+    expect(onSelectedChange).toHaveBeenLastCalledWith(true);
+
+    preview.rerender(
+      <CardHoverPreview
+        details={cardDetails}
+        selected
+        onSelectedChange={onSelectedChange}
+      >
+        <span>火球术</span>
+      </CardHoverPreview>
+    );
+    target = screen.getByText("火球术").closest(".card-hover-target") as HTMLElement;
+    expect(target).toHaveAttribute("data-card-selected", "true");
+
+    fireEvent.keyDown(target, { key: "Enter" });
+    expect(onSelectedChange).toHaveBeenLastCalledWith(false);
+    fireEvent.keyDown(target, { key: " " });
+    expect(onSelectedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each(["window blur", "document hidden"])(
+    "ends hover and focus on %s without clearing selection",
+    (reason) => {
+      const onHoverChange = vi.fn();
+      const onFocusChange = vi.fn();
+      const onSelectedChange = vi.fn();
+      Object.defineProperty(window, "hearthstoneTracker", {
+        configurable: true,
+        value: {
+          showCardPreview: vi.fn(() => Promise.resolve()),
+          hideCardPreview: vi.fn(() => Promise.resolve())
+        }
+      });
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      window.history.pushState({}, "", "/?overlay=1");
+      render(
+        <CardHoverPreview
+          details={cardDetails}
+          selected
+          onHoverChange={onHoverChange}
+          onFocusChange={onFocusChange}
+          onSelectedChange={onSelectedChange}
+        >
+          <span>火球术</span>
+        </CardHoverPreview>
+      );
+
+      const target = screen.getByText("火球术").closest(".card-hover-target") as HTMLElement;
+      fireEvent.mouseEnter(target);
+      fireEvent.focus(target);
+      if (reason === "window blur") {
+        window.dispatchEvent(new Event("blur"));
+      } else {
+        Object.defineProperty(document, "hidden", { configurable: true, value: true });
+        document.dispatchEvent(new Event("visibilitychange"));
+      }
+
+      expect(onHoverChange).toHaveBeenLastCalledWith(false);
+      expect(onFocusChange).toHaveBeenLastCalledWith(false);
+      expect(onSelectedChange).not.toHaveBeenCalled();
+      expect(target).toHaveAttribute("data-card-selected", "true");
+    }
+  );
+
+  it("ends transient activity for every row when another row owns the preview", () => {
+    const firstFocusChange = vi.fn();
+    const secondHoverChange = vi.fn();
+    Object.defineProperty(window, "hearthstoneTracker", {
+      configurable: true,
+      value: {
+        showCardPreview: vi.fn(() => Promise.resolve()),
+        hideCardPreview: vi.fn(() => Promise.resolve())
+      }
+    });
+    window.history.pushState({}, "", "/?overlay=1");
+    render(
+      <>
+        <CardHoverPreview details={cardDetails} onFocusChange={firstFocusChange}>
+          <span>火球术</span>
+        </CardHoverPreview>
+        <CardHoverPreview
+          details={{ ...cardDetails, dbfId: 316, name: "炎爆术" }}
+          onHoverChange={secondHoverChange}
+        >
+          <span>炎爆术</span>
+        </CardHoverPreview>
+      </>
+    );
+
+    fireEvent.focus(screen.getByText("火球术").closest(".card-hover-target") as HTMLElement);
+    fireEvent.mouseEnter(screen.getByText("炎爆术").closest(".card-hover-target") as HTMLElement);
+    window.dispatchEvent(new Event("blur"));
+
+    expect(firstFocusChange).toHaveBeenLastCalledWith(false);
+    expect(secondHoverChange).toHaveBeenLastCalledWith(false);
   });
 
   it("clears a stale external preview when the hover state is gone", () => {
