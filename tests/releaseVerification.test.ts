@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.7.1");
+    expect(packageJson.version).toBe("0.7.2");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');
@@ -90,14 +90,24 @@ describe("release verification entrypoint", () => {
     expect(script).toContain('/\\.card-detail-(?:copy|heading|image)\\s*\\{/');
   });
 
-  it("keeps isolated QA runs out of Dock before ready and cleans up failed starts", () => {
+  it("keeps every running app instance visible in Dock and cleans up failed starts", () => {
     const mainSource = read("src/main/main.ts");
-    const activationPolicy = mainSource.indexOf('app.setActivationPolicy("accessory")');
-    const readyHandler = mainSource.indexOf("app.whenReady()");
+    const dockSources = [
+      mainSource,
+      read("src/main/qaCaptureTiming.ts"),
+      read("scripts/generate-readme-screenshots.mjs"),
+      read("scripts/verify-card-lifecycle-ui.mjs"),
+      read("scripts/verify-independent-overlays-ui.mjs"),
+      read("scripts/verify-release.sh")
+    ].join("\n");
+    const overlayWorkspaceSource = read("src/main/overlayWindowWorkspace.ts");
 
-    expect(activationPolicy).toBeGreaterThan(-1);
-    expect(readyHandler).toBeGreaterThan(-1);
-    expect(activationPolicy).toBeLessThan(readyHandler);
+    expect(mainSource).toContain('app.setActivationPolicy("regular")');
+    expect(mainSource).toContain("await app.dock?.show()");
+    expect(overlayWorkspaceSource).toContain("skipTransformProcessType: true");
+    expect(overlayWorkspaceSource).not.toContain("skipTransformProcessType: false");
+    expect(dockSources).not.toContain('setActivationPolicy("accessory")');
+    expect(dockSources).not.toMatch(/(?:app\.)?dock(?:\?)?\.hide\s*\(/);
     expect(mainSource).not.toContain("app.exit(1)");
     expect(mainSource.match(/process\.exitCode = 1;/g)).toHaveLength(2);
   });

@@ -102,7 +102,6 @@ async function runElectronChild() {
   try {
     await app.whenReady();
     process.stdout.write("QA Electron 已 ready\n");
-    app.dock?.hide();
     const [{
       getAuxiliaryOverlayBounds,
       getSecretOverlayBounds,

@@ -205,7 +205,7 @@ function assertCommonScenario(scenario, inspection, isolatedPowerLog) {
   assert.equal(inspection.hasApi, true, `${scenario.name}: 必须通过桌面接口运行`);
   assert.match(inspection.location, /^file:\/\//, `${scenario.name}: 只能加载本地页面`);
   assert.equal(inspection.consoleErrorCount, 0, `${scenario.name}: 界面不能有控制台错误`);
-  assert.equal(inspection.qaDockVisible, false, `${scenario.name}: 截图应用不能留在 Dock`);
+  assert.equal(inspection.qaDockVisible, true, `${scenario.name}: 进程运行时必须保留 Dock 指示`);
   assert.equal(
     inspection.qaMainWindowVisible,
     scenario.mainWindowVisible,

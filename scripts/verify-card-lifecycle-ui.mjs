@@ -538,7 +538,7 @@ async function verifyFriendlyFinsPreview() {
   );
   assertExactWindow("friendly-fins-preview", inspection, 250, 320);
   assertCommon("friendly-fins-preview", inspection);
-  assert.equal(inspection.qaDockVisible, false, "隔离验收不能在 Dock 留下测试图标");
+  assert.equal(inspection.qaDockVisible, true, "隔离验收进程运行时必须保留 Dock 指示");
   assert.deepEqual(
     inspection.trackerState?.cardTracking?.contextDetailsBySideAndCardKey?.friendly?.["id:time_706"]
       ?.gameContextSections?.[0]?.cards?.map((card) => card.name),

@@ -299,7 +299,7 @@ run_capture() {
     const fs = require("node:fs");
     const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     if (!report.hasApi || !report.location || !report.bodyText) process.exit(1);
-    if (report.qaDockVisible !== false) process.exit(40);
+    if (report.qaDockVisible !== true) process.exit(40);
     const scenario = process.argv[2];
     const fixture = process.argv[3];
     const candidateMatch = scenario.match(/^arena-redraft-(35|34|33|32|31|30)-replay$/);

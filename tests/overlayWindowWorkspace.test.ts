@@ -11,39 +11,21 @@ describe("overlay workspace windows", () => {
     expect(getOverlayWindowPlatformOptions("win32")).toEqual({});
   });
 
-  it("keeps the required process-type transition enabled for a foreground production app", () => {
+  it("avoids the macOS process-type transition and reapplies only when fullscreen visibility changes", () => {
     const setVisibleOnAllWorkspaces = vi.fn();
     const window = { setVisibleOnAllWorkspaces };
 
-    expect(configureOverlayWorkspaceWindow(window, true, false)).toBe(true);
-    expect(configureOverlayWorkspaceWindow(window, true, false)).toBe(false);
-    expect(configureOverlayWorkspaceWindow(window, false, false)).toBe(true);
+    expect(configureOverlayWorkspaceWindow(window, true)).toBe(true);
+    expect(configureOverlayWorkspaceWindow(window, true)).toBe(false);
+    expect(configureOverlayWorkspaceWindow(window, false)).toBe(true);
 
     expect(setVisibleOnAllWorkspaces).toHaveBeenCalledTimes(2);
     expect(setVisibleOnAllWorkspaces).toHaveBeenNthCalledWith(1, true, {
       visibleOnFullScreen: true,
-      skipTransformProcessType: false
+      skipTransformProcessType: true
     });
     expect(setVisibleOnAllWorkspaces).toHaveBeenNthCalledWith(2, true, {
       visibleOnFullScreen: false,
-      skipTransformProcessType: false
-    });
-  });
-
-  it("reapplies with transform skipping only after the app is already accessory", () => {
-    const setVisibleOnAllWorkspaces = vi.fn();
-    const window = { setVisibleOnAllWorkspaces };
-
-    expect(configureOverlayWorkspaceWindow(window, true, false)).toBe(true);
-    expect(configureOverlayWorkspaceWindow(window, true, true)).toBe(true);
-    expect(configureOverlayWorkspaceWindow(window, true, true)).toBe(false);
-
-    expect(setVisibleOnAllWorkspaces).toHaveBeenNthCalledWith(1, true, {
-      visibleOnFullScreen: true,
-      skipTransformProcessType: false
-    });
-    expect(setVisibleOnAllWorkspaces).toHaveBeenNthCalledWith(2, true, {
-      visibleOnFullScreen: true,
       skipTransformProcessType: true
     });
   });
@@ -55,11 +37,11 @@ describe("overlay workspace windows", () => {
     const focus = vi.fn();
     const window = { setVisibleOnAllWorkspaces, setAlwaysOnTop, showInactive, focus };
 
-    reassertOverlayWindowPresentation(window, true, false);
+    reassertOverlayWindowPresentation(window, true);
 
     expect(setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
       visibleOnFullScreen: true,
-      skipTransformProcessType: false
+      skipTransformProcessType: true
     });
     expect(setAlwaysOnTop).toHaveBeenCalledWith(true, "screen-saver");
     expect(showInactive).toHaveBeenCalledOnce();
@@ -70,5 +52,19 @@ describe("overlay workspace windows", () => {
     expect(setAlwaysOnTop.mock.invocationCallOrder[0]).toBeLessThan(
       showInactive.mock.invocationCallOrder[0]
     );
+  });
+
+  it("does not repeat the macOS process-type transition when showing an already configured overlay", () => {
+    const setVisibleOnAllWorkspaces = vi.fn();
+    const window = {
+      setVisibleOnAllWorkspaces,
+      setAlwaysOnTop: vi.fn(),
+      showInactive: vi.fn()
+    };
+
+    configureOverlayWorkspaceWindow(window, true);
+    reassertOverlayWindowPresentation(window, true);
+
+    expect(setVisibleOnAllWorkspaces).toHaveBeenCalledTimes(1);
   });
 });

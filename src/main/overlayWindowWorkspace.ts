@@ -14,27 +14,21 @@ const appliedConfiguration = new WeakMap<object, string>();
 
 export function configureOverlayWorkspaceWindow(
   window: OverlayWorkspaceWindowLike,
-  visibleOnFullScreen: boolean,
-  skipTransformProcessType = false
+  visibleOnFullScreen: boolean
 ): boolean {
   return applyOverlayWorkspaceWindow(
     window,
-    visibleOnFullScreen,
-    skipTransformProcessType,
-    false
+    visibleOnFullScreen
   );
 }
 
 export function reassertOverlayWindowPresentation(
   window: OverlayPresentationWindowLike,
-  visibleOnFullScreen: boolean,
-  skipTransformProcessType = false
+  visibleOnFullScreen: boolean
 ): void {
   applyOverlayWorkspaceWindow(
     window,
-    visibleOnFullScreen,
-    skipTransformProcessType,
-    true
+    visibleOnFullScreen
   );
   window.setAlwaysOnTop(true, "screen-saver");
   window.showInactive();
@@ -42,15 +36,13 @@ export function reassertOverlayWindowPresentation(
 
 function applyOverlayWorkspaceWindow(
   window: OverlayWorkspaceWindowLike,
-  visibleOnFullScreen: boolean,
-  skipTransformProcessType: boolean,
-  force: boolean
+  visibleOnFullScreen: boolean
 ): boolean {
-  const configurationKey = `${visibleOnFullScreen}:${skipTransformProcessType}`;
-  if (!force && appliedConfiguration.get(window as object) === configurationKey) return false;
+  const configurationKey = String(visibleOnFullScreen);
+  if (appliedConfiguration.get(window as object) === configurationKey) return false;
   window.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen,
-    skipTransformProcessType
+    skipTransformProcessType: true
   });
   appliedConfiguration.set(window as object, configurationKey);
   return true;

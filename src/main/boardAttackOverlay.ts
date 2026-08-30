@@ -199,11 +199,8 @@ export function getBoardAttackOverlayWindowOptions(
   };
 }
 
-export function configureBoardAttackOverlayWindow(
-  window: BoardAttackOverlayWindowLike,
-  skipTransformProcessType = false
-): void {
-  configureOverlayWorkspaceWindow(window, true, skipTransformProcessType);
+export function configureBoardAttackOverlayWindow(window: BoardAttackOverlayWindowLike): void {
+  configureOverlayWorkspaceWindow(window, true);
   window.setAlwaysOnTop(true, "screen-saver");
   setAuxiliaryOverlayMouseInteractive(window, false);
 }

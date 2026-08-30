@@ -46,10 +46,10 @@ describe("tracker settings IPC", () => {
     expect(main).toContain('label: "退出"');
     expect(main).toContain("window.setOpacity");
     expect(main).toMatch(
-      /configureOverlayWorkspaceWindow\(\s*window,\s*!trackerSettings\.overlay\.hideInFullscreen,\s*useQaAccessoryActivationPolicy\s*\)/
+      /configureOverlayWorkspaceWindow\(\s*window,\s*!trackerSettings\.overlay\.hideInFullscreen\s*\)/
     );
     expect(main).toContain(
-      "configureBoardAttackOverlayWindow(window, useQaAccessoryActivationPolicy)"
+      "configureBoardAttackOverlayWindow(window)"
     );
     expect(main).toContain("getAnchoredOverlayWindowBounds");
     expect(main).toContain("applyConfiguredOverlayPositions");

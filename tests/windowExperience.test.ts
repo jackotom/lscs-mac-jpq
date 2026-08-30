@@ -144,10 +144,10 @@ describe("window experience configuration", () => {
     expect(presenter).not.toMatch(/\.show\(/);
     expect(presenter).not.toMatch(/\.focus\(/);
     expect(friendlyAutomatic).toContain("reassertOverlayWindowPresentation(");
-    expect(friendlyAutomatic).toContain("useQaAccessoryActivationPolicy");
+    expect(friendlyAutomatic).not.toContain("useQaAccessoryActivationPolicy");
     expect(friendlyAutomatic).not.toMatch(/overlayWindow\.(?:show|focus)\(/);
     expect(opponentAutomatic).toContain("reassertOverlayWindowPresentation(");
-    expect(opponentAutomatic).toContain("useQaAccessoryActivationPolicy");
+    expect(opponentAutomatic).not.toContain("useQaAccessoryActivationPolicy");
     expect(opponentAutomatic).not.toMatch(/opponentOverlayWindow\.(?:show|focus)\(/);
     expect(opponentAutomatic).not.toContain("expandOpponentOverlayWindow");
     expect(explicitOpponentToggle).toContain("expandOpponentOverlayWindow(true)");

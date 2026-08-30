@@ -28,11 +28,9 @@ import {
   shouldShowMainWindowOnLaunch
 } from "./mainWindowVisibility.js";
 import {
-  hideQaDockAfterLaunch,
   requestQaQuit,
   shouldApplyTrackerSettingsEffectsDuringQaCapture,
   shouldSkipLaunchAtLoginUpdateDuringQaCapture,
-  shouldUseQaAccessoryActivationPolicy,
   waitForQaRendererSettled
 } from "./qaCaptureTiming.js";
 import {
@@ -115,11 +113,6 @@ import { createAppPermissionManager } from "./appPermissions.js";
 if (process.env.QA_USER_DATA_DIR) {
   app.setPath("userData", process.env.QA_USER_DATA_DIR);
   app.setPath("logs", path.join(process.env.QA_USER_DATA_DIR, "logs"));
-}
-
-const useQaAccessoryActivationPolicy = shouldUseQaAccessoryActivationPolicy(process.env, process.platform);
-if (useQaAccessoryActivationPolicy) {
-  app.setActivationPolicy("accessory");
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -403,8 +396,7 @@ const automaticOverlayController = new AutomaticOverlayController({
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       reassertOverlayWindowPresentation(
         overlayWindow,
-        !trackerSettings.overlay.hideInFullscreen,
-        useQaAccessoryActivationPolicy
+        !trackerSettings.overlay.hideInFullscreen
       );
     }
   },
@@ -437,8 +429,7 @@ const automaticOpponentOverlayController = new AutomaticOverlayController({
     if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) {
       reassertOverlayWindowPresentation(
         opponentOverlayWindow,
-        !trackerSettings.overlay.hideInFullscreen,
-        useQaAccessoryActivationPolicy
+        !trackerSettings.overlay.hideInFullscreen
       );
     }
   },
@@ -599,6 +590,10 @@ function readQaWindowDimension(value: string | undefined, fallback: number, mini
 
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
+    if (process.platform === "darwin") {
+      app.setActivationPolicy("regular");
+      await app.dock?.show();
+    }
     diagnosticLogger.info("应用启动");
     const previousRun = await appRunState.begin(app.getVersion()).catch((error) => {
       diagnosticLogger.warn("运行状态初始化失败，将继续启动", error);
@@ -614,9 +609,6 @@ if (hasSingleInstanceLock) {
     await appRunState.markPhase("startup-health").catch((error) => {
       diagnosticLogger.warn("保存启动检修阶段失败", error);
     });
-    if (useQaAccessoryActivationPolicy) {
-      await hideQaDockAfterLaunch(app.dock);
-    }
     if (process.env.QA_ALLOW_MULTIPLE_INSTANCES !== "1") {
       try {
         await cleanupStaleScreenCaptures(undefined, Number.POSITIVE_INFINITY);
@@ -1359,8 +1351,7 @@ function applyOverlayWindowAppearance(): void {
     window.setOpacity(trackerSettings.overlay.opacity / 100);
     configureOverlayWorkspaceWindow(
       window,
-      !trackerSettings.overlay.hideInFullscreen,
-      useQaAccessoryActivationPolicy
+      !trackerSettings.overlay.hideInFullscreen
     );
   }
 }
@@ -2355,12 +2346,11 @@ async function createAuxiliaryOverlayWindow(
   });
   installQaConsoleErrorListener(window);
   configureSecureNavigation(window);
-  configureBoardAttackOverlayWindow(window, useQaAccessoryActivationPolicy);
+  configureBoardAttackOverlayWindow(window);
   window.setOpacity(trackerSettings.overlay.opacity / 100);
   configureOverlayWorkspaceWindow(
     window,
-    !trackerSettings.overlay.hideInFullscreen,
-    useQaAccessoryActivationPolicy
+    !trackerSettings.overlay.hideInFullscreen
   );
   tracker.attachWindow(window);
   try {
@@ -3088,10 +3078,6 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
     });
   }
 
-  if (shouldUseQaAccessoryActivationPolicy(process.env, process.platform)) {
-    await hideQaDockAfterLaunch(app.dock);
-  }
-
   if (process.env.QA_DECK_TEXT) {
     await tracker.importDeck(process.env.QA_DECK_TEXT);
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -3478,10 +3464,6 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
       if (hasTrackingLayout) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-  }
-
-  if (shouldUseQaAccessoryActivationPolicy(process.env, process.platform)) {
-    await hideQaDockAfterLaunch(app.dock);
   }
 
   if (inspectPath) {

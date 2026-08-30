@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  hideQaDockAfterLaunch,
   requestQaQuit,
   shouldApplyTrackerSettingsEffectsDuringQaCapture,
   shouldSkipLaunchAtLoginUpdateDuringQaCapture,
-  shouldUseQaAccessoryActivationPolicy,
   waitForQaRendererSettled
 } from "../src/main/qaCaptureTiming";
 
@@ -42,18 +40,6 @@ describe("QA capture timing", () => {
     expect(settled).toBe(false);
   });
 
-  it("uses accessory activation only for isolated macOS QA launches", () => {
-    const isolatedQa = {
-      QA_ALLOW_MULTIPLE_INSTANCES: "1",
-      QA_USER_DATA_DIR: "/tmp/hearthstone-qa"
-    };
-
-    expect(shouldUseQaAccessoryActivationPolicy(isolatedQa, "darwin")).toBe(true);
-    expect(shouldUseQaAccessoryActivationPolicy(isolatedQa, "linux")).toBe(false);
-    expect(shouldUseQaAccessoryActivationPolicy({ QA_USER_DATA_DIR: "/tmp/hearthstone-qa" }, "darwin")).toBe(false);
-    expect(shouldUseQaAccessoryActivationPolicy({ QA_ALLOW_MULTIPLE_INSTANCES: "1" }, "darwin")).toBe(false);
-  });
-
   it("can exercise startup settings effects in the packaged smart-counter capture", () => {
     const automatedCapture = {
       QA_EXIT_AFTER_SCREENSHOT: "1",
@@ -74,37 +60,4 @@ describe("QA capture timing", () => {
     })).toBe(true);
   });
 
-  it("hides a visible QA Dock icon immediately", async () => {
-    let visible = true;
-    const dock = {
-      isVisible: vi.fn(() => visible),
-      hide: vi.fn(() => { visible = false; })
-    };
-    const wait = vi.fn(async () => undefined);
-
-    await hideQaDockAfterLaunch(dock, wait);
-
-    expect(dock.hide).toHaveBeenCalledOnce();
-    expect(wait).not.toHaveBeenCalled();
-  });
-
-  it("retries hiding a stubborn QA Dock icon after the macOS grace period", async () => {
-    const dock = { isVisible: vi.fn(() => true), hide: vi.fn() };
-    const wait = vi.fn(async () => undefined);
-
-    await hideQaDockAfterLaunch(dock, wait);
-
-    expect(dock.hide).toHaveBeenCalledTimes(2);
-    expect(wait).toHaveBeenCalledWith(1_100);
-  });
-
-  it("does not wait when the QA Dock icon is already hidden", async () => {
-    const dock = { isVisible: vi.fn(() => false), hide: vi.fn() };
-    const wait = vi.fn(async () => undefined);
-
-    await hideQaDockAfterLaunch(dock, wait);
-
-    expect(wait).not.toHaveBeenCalled();
-    expect(dock.hide).not.toHaveBeenCalled();
-  });
 });

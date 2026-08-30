@@ -1,10 +1,5 @@
 export type QaJavaScriptExecutor = (script: string) => Promise<unknown>;
 
-export interface QaDockController {
-  isVisible(): boolean;
-  hide(): void;
-}
-
 export function shouldApplyTrackerSettingsEffectsDuringQaCapture(
   environment: Readonly<Record<string, string | undefined>>
 ): boolean {
@@ -18,27 +13,6 @@ export function shouldSkipLaunchAtLoginUpdateDuringQaCapture(
   environment: Readonly<Record<string, string | undefined>>
 ): boolean {
   return environment.QA_APPLY_TRACKER_SETTINGS_EFFECTS === "1";
-}
-
-export function shouldUseQaAccessoryActivationPolicy(
-  environment: Readonly<Partial<Pick<NodeJS.ProcessEnv, "QA_ALLOW_MULTIPLE_INSTANCES" | "QA_USER_DATA_DIR">>>,
-  platform: NodeJS.Platform
-): boolean {
-  return platform === "darwin" &&
-    environment.QA_ALLOW_MULTIPLE_INSTANCES === "1" &&
-    Boolean(environment.QA_USER_DATA_DIR);
-}
-
-export async function hideQaDockAfterLaunch(
-  dock: QaDockController | undefined,
-  wait: (delayMs: number) => Promise<void> = (delayMs) =>
-    new Promise((resolve) => setTimeout(resolve, delayMs))
-): Promise<void> {
-  if (!dock?.isVisible()) return;
-  dock.hide();
-  if (!dock.isVisible()) return;
-  await wait(1_100);
-  if (dock.isVisible()) dock.hide();
 }
 
 export function requestQaQuit(quit: () => void): Promise<never> {
