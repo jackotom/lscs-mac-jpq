@@ -119,6 +119,42 @@ describe("constructed screen recognition", () => {
     expect(selected?.id).toBe("standard");
   });
 
+  it("selects a uniquely named deck on the Casual screen regardless of format", () => {
+    const selectedDeck = { ...baseDeck, id: "casual-demon-hunter", name: "自定义 恶魔猎手", format: "标准" };
+    const inspection = inspectConstructedDeckScreen(
+      [
+        { text: "休闲模式", confidence: 0.9, x: 0.32, y: 0.91, width: 0.06, height: 0.02 },
+        { text: "自定义 恶魔猎手", confidence: 1, x: 0.72, y: 0.34, width: 0.08, height: 0.02 }
+      ],
+      [selectedDeck, { ...baseDeck, id: "other", name: "任务牧", format: "狂野" }]
+    );
+
+    expect(inspection).toEqual({
+      mode: "casual",
+      selectedName: "自定义 恶魔猎手",
+      selectedDeck
+    });
+  });
+
+  it("does not guess between same-name Standard and Wild decks on the Casual screen", () => {
+    const inspection = inspectConstructedDeckScreen(
+      [
+        { text: "休闲模式", confidence: 0.9, x: 0.32, y: 0.91, width: 0.06, height: 0.02 },
+        { text: "自定义 恶魔猎手", confidence: 1, x: 0.72, y: 0.34, width: 0.08, height: 0.02 }
+      ],
+      [
+        { ...baseDeck, id: "standard-demon-hunter", name: "自定义 恶魔猎手", format: "标准" },
+        { ...baseDeck, id: "wild-demon-hunter", name: "自定义 恶魔猎手", format: "狂野" }
+      ]
+    );
+
+    expect(inspection).toEqual({
+      mode: "casual",
+      selectedName: "自定义 恶魔猎手",
+      selectedDeck: undefined
+    });
+  });
+
   it("accepts a uniquely named Standard deck on the Wild deck screen", () => {
     const taskPriest = { ...baseDeck, id: "task-priest", name: "任务牧", format: "标准" };
     const selected = findScreenSelectedCollectionDeck(

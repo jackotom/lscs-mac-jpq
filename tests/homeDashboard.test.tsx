@@ -93,6 +93,17 @@ describe("home dashboard", () => {
     expect(within(home).queryByText("服务正常")).not.toBeInTheDocument();
   });
 
+  it("labels the Casual screen as Casual mode", () => {
+    render(<HomeDashboard state={createPublicTrackerState({
+      status: "watching",
+      trackerMode: "ladder",
+      constructedScreenMode: "casual"
+    })} />);
+
+    expect(screen.getAllByText("休闲模式").length).toBeGreaterThan(0);
+    expect(screen.queryByText("天梯模式")).not.toBeInTheDocument();
+  });
+
   it("shows one calm waiting message after Hearthstone is recognized", () => {
     render(
       <HomeDashboard

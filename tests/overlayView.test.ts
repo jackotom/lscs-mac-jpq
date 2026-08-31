@@ -523,6 +523,27 @@ describe("overlay view", () => {
     expect(view.recentDraws).toEqual([]);
   });
 
+  it("shows a Casual recognition state without calling it Wild", () => {
+    const state: PublicTrackerState = {
+      ...createPublicTrackerState(),
+      status: "watching",
+      constructedScreenMode: "casual",
+      deck: [{ name: "旧标准卡牌", count: 2, remaining: 2, drawn: 0, played: 0 }],
+      opponentPlayed: [],
+      events: [],
+      summary: { totalCards: 2, remainingCards: 2, drawnCards: 0, opponentPlayedCount: 0 }
+    };
+
+    const view = toOverlayPanelViewModel(state);
+
+    expect(view.deckIdentity).toMatchObject({
+      name: "正在识别套牌",
+      status: "waiting",
+      detail: "休闲套牌识别中"
+    });
+    expect(view.remainingDeck).toEqual([]);
+  });
+
   it("keeps every remaining deck row for the scrollable overlay list", () => {
     const deck = Array.from({ length: 18 }, (_, index) => ({
       name: `卡牌 ${index + 1}`,

@@ -428,6 +428,32 @@ describe("AutomaticOverlayController", () => {
     expect(fixture.showOverlayWindow).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a selected Casual deck visible and preserves close suppression after game start", async () => {
+    const fixture = makeHost(makeState({
+      constructedScreenMode: "casual",
+      autoMatchedDeckId: "deck-a",
+      deck: [{ name: "休闲套牌", count: 2, remaining: 2, drawn: 0, played: 0 }]
+    }));
+    const controller = new AutomaticOverlayController(fixture.host);
+    await controller.refresh();
+
+    expect(resolveAutomaticOverlayContext(fixture.host.getState())).toBe("constructed-deck:casual:deck-a");
+    expect(fixture.createOverlayWindow).toHaveBeenCalledTimes(1);
+    expect(fixture.showOverlayWindow).toHaveBeenCalledTimes(1);
+
+    controller.suppressCurrentContext();
+    fixture.closeOverlayWindow();
+    fixture.setState(makeState({
+      gameActive: true,
+      autoMatchedDeckId: "deck-a",
+      deck: [{ name: "休闲套牌", count: 2, remaining: 1, drawn: 1, played: 0 }]
+    }));
+    await controller.refresh();
+
+    expect(fixture.createOverlayWindow).toHaveBeenCalledTimes(1);
+    expect(fixture.showOverlayWindow).toHaveBeenCalledTimes(1);
+  });
+
   it("restores a manually closed overlay when the same deck changes mode", async () => {
     const fixture = makeHost(makeState({
       constructedScreenMode: "standard",

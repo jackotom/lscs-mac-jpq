@@ -92,4 +92,11 @@ describe("tracker settings IPC", () => {
     );
     expect(replaceSection).toContain('reportDiagnosticError("恢复开机启动设置失败"');
   });
+
+  it("routes every card database load through the live tracker", () => {
+    const main = source("src/main/main.ts");
+
+    expect(main).not.toContain("cardLibraryData.loadCardDatabase");
+    expect(main.match(/tracker\.loadCardDatabase\(/g)).toHaveLength(3);
+  });
 });

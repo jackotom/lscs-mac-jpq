@@ -181,7 +181,11 @@ export function toOverlayDeckIdentity(state: PublicTrackerState): OverlayDeckIde
     return {
       name: "正在识别套牌",
       status: "waiting",
-      detail: state.constructedScreenMode === "standard" ? "标准套牌识别中" : "狂野套牌识别中",
+      detail: state.constructedScreenMode === "standard"
+        ? "标准套牌识别中"
+        : state.constructedScreenMode === "wild"
+          ? "狂野套牌识别中"
+          : "休闲套牌识别中",
       compactName: "正在识别套牌",
       compactDetail: "识别中"
     };

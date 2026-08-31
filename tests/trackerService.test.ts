@@ -5216,6 +5216,182 @@ describe("TrackerService log selection", () => {
     ]));
     await service.dispose();
   });
+
+  it("treats a casual constructed game as a ladder tracker session", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(powerLog, [
+      "D 12:00:00.000 GameState.DebugPrintPower() - CREATE_GAME",
+      "D 12:00:00.000 GameState.DebugPrintGame() - GameType=GT_CASUAL"
+    ].join("\n") + "\n", "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+
+    await service.start({ logPath: powerLog });
+    const state = service.getState();
+    await service.dispose();
+
+    expect(state.gameActive).toBe(true);
+    expect(state.trackerMode).toBe("ladder");
+    expect(state.constructedScreenMode).toBe("casual");
+  });
+
+  it("preserves the Casual screen mode when previewing a uniquely named deck", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const decksLog = join(sessionDir, "Decks.log");
+    await writeFile(decksLog, "initial\n", "utf8");
+    const casualDeck = {
+      id: "casual-deck",
+      name: "休闲测试套牌",
+      format: "标准",
+      cards: [{ name: "测试牌", count: 30, cardId: "TEST_001" }],
+      rawText: "",
+      sourcePath: decksLog,
+      updatedAt: new Date().toISOString(),
+      warnings: []
+    };
+    const scanner = {
+      scanAndImportDecks: vi.fn(async () => ({ status: "ok" as const, decks: [casualDeck] }))
+    };
+    const service = new TrackerService(scanner, {
+      recognize: vi.fn(async () => ({
+        status: "ok" as const,
+        texts: [
+          { text: "休闲模式", confidence: 0.9, x: 0.32, y: 0.91, width: 0.06, height: 0.02 },
+          { text: "休闲测试套牌", confidence: 1, x: 0.72, y: 0.34, width: 0.08, height: 0.02 }
+        ]
+      }))
+    });
+
+    const state = await service.start({ logPath: decksLog });
+    await service.dispose();
+
+    expect(state.constructedScreenMode).toBe("casual");
+    expect(state.autoMatchedDeckId).toBe("casual-deck");
+    expect(state.trackerMode).toBe("ladder");
+  });
+
+  it("clears an old Casual screen mode when a Ranked game starts", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(powerLog, "initial\n", "utf8");
+    const rankedDeck = {
+      id: "ranked-deck",
+      name: "排位测试套牌",
+      format: "标准",
+      cards: [{ name: "测试牌", count: 30, cardId: "TEST_001" }],
+      rawText: "",
+      sourcePath: join(sessionDir, "Decks.log"),
+      updatedAt: new Date().toISOString(),
+      warnings: []
+    };
+    const scanner = {
+      scanAndImportDecks: vi.fn(async () => ({ status: "ok" as const, decks: [rankedDeck] }))
+    };
+    const service = new TrackerService(scanner, {
+      recognize: vi.fn(async () => ({
+        status: "ok" as const,
+        texts: [
+          { text: "休闲模式", confidence: 0.9, x: 0.32, y: 0.91, width: 0.06, height: 0.02 },
+          { text: "排位测试套牌", confidence: 1, x: 0.72, y: 0.34, width: 0.08, height: 0.02 }
+        ]
+      }))
+    });
+
+    await service.start({ logPath: powerLog });
+    expect(service.getState().constructedScreenMode).toBe("casual");
+
+    await appendFile(powerLog, [
+      "D 12:01:00.000 GameState.DebugPrintPower() - CREATE_GAME",
+      "D 12:01:00.000 GameState.DebugPrintGame() - GameType=GT_RANKED"
+    ].join("\n") + "\n", "utf8");
+    await vi.waitFor(() => expect(service.getState().gameActive).toBe(true));
+
+    expect(service.getState().trackerMode).toBe("ladder");
+    expect(service.getState().constructedScreenMode).toBeUndefined();
+    await service.dispose();
+  });
+
+  it("does not treat an unsupported constructed game type as ladder", async () => {
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(powerLog, [
+      "D 12:00:00.000 GameState.DebugPrintPower() - CREATE_GAME",
+      "D 12:00:00.000 GameState.DebugPrintGame() - GameType=GT_BATTLEGROUNDS"
+    ].join("\n") + "\n", "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+
+    await service.start({ logPath: powerLog });
+    const state = service.getState();
+    await service.dispose();
+
+    expect(state.gameActive).toBe(true);
+    expect(state.trackerMode).toBeUndefined();
+  });
+
+  it("rehydrates a live Arena deck after the card database refreshes", async () => {
+    vi.resetModules();
+    const capCards = [
+      ["CAP_101", 127013, "跟随引线"],
+      ["CAP_102", 127014, "眺望陆地"],
+      ["CAP_103", 127015, "手持火炮"],
+      ["CAP_104", 127016, "炸药工程师"],
+      ["CAP_105", 127017, "钩手拖曳"],
+      ["CAP_106", 127019, "克罗雷船长"],
+      ["CAP_107", 127099, "火炮长"]
+    ] as const;
+    const database = Object.fromEntries(capCards.map(([cardId, dbfId, name]) => [
+      String(dbfId),
+      { dbfId, cardId, name, collectible: true }
+    ]));
+    let loads = 0;
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          loads += 1;
+          return loads === 1 ? { warnings: [] } : { database, warnings: [] };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const arenaLog = join(sessionDir, "Arena.log");
+    await writeFile(arenaLog, [
+      "D 12:16:16.6950570 DraftManager.OnChoicesAndContents - Draft Deck ID: 9500168047, Hero Card = HERO_01",
+      ...capCards.map(([cardId]) => `D 12:16:16.6950570 DraftManager.OnChoicesAndContents - Draft deck contains card ${cardId}`),
+      "D 12:16:16.6950570 SetDraftMode - ACTIVE_DRAFT_DECK"
+    ].join("\n") + "\n", "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+
+    await service.start({ logPath: arenaLog });
+    expect(service.getState().arena?.deck.map((card) => card.name)).toEqual(capCards.map(([cardId]) => cardId));
+    expect(service.getState().deck.filter((card) => card.cardId?.startsWith("CAP_")).map((card) => card.name))
+      .toEqual(capCards.map(([cardId]) => cardId));
+
+    const loadCardDatabase = (service as unknown as {
+      loadCardDatabase?: (options: { forceRefresh: true }) => Promise<unknown>;
+    }).loadCardDatabase;
+    expect(loadCardDatabase).toBeTypeOf("function");
+    await loadCardDatabase!.call(service, { forceRefresh: true });
+
+    const state = service.getState();
+    for (const [cardId, , name] of capCards) {
+      expect(state.arena?.deck.find((card) => card.cardId === cardId)?.name).toBe(name);
+      expect(state.deck.find((card) => card.cardId === cardId)?.name).toBe(name);
+    }
+    expect(state.arena?.deck.map((card) => card.name)).not.toEqual(expect.arrayContaining(capCards.map(([cardId]) => cardId)));
+    expect(state.deck.map((card) => card.name)).not.toEqual(expect.arrayContaining(capCards.map(([cardId]) => cardId)));
+    await service.dispose();
+  });
 });
 
 async function createSessionDir() {

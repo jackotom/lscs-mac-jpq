@@ -109,5 +109,5 @@ export function resolveLadderDeckMode(state: PublicTrackerState): LadderMode | u
   if (state.status !== "watching" || (state.arena?.status && state.arena.status !== "inactive")) {
     return undefined;
   }
-  return state.constructedScreenMode;
+  return state.constructedScreenMode === "casual" ? undefined : state.constructedScreenMode;
 }

@@ -184,8 +184,8 @@ function matchesSuppressedContext(suppressedKey: string | undefined, nextKey: st
 }
 
 function parseConstructedDeckContext(key: string) {
-  const match = key.match(/^constructed-deck:(standard|wild|unknown):(.+)$/);
+  const match = key.match(/^constructed-deck:(standard|wild|casual|unknown):(.+)$/);
   return match?.[1] && match[2]
-    ? { mode: match[1] as "standard" | "wild" | "unknown", deckId: match[2] }
+    ? { mode: match[1] as "standard" | "wild" | "casual" | "unknown", deckId: match[2] }
     : undefined;
 }

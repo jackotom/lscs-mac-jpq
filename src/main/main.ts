@@ -12,7 +12,6 @@ import {
   resolveArenaOcrHelperPath
 } from "./arenaScreenRecognition.js";
 import { CollectionDeckService } from "./collectionDeckService.js";
-import { CardDataService } from "./cardDataService.js";
 import { shouldShowArenaChoiceOverlay } from "./arenaChoiceOverlayVisibility.js";
 import { AutomaticOverlayController } from "./automaticOverlayController.js";
 import { getFrontmostAppName, isHearthstoneFrontmost, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
@@ -166,7 +165,6 @@ const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer, undef
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
 const auxiliaryOverlayWindowStateStore = new AuxiliaryOverlayWindowStateStore(app.getPath("userData"));
 let trackerSettings: TrackerSettings = DEFAULT_TRACKER_SETTINGS;
-const cardLibraryData = new CardDataService();
 const homeNews = new HomeNewsService();
 let cardLibraryMetadata: { source?: string; version?: string } = {};
 let mainWindow: BrowserWindow | undefined;
@@ -979,7 +977,7 @@ function registerIpc() {
   });
   secureHandle("tracker:refresh-card-database", async () => {
     try {
-      const result = await cardLibraryData.loadCardDatabase({ forceRefresh: true });
+      const result = await tracker.loadCardDatabase({ forceRefresh: true });
       if (!result.database) {
         return { status: "error" as const, error: result.warnings[0] ?? "卡牌数据库不可用", warnings: result.warnings };
       }
@@ -1074,7 +1072,7 @@ function registerIpc() {
   });
   secureHandle("tracker:list-card-library", async (_event, query: unknown): Promise<CardLibraryResult> => {
     try {
-      const loaded = await cardLibraryData.loadCardDatabase(getConfiguredCardDatabaseLoadOptions());
+      const loaded = await tracker.loadCardDatabase(getConfiguredCardDatabaseLoadOptions());
       cardLibraryMetadata = {
         source: loaded.source ?? cardLibraryMetadata.source,
         version: loaded.version ?? cardLibraryMetadata.version
@@ -1228,7 +1226,7 @@ async function applyTrackerSettingsEffects(
   syncStatusTray();
   applyOverlayWindowAppearance();
   if (trackerSettings.other.autoUpdateCards && trackerSettings.other.updateFrequency !== "manual") {
-    void cardLibraryData.loadCardDatabase(getConfiguredCardDatabaseLoadOptions()).catch((error) => {
+    void tracker.loadCardDatabase(getConfiguredCardDatabaseLoadOptions()).catch((error) => {
       if (trackerSettings.other.verboseLogs) console.error("卡牌数据库自动更新失败", error);
     });
   }

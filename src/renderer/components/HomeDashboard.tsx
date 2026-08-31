@@ -460,6 +460,7 @@ function getStatusLabel(state: PublicTrackerState): string {
 
 function getCurrentModeLabel(state: PublicTrackerState): string {
   if (state.arena && state.arena.status !== "inactive") return "竞技场";
+  if (state.constructedScreenMode === "casual") return "休闲模式";
   if (state.constructedScreenMode === "wild") return "狂野模式";
   if (state.constructedScreenMode === "standard") return "标准模式";
   if (state.trackerMode === "arena") return "竞技场";

@@ -7,7 +7,7 @@ import { ArenaDraftEngine } from "../shared/arenaDraftEngine.js";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
 import { TrackerEngine } from "../shared/trackerEngine.js";
 import type { CollectionDeck, CollectionDeckScanResult, MatchMode, MatchRecord, PublicTrackerState, TrackerMode } from "../shared/types.js";
-import { CardDataService } from "./cardDataService.js";
+import { CardDataService, type CardDatabaseLoadOptions, type CardDatabaseLoadResult } from "./cardDataService.js";
 import { ArenaRatingService } from "./arenaRatingService.js";
 import { parsePlayerLog } from "./logParsers.js";
 import { isRootLevelPlayerOnlySession, resolveBestLogTarget, type HearthstoneLogFiles } from "./logDiscovery.js";
@@ -104,7 +104,7 @@ export class TrackerService {
   private knownCollectionDecks: CollectionDeck[] = [];
   private pendingExactArenaDeck: PendingExactArenaDeck | undefined;
   private latestExactArenaDeckObservation: ExactArenaDeckObservation | undefined;
-  private constructedScreenMode: "standard" | "wild" | undefined;
+  private constructedScreenMode: "standard" | "wild" | "casual" | undefined;
   private collectionDeckPreviewSource: "decks-log" | "screen" | undefined;
   private activeTrackerMode: TrackerMode | undefined;
   private activeSessionUsesUsableArenaLog = false;
@@ -199,6 +199,14 @@ export class TrackerService {
     this.knownCollectionDecks = decks.map((deck) => ({ ...deck, cards: deck.cards.map((card) => ({ ...card })) }));
     this.engine.setCollectionDecks(decks);
     this.pushState();
+  }
+
+  async loadCardDatabase(options: CardDatabaseLoadOptions = {}): Promise<CardDatabaseLoadResult> {
+    const result = await this.cardData.loadCardDatabase(options);
+    if (result.database) {
+      this.applyCardDatabase(result.database);
+    }
+    return result;
   }
 
   activateCollectionDeck(deckId: string) {
@@ -1014,6 +1022,9 @@ export class TrackerService {
         }
 
         this.resetPendingArenaExit();
+        if (this.engine.hasActiveGame() && this.constructedScreenMode === "casual") {
+          return;
+        }
         const leftConstructedScreen = this.constructedScreenMode !== undefined;
         this.constructedScreenMode = undefined;
 
@@ -1148,9 +1159,16 @@ export class TrackerService {
       return;
     }
     if (cardDatabase.database) {
-      this.engine.setCardDatabase(cardDatabase.database);
-      this.arena.setCardDatabase(cardDatabase.database);
+      this.applyCardDatabase(cardDatabase.database);
     }
+  }
+
+  private applyCardDatabase(database: NonNullable<CardDatabaseLoadResult["database"]>) {
+    this.engine.setCardDatabase(database);
+    this.arena.setCardDatabase(database);
+    this.lastArenaDeckSignature = undefined;
+    this.syncArenaDeckToTracker();
+    this.pushState();
   }
 
   private ensureArenaRatingsForCurrentArena(sessionContext: SessionContext) {
@@ -1365,6 +1383,7 @@ export class TrackerService {
     powerLogModifiedAtMs?: number
   ) {
     const hasGameStart = currentText.includes("CREATE_GAME");
+    const hearthstoneGameType = detectHearthstoneGameType(currentText);
     const gameType = detectPowerGameType(currentText) ?? knownGameType;
     this.updateMatchContext(currentText, gameType);
     const startsArenaGame = hasGameStart && gameType === "arena";
@@ -1387,7 +1406,7 @@ export class TrackerService {
       this.activeArenaGame = false;
     }
     if (startsArenaGame || startsConstructedGame) {
-      this.constructedScreenMode = undefined;
+      this.constructedScreenMode = hearthstoneGameType === "GT_CASUAL" ? "casual" : undefined;
       this.collectionDeckPreviewSource = undefined;
     }
     if (startsConstructedGame && this.arena.getState().status !== "inactive") {
@@ -1489,7 +1508,7 @@ export class TrackerService {
     if (gameType === "arena" || this.activeArenaGame || this.arena.getState().status === "playing") {
       return "arena";
     }
-    if (this.constructedScreenMode) {
+    if (this.constructedScreenMode && this.constructedScreenMode !== "casual") {
       return this.constructedScreenMode;
     }
 
@@ -1821,7 +1840,9 @@ export class TrackerService {
       this.collectionDeckPreviewSource === "decks-log" &&
       previousState.autoMatchedDeckId === deck.id;
     this.collectionDeckPreviewSource = keepsAuthoritativeSource ? "decks-log" : source;
-    this.constructedScreenMode = getConstructedMode(deck) ?? this.constructedScreenMode;
+    this.constructedScreenMode = source === "screen"
+      ? this.constructedScreenMode ?? getConstructedMode(deck)
+      : getConstructedMode(deck) ?? this.constructedScreenMode;
     this.lastArenaDeckSignature = undefined;
     this.pushState();
     return true;
@@ -1923,11 +1944,15 @@ function splitCompleteLogChunk(previous: Buffer | undefined, chunk: Buffer) {
 }
 
 function detectSupportedTrackerMode(text: string): TrackerMode | undefined {
-  const gameTypes = [...text.matchAll(/\bGameType=(GT_[A-Z_]+)\b/gi)];
-  const gameType = gameTypes.at(-1)?.[1]?.toUpperCase();
+  const gameType = detectHearthstoneGameType(text);
   if (!gameType) return undefined;
   if (gameType.includes("ARENA")) return "arena";
-  return gameType === "GT_RANKED" ? "ladder" : undefined;
+  return gameType === "GT_RANKED" || gameType === "GT_CASUAL" ? "ladder" : undefined;
+}
+
+function detectHearthstoneGameType(text: string): string | undefined {
+  const gameTypes = [...text.matchAll(/\bGameType=(GT_[A-Z_]+)\b/gi)];
+  return gameTypes.at(-1)?.[1]?.toUpperCase();
 }
 
 function buildPowerLogRequiredMessage(logPath: string) {

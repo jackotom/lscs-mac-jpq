@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.7.2");
+    expect(packageJson.version).toBe("0.7.3");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageScript).toContain('app_version="$(node -p');
@@ -243,16 +243,15 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
     const mainSource = read("src/main/main.ts");
     const qaPathSetup = mainSource.indexOf('app.setPath("userData", process.env.QA_USER_DATA_DIR)');
+    const persistentServiceConstructors = ["new CollectionDeckService()", "new TrackerService("];
     const firstPersistentService = Math.min(
-      mainSource.indexOf("new CollectionDeckService()"),
-      mainSource.indexOf("new TrackerService("),
-      mainSource.indexOf("new CardDataService()")
+      ...persistentServiceConstructors.map((constructor) => mainSource.indexOf(constructor))
     );
 
     expect(qaPathSetup).toBeGreaterThan(-1);
     expect(firstPersistentService).toBeGreaterThan(-1);
     expect(qaPathSetup).toBeLessThan(firstPersistentService);
-    for (const constructor of ["new CollectionDeckService()", "new TrackerService(", "new CardDataService()"]) {
+    for (const constructor of persistentServiceConstructors) {
       expect(qaPathSetup).toBeLessThan(mainSource.indexOf(constructor));
     }
     expect(releaseScript.match(/QA_SKIP_LOG_CONFIG_REPAIR=1/g)).toHaveLength(3);

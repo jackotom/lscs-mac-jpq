@@ -109,6 +109,7 @@ describe("LadderDeckOverlayController", () => {
   it("resolves only constructed standard and wild contexts", () => {
     expect(resolveLadderDeckMode(state({ constructedScreenMode: "standard" }))).toBe("standard");
     expect(resolveLadderDeckMode(state({ constructedScreenMode: "wild" }))).toBe("wild");
+    expect(resolveLadderDeckMode(state({ constructedScreenMode: "casual" }))).toBeUndefined();
     expect(resolveLadderDeckMode(state({ constructedScreenMode: "standard", arena: { status: "drafting", draftCount: 0, unresolvedCount: 30, currentChoices: [], picks: [], deck: [] } }))).toBeUndefined();
     expect(resolveLadderDeckMode(state())).toBeUndefined();
   });

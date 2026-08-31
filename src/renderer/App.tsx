@@ -910,6 +910,11 @@ function App() {
       setHomeLadderRecommendation({ status: "unavailable", message: "当前版本未接入天梯推荐数据。" });
       return;
     }
+    if (!hasAcceptedTrackerState) return;
+    if (state.constructedScreenMode === "casual") {
+      setHomeLadderRecommendation({ status: "unavailable", message: "休闲模式不提供天梯卡组推荐。" });
+      return;
+    }
 
     let disposed = false;
     const mode: LadderMode = state.constructedScreenMode === "wild" ? "wild" : "standard";
@@ -930,7 +935,7 @@ function App() {
     return () => {
       disposed = true;
     };
-  }, [activeView, api, state.constructedScreenMode]);
+  }, [activeView, api, hasAcceptedTrackerState, state.constructedScreenMode]);
 
   useEffect(() => {
     if (activeView !== "home") return;
@@ -1992,7 +1997,7 @@ function DesktopSidebar({
         </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.7.2</small>
+          <small>v0.7.3</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

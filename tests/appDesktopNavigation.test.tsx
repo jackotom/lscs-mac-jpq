@@ -22,6 +22,29 @@ afterEach(() => {
 });
 
 describe("desktop navigation shell", () => {
+  it("does not request a ladder recommendation for Casual mode", async () => {
+    const getLadderDeckRecommendation = vi.fn(async () => ({
+      status: "unavailable" as const,
+      message: "不应请求"
+    }));
+    window.hearthstoneTracker = {
+      discoverLogs: vi.fn(async () => []),
+      getState: vi.fn(async () => createPublicTrackerState({
+        status: "watching",
+        trackerMode: "ladder",
+        constructedScreenMode: "casual"
+      })),
+      onUpdate: vi.fn(() => () => undefined),
+      getTrackerSettings: vi.fn(async () => settings),
+      getLadderDeckRecommendation
+    } as unknown as typeof window.hearthstoneTracker;
+
+    render(<App />);
+
+    expect(await screen.findByText("休闲模式不提供天梯卡组推荐。")).toBeInTheDocument();
+    expect(getLadderDeckRecommendation).not.toHaveBeenCalled();
+  });
+
   it("keeps one shared titlebar across home and workbench routes", async () => {
     const minimizeMain = vi.fn(async () => true);
     window.hearthstoneTracker = {

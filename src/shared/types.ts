@@ -412,7 +412,7 @@ export interface PublicTrackerState {
   gameActive?: boolean;
   logPath?: string;
   arenaLogPath?: string;
-  constructedScreenMode?: "standard" | "wild";
+  constructedScreenMode?: "standard" | "wild" | "casual";
   deckCode?: string;
   deckName?: string;
   autoMatchedDeckId?: string;

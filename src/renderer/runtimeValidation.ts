@@ -7,6 +7,8 @@ import {
 import type { ArenaInsightsResult, CollectionInsightsResult } from "./types";
 
 const trackerStatuses = new Set(["idle", "watching", "paused", "missing-log", "error"]);
+const trackerModes = new Set(["ladder", "arena"]);
+const constructedScreenModes = new Set(["standard", "wild", "casual"]);
 const arenaStatuses = new Set(["inactive", "drafting", "redrafting", "complete", "playing"]);
 const arenaScoreTiers = new Set(["s", "a", "b", "c", "d", "f", "unknown"]);
 const matchModes = new Set(["standard", "wild", "arena", "unknown"]);
@@ -29,7 +31,10 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isRecord(value) || typeof value.status !== "string" || !trackerStatuses.has(value.status) || !Array.isArray(value.deck) ||
       !value.deck.every((card) => isCardTrackerRow(card, false)) || !Array.isArray(value.opponentPlayed) ||
       !value.opponentPlayed.every((card) => isCardTrackerRow(card, true)) || !Array.isArray(value.events) ||
-      !value.events.every(isTrackerEvent) || !isSummary(value.summary)) {
+      !value.events.every(isTrackerEvent) || !isSummary(value.summary) ||
+      (value.trackerMode !== undefined && (typeof value.trackerMode !== "string" || !trackerModes.has(value.trackerMode))) ||
+      (value.constructedScreenMode !== undefined &&
+        (typeof value.constructedScreenMode !== "string" || !constructedScreenModes.has(value.constructedScreenMode)))) {
     throw new Error("记牌器状态数据无效，已拒绝更新界面。");
   }
   if (value.arena !== undefined && !isArenaState(value.arena)) {

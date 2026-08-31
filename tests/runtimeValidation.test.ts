@@ -61,6 +61,19 @@ function createDetailsWithOutcomeSections() {
 }
 
 describe("card tracking runtime validation", () => {
+  it("accepts a Casual constructed-screen mode", () => {
+    const state = createPublicTrackerState({ constructedScreenMode: "casual" });
+
+    expect(parsePublicTrackerState(state).constructedScreenMode).toBe("casual");
+  });
+
+  it("rejects an unknown constructed-screen mode", () => {
+    const state = createPublicTrackerState() as unknown as Record<string, unknown>;
+    state.constructedScreenMode = "practice";
+
+    expect(() => parsePublicTrackerState(state)).toThrow(/状态数据无效/);
+  });
+
   it("accepts structured local insight snapshots and rejects invalid counters", () => {
     const arena = {
       status: "ok", source: "本机竞技场档案", updatedAt: "2026-08-22T12:00:00.000Z", runs: [], highWinDecks: [], mulliganStats: []

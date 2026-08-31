@@ -10,7 +10,7 @@ export interface ScreenTextObservation {
 }
 
 export interface ConstructedDeckScreenInspection {
-  readonly mode: "standard" | "wild" | undefined;
+  readonly mode: "standard" | "wild" | "casual" | undefined;
   readonly selectedName: string | undefined;
   readonly selectedDeck: CollectionDeck | undefined;
 }
@@ -37,7 +37,7 @@ export function findScreenSelectedCollectionDeck(
   return inspectConstructedDeckScreen(observations, decks).selectedDeck;
 }
 
-function detectConstructedMode(observations: readonly ScreenTextObservation[]): "standard" | "wild" | undefined {
+function detectConstructedMode(observations: readonly ScreenTextObservation[]): "standard" | "wild" | "casual" | undefined {
   for (const observation of observations) {
     const text = normalizeText(observation.text);
     if (/标准(?:对)?战/.test(text)) {
@@ -45,6 +45,9 @@ function detectConstructedMode(observations: readonly ScreenTextObservation[]): 
     }
     if (/狂野(?:对)?战/.test(text)) {
       return "wild";
+    }
+    if (/休闲模式/.test(text)) {
+      return "casual";
     }
   }
   return undefined;
@@ -61,7 +64,10 @@ function detectSelectedDeckName(observations: readonly ScreenTextObservation[]):
   return candidates.sort((left, right) => right.length - left.length)[0];
 }
 
-function deckMatchesMode(deck: CollectionDeck, mode: "standard" | "wild") {
+function deckMatchesMode(deck: CollectionDeck, mode: "standard" | "wild" | "casual") {
+  if (mode === "casual") {
+    return true;
+  }
   const format = normalizeText(deck.format ?? deck.mode ?? "");
   if (mode === "standard") {
     return format.includes("标准") || format.includes("standard");
@@ -69,7 +75,7 @@ function deckMatchesMode(deck: CollectionDeck, mode: "standard" | "wild") {
   return format.includes("狂野") || format.includes("wild");
 }
 
-function findMatchingDecks(selectedName: string, mode: "standard" | "wild", decks: readonly CollectionDeck[]) {
+function findMatchingDecks(selectedName: string, mode: "standard" | "wild" | "casual", decks: readonly CollectionDeck[]) {
   const normalizedSelectedName = normalizeText(selectedName);
   const exactAcrossModes = decks.filter((deck) => normalizeText(deck.name ?? "") === normalizedSelectedName);
   if (exactAcrossModes.length === 1) {
