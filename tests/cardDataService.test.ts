@@ -314,6 +314,76 @@ describe("CardDataService", () => {
     );
   });
 
+  it("accepts a preferred foreign cache with current upstream empty-name metadata rows", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "foreign-card-empty-name-cache-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "official-cards.json");
+    await writeFile(cachePath, JSON.stringify({
+      schemaVersion: 1,
+      source: "Blizzard 官方卡牌浏览器",
+      version: "cached-version",
+      fetchedAt: new Date().toISOString(),
+      cards: [{ id: 1001, dbfId: 1001, name: "官网缓存卡", collectible: 1 }]
+    }), "utf8");
+    const capCards = [
+      { dbfId: 127013, id: "CAP_101", name: "跟随引线" },
+      { dbfId: 127014, id: "CAP_102", name: "眺望陆地" },
+      { dbfId: 127015, id: "CAP_103", name: "手持火炮" },
+      { dbfId: 127016, id: "CAP_104", name: "炸药工程师" },
+      { dbfId: 127017, id: "CAP_105", name: "钩手拖曳" },
+      { dbfId: 127019, id: "CAP_106", name: "克罗雷船长" },
+      { dbfId: 127099, id: "CAP_107", name: "火炮长" }
+    ];
+    const emptyNameMetadata = Array.from({ length: 380 }, (_, index) => ({
+      dbfId: 900_000 + index,
+      id: `QA_EMPTY_NAME_${index}`,
+      name: "",
+      type: "Enchantment"
+    }));
+    await writeForeignSupplementCache(root, [...capCards, ...emptyNameMetadata]);
+    const fetchMock = vi.fn();
+
+    const result = await new CardDataService(cachePath, fetchMock as never)
+      .loadCardDatabase({ preferCache: true });
+
+    for (const card of capCards) {
+      expect(result.database?.[String(card.dbfId)]).toEqual(expect.objectContaining({
+        cardId: card.id,
+        name: card.name
+      }));
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a foreign cache below the minimum valid-card ratio", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "foreign-card-low-ratio-cache-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "official-cards.json");
+    await writeFile(cachePath, JSON.stringify({
+      schemaVersion: 1,
+      source: "Blizzard 官方卡牌浏览器",
+      version: "cached-version",
+      fetchedAt: new Date().toISOString(),
+      cards: [{ id: 1001, dbfId: 1001, name: "官网缓存卡", collectible: 1 }]
+    }), "utf8");
+    const tooManyEmptyNames = Array.from({ length: 700 }, (_, index) => ({
+      dbfId: 910_000 + index,
+      id: `QA_TOO_MANY_EMPTY_NAMES_${index}`,
+      name: "",
+      type: "Enchantment"
+    }));
+    await writeForeignSupplementCache(root, tooManyEmptyNames);
+
+    const result = await new CardDataService(cachePath, vi.fn() as never)
+      .loadCardDatabase({ preferCache: true });
+
+    expect(result.database?.["800007"]).toBeUndefined();
+    expect(result.warnings.join("\n")).toContain("海外卡牌补充库");
+    expect(result.warnings.join("\n")).toContain("缓存校验失败");
+  });
+
   it("uses the Firestone mirror when the primary foreign card source is unavailable", async () => {
     const { CardDataService } = await import("../src/main/cardDataService.js");
     const root = await mkdtemp(path.join(os.tmpdir(), "foreign-card-mirror-service-"));
