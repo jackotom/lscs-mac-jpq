@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { shouldShowArenaChoiceOverlay } from "../src/main/arenaChoiceOverlayVisibility";
 import { isHearthstoneFrontmost, resolveFrontmostAppHelperPath } from "../src/main/frontmostApp";
 import type { ArenaState } from "../src/shared/types";
@@ -55,5 +58,15 @@ describe("arena choice overlay visibility", () => {
   it("resolves the project frontmost app helper during development", () => {
     expect(resolveFrontmostAppHelperPath("/Electron/Resources", "file:///project/dist-electron/main/frontmostApp.js", false))
       .toBe("/project/native/bin/frontmost-app");
+  });
+
+  it("corrects Battle.net only when Hearthstone owns the front window", () => {
+    const helper = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../native/frontmost-app.swift");
+    const resolve = (workspaceName: string, frontWindowOwner: string) =>
+      execFileSync("swift", [helper, "--resolve", workspaceName, frontWindowOwner], { encoding: "utf8" }).trim();
+
+    expect(resolve("Battle.net", "Hearthstone")).toBe("Hearthstone");
+    expect(resolve("Battle.net", "Battle.net")).toBe("Battle.net");
+    expect(resolve("ChatGPT", "Hearthstone")).toBe("ChatGPT");
   });
 });
