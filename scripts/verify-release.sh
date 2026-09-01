@@ -148,6 +148,7 @@ fs.writeFileSync(path.join(targetDir, "arena-ratings.qa-cache.json"), `${JSON.st
 fs.writeFileSync(path.join(targetDir, "arena-ratings-firestone-rogue.qa-cache.json"), `${JSON.stringify({
   source: "Firestone",
   playerClass: "rogue",
+  schemaVersion: 1,
   version: "qa-candidate-impact-v1",
   lastUpdated: fetchedAt,
   overallWins: 5_000,
