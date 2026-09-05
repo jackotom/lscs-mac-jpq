@@ -93,7 +93,7 @@ describe("transient overlay window lifecycle", () => {
     const releaseStart = main.indexOf("async function releaseOpponentOverlayWindow");
     const releaseSource = main.slice(
       releaseStart,
-      main.indexOf("async function loadOpponentOverlayBounds", releaseStart)
+      main.indexOf("async function loadOpponentOverlayWindowState", releaseStart)
     );
     expect(releaseSource).toContain("opponentOverlayWindowCreationPromise");
     expect(releaseSource).toMatch(
@@ -104,7 +104,7 @@ describe("transient overlay window lifecycle", () => {
   it("closes friendly and opponent windows even when final bounds persistence fails", () => {
     for (const [releaseName, nextName] of [
       ["releaseOverlayWindow", "saveOverlayWindowBounds"],
-      ["releaseOpponentOverlayWindow", "loadOpponentOverlayBounds"]
+      ["releaseOpponentOverlayWindow", "loadOpponentOverlayWindowState"]
     ]) {
       const releaseStart = main.indexOf(`async function ${releaseName}`);
       const releaseSource = main.slice(

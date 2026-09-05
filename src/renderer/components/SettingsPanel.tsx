@@ -355,8 +355,6 @@ export function SettingsPanel({
             onChange={(value) => updateGeneral({ focusOnOpen: value })}
           />
           <SelectControl label="游戏启动检测" description="自动检查炉石传说是否运行" value={settings.general.gameDetection} options={[{ value: "automatic", label: "自动检测" }, { value: "manual", label: "手动检测" }]} disabled={controlsDisabled} onChange={(value) => updateGeneral({ gameDetection: value })} />
-          <SelectControl label="支持的游戏语言" value={settings.general.gameLanguage} options={[{ value: "zh-CN", label: "简体中文" }, { value: "zh-TW", label: "繁体中文" }, { value: "en-US", label: "English" }]} disabled={controlsDisabled} onChange={(value) => updateGeneral({ gameLanguage: value })} />
-          <SelectControl label="游戏窗口匹配方式" value={settings.general.windowMatching} options={[{ value: "smart", label: "智能模式（推荐）" }, { value: "title", label: "按窗口标题" }, { value: "process", label: "按游戏进程" }]} disabled={controlsDisabled} onChange={(value) => updateGeneral({ windowMatching: value })} />
         </div>
       ) : null}
     </section>
@@ -469,8 +467,6 @@ export function SettingsPanel({
             <ToggleControl label="自动更新卡牌数据库" checked={settings.other.autoUpdateCards} disabled={controlsDisabled} onChange={(value) => updateOther({ autoUpdateCards: value })} />
             <SelectControl label="检查更新频率" value={settings.other.updateFrequency} options={[{ value: "daily", label: "每天" }, { value: "weekly", label: "每周" }, { value: "manual", label: "仅手动" }]} disabled={controlsDisabled} onChange={(value) => updateOther({ updateFrequency: value })} />
             <SelectControl label="对局记录保留天数" value={settings.other.matchRetentionDays} options={[{ value: 30, label: "30 天" }, { value: 90, label: "90 天" }, { value: 180, label: "180 天" }]} disabled={controlsDisabled} onChange={(value) => updateOther({ matchRetentionDays: value })} />
-            <ToggleControl label="新版本更新提醒" checked={settings.other.notifyUpdates} disabled={controlsDisabled} onChange={(value) => updateOther({ notifyUpdates: value })} />
-            <ToggleControl label="版本活动与公告" checked={settings.other.notifyAnnouncements} disabled={controlsDisabled} onChange={(value) => updateOther({ notifyAnnouncements: value })} />
             <ToggleControl label="启用详细日志" description="仅用于本机排障，会增加日志体积" checked={settings.other.verboseLogs} disabled={controlsDisabled} onChange={(value) => updateOther({ verboseLogs: value })} />
           </div>
 

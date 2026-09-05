@@ -1508,7 +1508,7 @@ export class TrackerService {
     if (gameType === "arena" || this.activeArenaGame || this.arena.getState().status === "playing") {
       return "arena";
     }
-    if (this.constructedScreenMode && this.constructedScreenMode !== "casual") {
+    if (this.constructedScreenMode) {
       return this.constructedScreenMode;
     }
 

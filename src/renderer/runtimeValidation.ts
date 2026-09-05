@@ -11,7 +11,7 @@ const trackerModes = new Set(["ladder", "arena"]);
 const constructedScreenModes = new Set(["standard", "wild", "casual"]);
 const arenaStatuses = new Set(["inactive", "drafting", "redrafting", "complete", "playing"]);
 const arenaScoreTiers = new Set(["s", "a", "b", "c", "d", "f", "unknown"]);
-const matchModes = new Set(["standard", "wild", "arena", "unknown"]);
+const matchModes = new Set(["standard", "wild", "casual", "arena", "unknown"]);
 const matchResults = new Set(["win", "loss", "tie"]);
 const eventKinds = new Set([
   "game-start", "game-end", "draw", "friendly-play", "opponent-play", "arena-pick", "zone-change", "info"

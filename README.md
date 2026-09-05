@@ -1,10 +1,10 @@
 # 炉石 Mac 记牌器
 
-**v0.7.4 · Apple 芯片 Mac · 本机运行**
+**v0.7.5 · Apple 芯片 Mac · 本机运行**
 
 自动识别当前套牌，在对局中显示牌库变化、对手已出牌、竞技场选牌数据和关键计数。
 
-[下载公开版](https://github.com/jackotom/lscs-mac-jpq/releases/latest) · [查看 v0.7.4 更新](docs/releases/v0.7.4.md)
+[下载公开版](https://github.com/jackotom/lscs-mac-jpq/releases/latest) · [查看 v0.7.5 更新](docs/releases/v0.7.5.md)
 
 ![炉石记牌器首页，显示当前套牌、对局统计、天梯卡组与竞技场排行](docs/screenshots/home-dashboard.png)
 
@@ -60,6 +60,12 @@ _当前桌面版的隔离演示界面；不会读取或展示你的真实对局�
 - 主要读取炉石日志；授权后可临时识别炉石窗口文字。
 - 不读取游戏内存，不注入游戏进程。
 - 对局记录和缓存保存在本机，不上传你的对局数据。
+
+## v0.7.5 重点更新
+
+- 休闲对局独立记录和统计，不再混入标准或狂野战绩。
+- 对手浮窗重启后保留折叠状态和展开尺寸。
+- 移除四项尚未生效的设置，修复源码开发启动流程。
 
 ## v0.7.4 重点更新
 
@@ -184,6 +190,8 @@ _当前桌面版的隔离演示界面；不会读取或展示你的真实对局�
 npm install
 npm run dev
 ```
+
+开发启动需要安装 Xcode Command Line Tools。`npm run dev` 会先构建原生组件和主进程，再启动界面；修改主进程或原生组件后，停止并重新运行该命令。界面代码由 Vite 自动刷新。
 
 生成当前 README 截图：
 

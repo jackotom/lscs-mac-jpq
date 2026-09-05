@@ -163,6 +163,20 @@ describe("match history route", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("历史文件损坏");
   });
 
+  it("accepts and renders casual history records", async () => {
+    installTrackerApi(vi.fn(async () => ({
+      status: "ok",
+      matches: [{ id: "casual-1", mode: "casual", deckName: "休闲套牌", result: "win", endedAt: "2026-07-22T12:00:00.000Z" }],
+      summary: { total: 1, wins: 1, losses: 0, ties: 0, winRate: 1 }
+    })));
+    render(<App />);
+
+    await openWorkbench();
+    fireEvent.click(await screen.findByRole("button", { name: "对局记录" }));
+
+    expect(await screen.findByText("休闲")).toBeInTheDocument();
+  });
+
   it.each([
     ["summary", { ...validHistory, summary: { ...validHistory.summary, total: -1 } }],
     ["matches", { ...validHistory, matches: {} }],

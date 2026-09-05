@@ -204,7 +204,7 @@ export interface MatchFlowSnapshot {
 
 export type MatchResult = "win" | "loss" | "tie";
 
-export type MatchMode = "standard" | "wild" | "arena" | "unknown";
+export type MatchMode = "standard" | "wild" | "casual" | "arena" | "unknown";
 
 export interface MatchRecord {
   readonly id: string;

@@ -1997,7 +1997,7 @@ function DesktopSidebar({
         </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.7.4</small>
+          <small>v0.7.5</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

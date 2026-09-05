@@ -51,11 +51,11 @@ export class OpponentOverlayWindowController {
     const { window, state } = session;
     if (!state.isCollapsed()) {
       state.updateExpandedBounds(window.getBounds());
-      await this.host.saveExpandedBounds(state.currentBounds());
-      window.setResizable(false);
-      window.setMinimumSize(52, 38);
-      window.setBounds(state.collapse(), false);
     }
+    state.collapse();
+    await this.host.saveExpandedBounds(state.expanded());
+    if (this.liveWindow() !== window || this.host.getState() !== state) return state.isCollapsed();
+    this.applyState(window, state);
     this.publish(window, state.isCollapsed());
     window.showInactive();
     return state.isCollapsed();
@@ -68,9 +68,10 @@ export class OpponentOverlayWindowController {
     }
 
     const { window, state } = session;
-    window.setBounds(state.expand(), false);
-    window.setMinimumSize(100, 150);
-    window.setResizable(true);
+    const expandedBounds = state.expand();
+    await this.host.saveExpandedBounds(expandedBounds);
+    if (this.liveWindow() !== window || this.host.getState() !== state) return state.isCollapsed();
+    this.applyState(window, state);
     this.publish(window, state.isCollapsed());
     if (focus) {
       window.show();
@@ -90,6 +91,18 @@ export class OpponentOverlayWindowController {
     const window = this.liveWindow();
     const state = this.host.getState();
     return window && state ? { window, state } : undefined;
+  }
+
+  private applyState(window: OpponentOverlayWindowLike, state: OpponentOverlayWindowState): void {
+    if (state.isCollapsed()) {
+      window.setResizable(false);
+      window.setMinimumSize(52, 38);
+      window.setBounds(state.currentBounds(), false);
+      return;
+    }
+    window.setBounds(state.currentBounds(), false);
+    window.setMinimumSize(100, 150);
+    window.setResizable(true);
   }
 
   private publish(window: OpponentOverlayWindowLike, collapsed: boolean): void {

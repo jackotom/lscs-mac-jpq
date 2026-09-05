@@ -41,8 +41,8 @@ export interface HomeDashboardProps {
 const heroImageUrl = new URL("../assets/home-emerald-hero-v1.png", import.meta.url).href;
 const appIconUrl = new URL("../../../assets/icons/hearthstone-deck-tracker-icon-v1.png", import.meta.url).href;
 const resultLabels = { win: "胜利", loss: "失败", tie: "平局" } as const;
-const matchModeLabels = { standard: "标准", wild: "狂野", arena: "竞技场", unknown: "未知模式" } as const;
-const modeOrder = ["standard", "wild", "arena", "unknown"] as const;
+const matchModeLabels = { standard: "标准", wild: "狂野", casual: "休闲", arena: "竞技场", unknown: "未知模式" } as const;
+const modeOrder = ["standard", "wild", "casual", "arena", "unknown"] as const;
 
 type CopyState = "idle" | "copying" | "copied" | "error";
 

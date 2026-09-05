@@ -123,7 +123,7 @@ function isMatchResult(value: unknown): value is MatchResult {
 }
 
 function isMatchMode(value: unknown): value is MatchMode {
-  return value === "standard" || value === "wild" || value === "arena" || value === "unknown";
+  return value === "standard" || value === "wild" || value === "casual" || value === "arena" || value === "unknown";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

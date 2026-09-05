@@ -84,6 +84,69 @@ describe("opponent overlay window controller", () => {
     expect(controller.isOpponentOverlaySender({})).toBe(false);
   });
 
+  it("applies folded bounds when a restored state is already collapsed", async () => {
+    const state = OpponentOverlayWindowState.fromPersisted({
+      x: 40, y: 50, width: 260, height: 180, collapsed: true
+    });
+    const window = {
+      webContents: { send: vi.fn() },
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 40, y: 50, width: 260, height: 180 }),
+      setResizable: vi.fn(),
+      setMinimumSize: vi.fn(),
+      setBounds: vi.fn(),
+      showInactive: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn()
+    };
+    const controller = new OpponentOverlayWindowController({
+      getWindow: () => window,
+      getState: () => state,
+      saveExpandedBounds: vi.fn(async () => undefined)
+    });
+
+    await expect(controller.collapse()).resolves.toBe(true);
+
+    expect(window.setMinimumSize).toHaveBeenCalledWith(52, 38);
+    expect(window.setBounds).toHaveBeenCalledWith({ x: 40, y: 50, width: 52, height: 38 }, false);
+  });
+
+  it("keeps the newest expand intent when an earlier collapse is still saving", async () => {
+    let finishCollapseSave: (() => void) | undefined;
+    const collapseSave = new Promise<void>((resolve) => {
+      finishCollapseSave = resolve;
+    });
+    const state = new OpponentOverlayWindowState({ x: 40, y: 50, width: 260, height: 180 });
+    const window = {
+      webContents: { send: vi.fn() },
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 40, y: 50, width: 260, height: 180 }),
+      setResizable: vi.fn(),
+      setMinimumSize: vi.fn(),
+      setBounds: vi.fn(),
+      showInactive: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn()
+    };
+    const saveExpandedBounds = vi.fn()
+      .mockImplementationOnce(async () => collapseSave)
+      .mockResolvedValue(undefined);
+    const controller = new OpponentOverlayWindowController({
+      getWindow: () => window,
+      getState: () => state,
+      saveExpandedBounds
+    });
+
+    const collapsing = controller.collapse();
+    const expanding = controller.expand(false);
+    finishCollapseSave?.();
+    await Promise.all([collapsing, expanding]);
+
+    expect(state.isCollapsed()).toBe(false);
+    expect(window.setBounds).toHaveBeenLastCalledWith({ x: 40, y: 50, width: 260, height: 180 }, false);
+    expect(window.setResizable).toHaveBeenLastCalledWith(true);
+  });
+
   it("shows a collapsed entry without expanding it when data changes", () => {
     const state = new OpponentOverlayWindowState({ x: 40, y: 50, width: 260, height: 180 });
     state.collapse();

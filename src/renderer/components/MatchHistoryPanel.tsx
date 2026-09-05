@@ -16,6 +16,7 @@ const resultLabels = {
 const modeLabels = {
   standard: "标准",
   wild: "狂野",
+  casual: "休闲",
   arena: "竞技场",
   unknown: "未知模式"
 } as const;

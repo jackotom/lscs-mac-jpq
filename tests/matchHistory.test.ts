@@ -590,6 +590,50 @@ describe("TrackerService match history", () => {
     });
   });
 
+  it("records a casual game as casual even when its selected deck is Standard", async () => {
+    vi.resetModules();
+    vi.doMock("../src/main/cardDataService.js", () => ({
+      CardDataService: class CardDataService {
+        async loadCardDatabase() {
+          return { warnings: [] };
+        }
+      }
+    }));
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "match-history-casual-"));
+    tempDirs.push(root);
+    const powerLog = path.join(root, "Power.log");
+    await writeFile(powerLog, [
+      "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=Local",
+      "D 12:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_CASUAL",
+      "D 12:05:00.000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Local id=2 zone=PLAY zonePos=0 cardId= player=1] tag=PLAYSTATE value=WON"
+    ].join("\n"), "utf8");
+    const deck = {
+      id: "casual-standard-deck",
+      name: "Casual Standard Deck",
+      format: "standard",
+      cards: [{ name: "Fireball", count: 30 }],
+      rawText: "",
+      sourcePath: path.join(root, "Decks.log"),
+      updatedAt: "2026-09-05T00:00:00.000Z",
+      warnings: []
+    };
+    const service = new TrackerService(
+      { scanAndImportDecks: vi.fn(async () => ({ status: "ok" as const, decks: [deck], activeDeck: deck })) },
+      { recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] })) },
+      new MatchHistoryStore(path.join(root, "match-history.json"))
+    );
+
+    await service.start({ logPath: powerLog });
+    const history = await service.getMatchHistory();
+    await service.dispose();
+
+    expect(history).toMatchObject({
+      status: "ok",
+      matches: [{ result: "win", mode: "casual", deckName: "Casual Standard Deck" }]
+    });
+  });
+
   it("records a confirmed Arena result even though Arena games bypass the constructed engine", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({

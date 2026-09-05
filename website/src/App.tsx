@@ -13,7 +13,8 @@ import {
   X,
 } from "lucide-react";
 
-const releaseUrl = import.meta.env.VITE_DOWNLOAD_URL || "https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.6.7.zip";
+const releaseVersion = "0.7.5";
+const releaseUrl = import.meta.env.VITE_DOWNLOAD_URL || `https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v${releaseVersion}.zip`;
 const changelogUrl = "https://github.com/jackotom/lscs-mac-jpq/blob/main/CHANGELOG.md";
 
 const navItems = [
@@ -33,7 +34,11 @@ const overview = [
 function Brand() {
   return (
     <a className="brand" href="#top" aria-label="炉石记牌器首页">
-      <span>炉石记牌器</span>
+      <img className="brand-mark" src="./favicon.svg?v=067-player" alt="" aria-hidden="true" />
+      <span className="brand-copy">
+        <strong>炉石记牌器</strong>
+        <small>v{releaseVersion}</small>
+      </span>
     </a>
   );
 }
@@ -59,6 +64,7 @@ function Header() {
           ))}
           <a className="mobile-release" href={changelogUrl}>更新记录</a>
         </nav>
+        <a className="nav-github" href="https://github.com/jackotom/lscs-mac-jpq" target="_blank" rel="noreferrer">GitHub</a>
         <a className="nav-download" href={releaseUrl} target="_blank" rel="noreferrer">
           下载公开版 <Download size={17} aria-hidden="true" />
         </a>
@@ -75,26 +81,27 @@ function Hero() {
     <section className="hero" id="top">
       <div className="hero-inner">
         <div className="hero-copy">
-          <h1>每一张牌，<br />都心里有数。</h1>
+          <span className="hero-badge"><i aria-hidden="true" />macOS 原生 · 本机运行</span>
+          <h1>每一张牌，<br /><span>都心里有数。</span></h1>
           <p>专为 Apple 芯片 Mac 打造。自动识别套牌，实时追踪牌库、对手已出牌与竞技场选牌。只在本机运行，不读内存，不打扰操作。</p>
           <div className="hero-actions">
             <a className="button button-primary" href={releaseUrl} target="_blank" rel="noreferrer">
-              下载公开版 v0.6.7 <Download size={20} />
+              下载公开版 v{releaseVersion} <Download size={20} />
             </a>
-            <a className="text-link" href="#tracker">查看实际界面 <ArrowRight size={18} /></a>
+            <a className="button button-secondary" href="#tracker">查看实际界面 <ArrowRight size={18} /></a>
+            <a className="button button-secondary" href={changelogUrl} target="_blank" rel="noreferrer">更新记录</a>
           </div>
-          <span className="compatibility">macOS 12+ · Apple 芯片 · 约 117 MB</span>
+          <div className="hero-proof" aria-label="产品信息">
+            <span><Check />macOS 12+</span>
+            <span><Check />Apple 芯片</span>
+          </div>
         </div>
 
         <div className="hero-visual" aria-label="炉石记牌器真实界面预览">
-          <div className="app-window">
-            <img src="./home-dashboard.png" alt="炉石记牌器首页，显示套牌、战绩和公开数据" />
-          </div>
-          <div className="overlay-window friendly">
-            <img src="./friendly-overlay.png" alt="我方牌库悬浮窗" />
-          </div>
-          <div className="overlay-window opponent">
-            <img src="./opponent-overlay.png" alt="对手已出牌悬浮窗" />
+          <div className="showcase-frame">
+            <div className="app-window">
+              <img src="./home-dashboard.png" alt="炉石记牌器首页，显示套牌、战绩和公开数据" />
+            </div>
           </div>
         </div>
       </div>
@@ -229,8 +236,8 @@ function PrivacyAndInstall() {
       <section className="download-finale">
         <div className="finale-inner">
           <h2>下一局，开始看清每张牌。</h2>
-          <a className="button button-light" href={releaseUrl} target="_blank" rel="noreferrer"><Download /> 下载公开版 v0.6.7</a>
-          <p className="finale-meta">macOS 12+ · Apple 芯片 · 约 117 MB</p>
+          <a className="button button-light" href={releaseUrl} target="_blank" rel="noreferrer"><Download /> 下载公开版 v{releaseVersion}</a>
+          <p className="finale-meta">macOS 12+ · Apple 芯片</p>
           <p className="signing-note">当前安装包使用 Developer ID 正式签名，已通过 Apple 公证并装订票据。</p>
         </div>
       </section>
@@ -246,7 +253,6 @@ function Footer() {
         <div className="footer-links">
           <a href={changelogUrl} target="_blank" rel="noreferrer">更新记录</a>
           <a href="https://github.com/jackotom/lscs-mac-jpq" target="_blank" rel="noreferrer">GitHub</a>
-          <a href="mailto:admin@acyg.me">商业授权</a>
         </div>
       </div>
       <p>非暴雪娱乐或网易官方产品。炉石传说名称、卡牌图片及其他相关资产权利归各自权利人所有。</p>

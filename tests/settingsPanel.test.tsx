@@ -217,6 +217,20 @@ describe("software settings", () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...settings, appearance: { ...settings.appearance, zoom: 110 } });
   });
 
+  it("does not present settings that have no effect", () => {
+    renderPanel();
+
+    for (const name of [
+      "支持的游戏语言",
+      "游戏窗口匹配方式",
+      "新版本更新提醒",
+      "版本活动与公告"
+    ]) {
+      expect(screen.queryByRole("combobox", { name })).not.toBeInTheDocument();
+      expect(screen.queryByRole("switch", { name })).not.toBeInTheDocument();
+    }
+  });
+
   it("keeps maintenance, privacy, shortcut, loading, and notice behavior on the combined page", () => {
     const actions = {
       onOpenLogFolder: vi.fn(),

@@ -13,6 +13,12 @@ const history = {
   summary: { total: 3, wins: 1, losses: 1, ties: 1, winRate: 1 / 3 }
 } as unknown as MatchHistoryResult;
 
+const casualHistory: MatchHistoryResult = {
+  status: "ok",
+  matches: [{ id: "casual", mode: "casual", deckName: "休闲套牌", result: "win", endedAt: "2026-07-22T10:30:00.000Z" }],
+  summary: { total: 1, wins: 1, losses: 0, ties: 0, winRate: 1 }
+};
+
 describe("MatchHistoryPanel", () => {
   it("shows the summary and newest records first", () => {
     render(<MatchHistoryPanel result={history} loading={false} />);
@@ -30,6 +36,12 @@ describe("MatchHistoryPanel", () => {
       expect.stringContaining("竞技场"),
       expect.stringContaining("任务术")
     ]);
+  });
+
+  it("labels a casual record as casual", () => {
+    render(<MatchHistoryPanel result={casualHistory} loading={false} />);
+
+    expect(screen.getByText("休闲")).toBeInTheDocument();
   });
 
   it("shows an explicit empty state", () => {

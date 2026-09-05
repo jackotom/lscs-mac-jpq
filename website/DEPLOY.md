@@ -1,42 +1,27 @@
-# 国内服务器部署
+# 国内官网部署
 
-官网是纯静态页面。构建结果位于 `website/dist/`，可直接交给 Nginx 托管。
+官网是静态页面。构建结果位于 `website/dist/`，由既有 Web 服务提供。
 
-## 当前正式环境
+## v0.7.5 待发布配置
 
-- 网址：`https://acyg.me/lsjpq/`
-- 下载地址：`https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.6.7.zip`
-
-服务器地址、目录和登录方式只保存在本机工作区记忆，不进入公开仓库。官网由现有 Web 服务直接提供静态文件。
+- 页面、结构化数据和国内下载地址均指向 `v0.7.5`。
+- 默认下载：`https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.7.5.zip`
+- 安装包体积和 SHA-256 以最终公证包为准；发布前补充核验，不能沿用旧版本数据。
 
 ## 构建
 
 ```bash
-VITE_DOWNLOAD_URL="https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v0.6.7.zip" npm run build
+npm run build
 ```
 
-构建会把首页搜索与分享信息、静态无脚本说明和 `public/og-image.png` 一并复制到 `dist/`。当前公开版为 `0.6.7`；更新版本时，必须同步更新首页展示、下载地址、结构化数据和分享图。
+仅当部署有已经核验的替代镜像时，才设置 `VITE_DOWNLOAD_URL` 覆盖默认下载地址。
 
-构建后使用站点 SEO 验收工具检查 `index.html`、`dist/index.html` 和 1200×630 分享图。网站目录的 sitemap 与 robots.txt 由主站统一提供。
+## 发布与验收
 
-## Nginx 最小配置
+先将最终安装包和页面成品上传到新的临时位置，核对页面下载链接、安装包 SHA-256 与 GitHub Release 一致后，再切换正式文件。发布完成后验证：
 
-```nginx
-server {
-    listen 80;
-    server_name 你的域名;
-    root /你的官网目录/dist;
-    index index.html;
+1. 公网首页和下载链接返回成功。
+2. 页面、结构化数据与分享标题均为 `v0.7.5`。
+3. 国内安装包与 GitHub Release 的体积和 SHA-256 一致。
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location ~* \.(js|css|png|jpg|jpeg|svg|webp|ico)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-更新时先上传到新的临时目录，核对文件和安装包哈希，再替换正式目录。不要在仓库中保存服务器密码或私钥。
+服务器路径、登录方式、备份位置与运行指纹不写入仓库；详细部署证据只保存在本地交付记录。

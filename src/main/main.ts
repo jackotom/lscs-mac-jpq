@@ -1655,9 +1655,11 @@ async function createOpponentOverlayWindow(options: {
 }
 
 async function createOpponentOverlayWindowInstance(qaDemo: boolean): Promise<BrowserWindow> {
-  const expandedBounds = await loadOpponentOverlayBounds();
+  const restoredState = await loadOpponentOverlayWindowState();
+  const expandedBounds = restoredState.expanded();
   if (opponentOverlayWindow && !opponentOverlayWindow.isDestroyed()) return opponentOverlayWindow;
-  opponentOverlayWindowState = new OpponentOverlayWindowState(expandedBounds);
+  opponentOverlayWindowState = restoredState;
+  opponentOverlayRestoreCollapsed = restoredState.isCollapsed();
 
   const createdWindow = new BrowserWindow({
     ...getOverlayWindowPlatformOptions(),
@@ -1757,21 +1759,33 @@ async function releaseOpponentOverlayWindow(expectedWindow?: BrowserWindow): Pro
   }
 }
 
-async function loadOpponentOverlayBounds() {
+async function loadOpponentOverlayWindowState() {
   const fallbackWorkArea = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
   const workAreas = screen.getAllDisplays().map((display) => display.workArea);
   try {
     const value = JSON.parse(await fs.readFile(getOpponentOverlayBoundsPath(), "utf8")) as unknown;
-    return normalizeOpponentOverlayWindowBounds(value, workAreas, fallbackWorkArea);
+    const state = OpponentOverlayWindowState.fromPersisted(value);
+    return new OpponentOverlayWindowState(
+      normalizeOpponentOverlayWindowBounds(state.expanded(), workAreas, fallbackWorkArea),
+      state.isCollapsed()
+    );
   } catch {
     // The default bounds are used until the user moves or resizes the window.
   }
-  return normalizeOpponentOverlayWindowBounds(undefined, workAreas, fallbackWorkArea);
+  return new OpponentOverlayWindowState(
+    normalizeOpponentOverlayWindowBounds(undefined, workAreas, fallbackWorkArea)
+  );
 }
 
 async function saveOpponentOverlayBounds(bounds: { x: number; y: number; width: number; height: number }) {
+  const stateSnapshot = opponentOverlayWindowState?.toPersisted();
+  const persisted = {
+    ...stateSnapshot,
+    ...bounds,
+    collapsed: stateSnapshot?.collapsed === true
+  };
   await fs.mkdir(path.dirname(getOpponentOverlayBoundsPath()), { recursive: true });
-  await fs.writeFile(getOpponentOverlayBoundsPath(), `${JSON.stringify(bounds)}\n`, "utf8");
+  await fs.writeFile(getOpponentOverlayBoundsPath(), `${JSON.stringify(persisted)}\n`, "utf8");
 }
 
 function getOpponentOverlayBoundsPath() {
