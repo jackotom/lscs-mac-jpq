@@ -5,6 +5,8 @@ import {
   type TrackerSettings
 } from "../shared/types";
 import type { ArenaInsightsResult, CollectionInsightsResult } from "./types";
+import type { DecisionOffer } from "../shared/decisionInsights";
+import { parseMatchDetails } from "../shared/matchAnalytics";
 
 const trackerStatuses = new Set(["idle", "watching", "paused", "missing-log", "error"]);
 const trackerModes = new Set(["ladder", "arena"]);
@@ -65,7 +67,74 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
   if (!isPublicCardTracking(value.cardTracking)) {
     throw new Error("卡牌生命周期数据无效，已拒绝更新界面。");
   }
+  if (!isOptionalMatchDetails(value.matchDetails)) {
+    throw new Error("对局详情数据无效，已拒绝更新界面。");
+  }
+  if (!isDecisionState(value)) {
+    throw new Error("决策参考数据无效，已拒绝更新界面。");
+  }
   return value as unknown as PublicTrackerState;
+}
+
+function isOptionalMatchDetails(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "friendlyClass", "opponentClass", "initiative", "durationSeconds", "turns", "deckKey", "mulligan"
+  ]) || (value.deckKey !== undefined && !isBoundedText(value.deckKey, 10000)) ||
+      (value.friendlyClass !== undefined && !isBoundedText(value.friendlyClass, 100)) ||
+      (value.opponentClass !== undefined && !isBoundedText(value.opponentClass, 100)) ||
+      (value.mulligan !== undefined && (!Array.isArray(value.mulligan) || value.mulligan.length > 50 ||
+        !value.mulligan.every((row) => isRecord(row) && hasOnlyKeys(row, [
+          "cardId", "cardName", "drawnBeforeMulligan", "keptInMulligan", "inHandAfterMulligan"
+        ]) && isBoundedText(row.cardId) && isBoundedText(row.cardName, 300))))) return false;
+  try {
+    parseMatchDetails(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isBoundedText(value: unknown, maximum = 200): value is string {
+  return isNonEmptyString(value) && value.length <= maximum;
+}
+
+function isDecisionOffer(value: unknown, extraKeys: readonly string[] = []): value is DecisionOffer {
+  return isRecord(value) && hasOnlyKeys(value, ["id", "kind", "cards", ...extraKeys]) &&
+    isBoundedText(value.id) && isOneOf(value.kind, ["mulligan", "discover"]) &&
+    Array.isArray(value.cards) && value.cards.length > 0 && value.cards.length <= 50 &&
+    hasUniqueStrings(value.cards, "entityId") && value.cards.every((card) =>
+      isRecord(card) && hasOnlyKeys(card, ["entityId", "cardId", "name"]) &&
+      isBoundedText(card.entityId) && isBoundedText(card.cardId) && isBoundedText(card.name, 300));
+}
+
+function isDecisionState(state: Record<string, unknown>): boolean {
+  const offer = state.decisionOffer;
+  const insight = state.decisionInsight;
+  if (offer === undefined) return insight === undefined;
+  if (state.gameActive !== true || !isDecisionOffer(offer)) return false;
+  if (insight === undefined) return true;
+  if (!isRecord(insight) || !isDecisionOffer(insight, ["mode", "status", "source", "updatedAt", "note", "stats"]) ||
+      insight.id !== offer.id || insight.kind !== offer.kind || insight.cards.length !== offer.cards.length ||
+      !insight.cards.every((card) => offer.cards.some((offered) =>
+        card.entityId === offered.entityId && card.cardId === offered.cardId && card.name === offered.name)) ||
+      typeof insight.mode !== "string" || !matchModes.has(insight.mode) ||
+      !isOneOf(insight.status, ["loading", "ready", "unavailable"]) || !isBoundedText(insight.source) ||
+      (insight.updatedAt !== undefined && (!isBoundedText(insight.updatedAt, 100) || !isValidDate(insight.updatedAt))) ||
+      (insight.note !== undefined && !isBoundedText(insight.note, 2000)) ||
+      !Array.isArray(insight.stats) || insight.stats.length > offer.cards.length ||
+      (insight.status !== "ready" && insight.stats.length > 0) || !hasUniqueStrings(insight.stats, "cardId")) {
+    return false;
+  }
+  return insight.stats.every((row) => isRecord(row) &&
+    hasOnlyKeys(row, ["cardId", "samples", "winRate", "keepRate", "keepSamples", "drawnWinRate", "metric"]) &&
+    isBoundedText(row.cardId) && offer.cards.some((card) => card.cardId === row.cardId) &&
+    Number.isSafeInteger(row.samples) && isPositiveInteger(row.samples) &&
+    typeof row.winRate === "number" && isOptionalPercentage(row.winRate) &&
+    (row.keepSamples === undefined || (Number.isSafeInteger(row.keepSamples) && isPositiveInteger(row.keepSamples))) &&
+    (row.keepRate === undefined || row.keepSamples !== undefined) &&
+    isOptionalPercentage(row.keepRate) && isOptionalPercentage(row.drawnWinRate) &&
+    (row.metric === undefined || isOneOf(row.metric, ["mulligan", "discovered", "drawn"])));
 }
 
 function isDeckIdentity(value: unknown): boolean {
@@ -854,6 +923,7 @@ function isMatchRecord(value: unknown): boolean {
     typeof value.result === "string" && matchResults.has(value.result) &&
     typeof value.mode === "string" && matchModes.has(value.mode) &&
     (value.deckName === undefined || typeof value.deckName === "string") &&
+    isOptionalMatchDetails(value.details) &&
     typeof value.endedAt === "string" && Number.isFinite(Date.parse(value.endedAt));
 }
 

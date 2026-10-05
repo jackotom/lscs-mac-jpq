@@ -11,6 +11,7 @@ import {
 } from "./CardTrackingGroups";
 import { PublicMatchCounters } from "./PublicMatchCounters";
 import { MatchPulse } from "./MatchPulse";
+import { DecisionInsightsPanel } from "./DecisionInsightsPanel";
 
 export function OverlayPanel({ view, className = "overlay-shell", style, onClose, onOpenSettings, isLoading = false, loadError }: OverlayPanelProps) {
   const needsLogRepair = view.status.tone === "offline";
@@ -64,6 +65,7 @@ export function OverlayPanel({ view, className = "overlay-shell", style, onClose
         </section>
       ) : (
         <>
+          <DecisionInsightsPanel insight={view.decisionInsight} />
           {view.arena?.showDeckStats ? (
             <ArenaOverlay arena={view.arena} globalEffects={view.globalEffects ?? []} />
           ) : (

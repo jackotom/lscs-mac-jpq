@@ -6,6 +6,9 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { ArenaDraftEngine } from "../shared/arenaDraftEngine.js";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
 import { TrackerEngine } from "../shared/trackerEngine.js";
+import { MatchTelemetry } from "../shared/matchTelemetry.js";
+import { DecisionInsightController } from "./decisionInsightController.js";
+import type { DecisionStatsService } from "./decisionStatsService.js";
 import { projectTrackerState, type TrackerStateCapability } from "./trackerStateProjection.js";
 import type { CollectionDeck, CollectionDeckScanResult, MatchMode, MatchRecord, PublicTrackerState, TrackerMode } from "../shared/types.js";
 import { CardDataService, type CardDatabaseLoadOptions, type CardDatabaseLoadResult } from "./cardDataService.js";
@@ -79,6 +82,8 @@ interface ArenaRatingsRequest {
 
 export class TrackerService {
   private engine = new TrackerEngine();
+  private telemetry = new MatchTelemetry();
+  private decisionInsights: DecisionInsightController;
   private arena = new ArenaDraftEngine();
   private cardData = new CardDataService();
   private arenaRatings = new ArenaRatingService();
@@ -121,6 +126,7 @@ export class TrackerService {
   private activeMatchId: string | undefined;
   private activeMatchDeckName: string | undefined;
   private activeMatchMode: MatchMode = "unknown";
+  private manualDeckKey: string | undefined;
   private playerLogFriendlyController: number | undefined;
   private powerGameExplicitLocalPlayerIds = new Set<number>();
   private powerGamePlayerNames = new Map<number, string>();
@@ -140,8 +146,11 @@ export class TrackerService {
     private readonly collectionDecks?: CollectionDeckScanner,
     private readonly arenaScreenRecognizer: ArenaScreenRecognizerLike = new ArenaScreenRecognizer(),
     private readonly matchHistory = new MatchHistoryStore(),
-    private readonly arenaInsights?: ArenaInsightsRecorder
-  ) {}
+    private readonly arenaInsights?: ArenaInsightsRecorder,
+    decisionStats?: Pick<DecisionStatsService, "getStats">
+  ) {
+    this.decisionInsights = new DecisionInsightController(() => { if (!this.disposing) this.pushState(); }, decisionStats);
+  }
 
   private get activeLogPath() {
     return this.sessionContext.activeLogPath;
@@ -174,9 +183,15 @@ export class TrackerService {
       constructedScreenMode: this.constructedScreenMode,
       trackerMode: this.resolveTrackerMode(state),
       arena: this.arena.getState(),
+      decisionOffer: state.gameActive ? this.telemetry.getOffer() : undefined,
+      matchDetails: state.gameActive ? { ...this.telemetry.getDetails(), ...this.matchDeckKey(state) } : undefined,
       error: state.error ?? this.arenaInsightsWriteError
     };
-    return projectTrackerState(capability, fullState);
+    const arenaMode = this.telemetry.getArenaMode();
+    return projectTrackerState(capability, {
+      ...fullState,
+      decisionInsight: this.decisionInsights.update(fullState, this.resolveCurrentMatchMode(undefined, state), arenaMode)
+    });
   }
 
   getStateForWebContents(webContentsId: number): PublicTrackerState {
@@ -792,6 +807,7 @@ export class TrackerService {
   }
 
   private markGameStartedWhilePowerLogStalled() {
+    this.telemetry.reset();
     this.engine.resetAfterGame();
     this.engine.resetForGame();
     this.constructedScreenMode = undefined;
@@ -803,6 +819,7 @@ export class TrackerService {
   }
 
   private resetForPowerLogReplay() {
+    this.telemetry.reset();
     this.engine.resetForLogSession();
     this.constructedScreenMode = undefined;
     this.collectionDeckPreviewSource = undefined;
@@ -817,6 +834,8 @@ export class TrackerService {
   }
 
   private beginSession() {
+    this.telemetry.reset();
+    this.decisionInsights.dispose();
     const sessionContext = createSessionContext(createSessionKey(++this.sessionSequence));
     this.sessionContext = sessionContext;
     this.stopSessionRefresh();
@@ -1183,6 +1202,8 @@ export class TrackerService {
       return;
     }
     this.engine.importDeck(deckText, cardDatabase.database, cardDatabase.warnings);
+    const state = this.engine.getState();
+    this.manualDeckKey = completeDeckKey(state.deck.map(card => ({ ...card, cardId: card.cardId ?? card.details?.cardId })), [30, 40], state.deckCode);
   }
 
   private async refreshCollectionDecks(logPath: string, sessionContext: SessionContext): Promise<CollectionDeck | undefined> {
@@ -1224,6 +1245,7 @@ export class TrackerService {
   private applyCardDatabase(database: NonNullable<CardDatabaseLoadResult["database"]>) {
     this.engine.setCardDatabase(database);
     this.arena.setCardDatabase(database);
+    this.telemetry.setCardDatabase(database);
     this.lastArenaDeckSignature = undefined;
     this.syncArenaDeckToTracker();
     this.pushState();
@@ -1473,6 +1495,11 @@ export class TrackerService {
     }
 
     const lines = currentText.split(/\r?\n/);
+    this.telemetry.setPlayerNames(this.powerGamePlayerNames);
+    for (const line of lines) {
+      this.telemetry.applyLine(line, this.engine.getFriendlyController());
+      if (line.includes("CREATE_GAME")) this.telemetry.setPlayerNames(this.powerGamePlayerNames);
+    }
     const firstGameEndIndex = lines.findIndex(isGameEndLine);
     if (firstGameEndIndex >= 0) {
       const beforeGameEnd = lines.slice(0, firstGameEndIndex).join("\n");
@@ -1502,7 +1529,7 @@ export class TrackerService {
     }
     if (gameStartLine) {
       const sourcePath = this.engine.getState().logPath ?? this.activeLogPath ?? "Power.log";
-      this.activeMatchId = createHash("sha256").update(`${path.resolve(sourcePath)}\n${gameStartLine}`).digest("hex");
+      this.activeMatchId = createHash("sha256").update(`${path.resolve(sourcePath)}\n${getPowerLogTimestamp(gameStartLine) ?? gameStartLine}`).digest("hex");
       this.activeMatchDeckName = this.engine.getState().deckName;
       this.activeMatchMode = this.resolveCurrentMatchMode(gameType);
     }
@@ -1541,12 +1568,14 @@ export class TrackerService {
       result: resultLine.result,
       mode: this.activeMatchMode,
       ...(this.activeMatchDeckName ? { deckName: this.activeMatchDeckName } : {}),
+      details: { ...this.telemetry.getDetails(), ...this.matchDeckKey() },
       endedAt
     };
     if (match.mode === "arena" && match.result !== "tie" && this.activeArenaRunId && this.arenaInsights) {
       const runId = this.activeArenaRunId;
       const arenaResult = match.result;
-      this.enqueueArenaInsightsWrite(() => this.arenaInsights!.recordResult(runId, arenaResult, match.id, []));
+      const mulligan = (match.details?.mulligan ?? []).map(card => ({ ...card, won: arenaResult === "win" }));
+      this.enqueueArenaInsightsWrite(() => this.arenaInsights!.recordResult(runId, arenaResult, match.id, mulligan));
     }
     this.pendingMatchIds.add(match.id);
     this.matchHistoryWrites = this.matchHistoryWrites.then(async () => {
@@ -1562,7 +1591,7 @@ export class TrackerService {
     });
   }
 
-  private resolveCurrentMatchMode(gameType?: "arena" | "constructed"): MatchMode {
+  private resolveCurrentMatchMode(gameType?: "arena" | "constructed", state?: PublicTrackerState): MatchMode {
     if (gameType === "arena" || this.activeArenaGame || this.arena.getState().status === "playing") {
       return "arena";
     }
@@ -1570,9 +1599,23 @@ export class TrackerService {
       return this.constructedScreenMode;
     }
 
-    const activeDeckId = this.engine.getState().autoMatchedDeckId;
+    const activeDeckId = (state ?? this.engine.getState()).autoMatchedDeckId;
     const activeDeck = activeDeckId ? this.knownCollectionDecks.find((deck) => deck.id === activeDeckId) : undefined;
     return activeDeck ? getConstructedMode(activeDeck) ?? "unknown" : "unknown";
+  }
+
+  private matchDeckKey(state = this.engine.getState()): { deckKey?: string } {
+    if (state.manualDeck) return this.manualDeckKey ? { deckKey: this.manualDeckKey } : {};
+    const arena = this.arena.getState();
+    if (this.activeMatchMode === "arena") {
+      const deckKey = !arena.awaitingExactDeck && (arena.status === "complete" || arena.status === "playing")
+        ? completeDeckKey(arena.deck, [30]) : undefined;
+      return deckKey ? { deckKey } : {};
+    }
+    const selected = this.knownCollectionDecks.find(deck => deck.id === state.autoMatchedDeckId);
+    const deckKey = selected && state.deckIdentity?.status === "confirmed"
+      ? completeDeckKey(selected.cards, [30, 40], selected.rawDeckString) : undefined;
+    return deckKey ? { deckKey } : {};
   }
 
   private resolveTrackerMode(state: PublicTrackerState): TrackerMode | undefined {
@@ -1965,6 +2008,13 @@ export class TrackerService {
       }
     }
   }
+}
+
+function completeDeckKey(cards: readonly { cardId?: string; count: number }[], sizes: readonly number[], deckCode?: string) {
+  if (!sizes.includes(cards.reduce((total, card) => total + card.count, 0)) || cards.some(card => !card.cardId)) return undefined;
+  const counts = new Map<string, number>();
+  for (const card of cards) counts.set(card.cardId!, (counts.get(card.cardId!) ?? 0) + card.count);
+  return createHash("sha256").update(deckCode?.trim() || JSON.stringify([...counts].sort(([a], [b]) => a.localeCompare(b)))).digest("hex");
 }
 
 function getArenaRecognitionContext(state: ReturnType<ArenaDraftEngine["getState"]>): string {

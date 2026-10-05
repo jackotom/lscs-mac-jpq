@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import type { MatchHistoryResult, MatchMode, MatchRecord, MatchResult } from "../shared/types.js";
+import { parseMatchDetails } from "../shared/matchAnalytics.js";
 
 const DATABASE_FILE_NAME = "match-history.json";
 export class MatchHistoryStore {
@@ -34,12 +35,13 @@ export class MatchHistoryStore {
   async add(match: MatchRecord): Promise<void> {
     const operation = this.writeChain.catch(() => undefined).then(async () => {
       try {
+        const parsed = parseMatchRecord(match);
         const current = await this.readMatches();
         if (current.some((entry) => entry.id === match.id)) {
           this.writeErrors.delete(match.id);
           return;
         }
-        const matches = [...current, match]
+        const matches = [...current, parsed]
           .sort((left, right) => Date.parse(right.endedAt) - Date.parse(left.endedAt));
         await this.writeMatches(matches);
         this.writeErrors.delete(match.id);
@@ -112,7 +114,7 @@ function parseMatchRecord(value: unknown): MatchRecord {
     throw new Error("对局记录字段无效");
   }
 
-  return { id, result, mode, ...(deckName ? { deckName } : {}), endedAt };
+  return { id, result, mode, ...(deckName ? { deckName } : {}), endedAt, ...(value.details !== undefined ? { details: parseMatchDetails(value.details) } : {}) };
 }
 
 function isMatchResult(value: unknown): value is MatchResult {

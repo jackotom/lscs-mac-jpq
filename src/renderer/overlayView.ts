@@ -83,6 +83,9 @@ export function toOverlayPanelViewModel(
   const matchPulse = shouldClearTrackedData ? undefined : toMatchPulseViewFromState(state);
   return {
     cardTracking,
+    decisionInsight: side === "friendly" && state.gameActive === true && state.status === "watching"
+      ? state.decisionInsight
+      : undefined,
     summary: {
       totalCards: shouldClearTrackedData ? 0 : state.summary.totalCards,
       remainingCards: hasUnknownConstructedDeck || isUnknownActiveDeckCount

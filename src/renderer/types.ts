@@ -25,6 +25,7 @@ import type { HomeNewsResult } from "../shared/homeNews";
 import type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 import type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
 import type { AppPermissionId, AppPermissionSummary } from "../shared/appPermissions";
+import type { DecisionInsight } from "../shared/decisionInsights";
 
 export type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 export type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
@@ -314,6 +315,7 @@ export interface MatchPulseView {
 }
 
 export interface OverlayPanelViewModel {
+  decisionInsight?: DecisionInsight;
   cardTracking: OverlayCardTrackingView;
   summary: OverlayDeckSummary;
   deckIdentity: OverlayDeckIdentity;

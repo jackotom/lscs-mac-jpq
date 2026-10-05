@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { autoRepairLogConfigOnStartup, ensureLogConfig, inspectLogConfig } from "./logConfig.js";
 import { discoverLogCandidates } from "./logDiscovery.js";
 import { TrackerService } from "./trackerService.js";
+import { DecisionStatsService } from "./decisionStatsService.js";
 import {
   ArenaScreenRecognizer,
   ScreenCaptureError,
@@ -171,7 +172,8 @@ const arenaScreenRecognizer = process.env.QA_SKIP_ARENA_SCREEN_RECOGNITION === "
   : new ArenaScreenRecognizer(undefined, captureHearthstoneDisplay);
 const arenaInsights = new ArenaInsightsService(new ArenaRunStore());
 const collectionInsights = new CollectionInsightsService(new CollectionInsightsStore());
-const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer, undefined, arenaInsights);
+const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer, undefined, arenaInsights,
+  process.mas ? undefined : new DecisionStatsService());
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
 const masLogAccessStore = new MasLogAccessStore({
   filePath: path.join(app.getPath("userData"), "mas-log-access.json"),

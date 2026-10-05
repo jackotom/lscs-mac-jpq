@@ -20,6 +20,7 @@ import { SingleAttackOverlay } from "./components/SingleAttackOverlay";
 import { HealthOverlay } from "./components/HealthOverlay";
 import { SmartCounterOverlay } from "./components/SmartCounterOverlay";
 import { OverlayPanel } from "./components/OverlayPanel";
+import { DecisionInsightsPanel } from "./components/DecisionInsightsPanel";
 import { LadderDeckRecommendationPanel } from "./components/LadderDeckRecommendationPanel";
 import { TopBar, trackerStatusLabels } from "./components/TopBar";
 import { MatchPulse } from "./components/MatchPulse";
@@ -1861,6 +1862,7 @@ function App() {
         ) : (
           <>
             <DashboardOverview state={deckDisplayState} status={trackerStatus} />
+            <DecisionInsightsPanel insight={state.gameActive === true && state.status === "watching" ? state.decisionInsight : undefined} />
             <section className="dashboard-grid" aria-label="记牌器工作区">
               <DeckPanel cards={deckCards} summary={deckSummary} logIssue={logRepairNotice ? undefined : logIssue} />
               <EventFeed events={events} />
@@ -2007,7 +2009,7 @@ function DesktopSidebar({
         </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.7.8</small>
+          <small>v0.7.9</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">

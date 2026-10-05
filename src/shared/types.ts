@@ -6,6 +6,7 @@ import type {
 } from "./cardDatabase.js";
 import type { ArenaCardRating, ArenaScoreQuality } from "./arenaRatings.js";
 import type { DataSourceProvenance } from "./dataSourceProvenance.js";
+import type { DecisionInsight, DecisionOffer, MatchDetails } from "./decisionInsights.js";
 
 export type Zone = "DECK" | "HAND" | "PLAY" | "GRAVEYARD" | "REMOVEDFROMGAME" | "SETASIDE" | "SECRET" | "UNKNOWN";
 
@@ -214,6 +215,7 @@ export interface MatchRecord {
   readonly mode: MatchMode;
   readonly deckName?: string;
   readonly endedAt: string;
+  readonly details?: MatchDetails;
 }
 
 export interface MatchHistorySummary {
@@ -409,6 +411,9 @@ export interface TurnTimerState {
 }
 
 export interface PublicTrackerState {
+  readonly decisionOffer?: DecisionOffer;
+  readonly decisionInsight?: DecisionInsight;
+  readonly matchDetails?: MatchDetails;
   readonly manualDeck?: boolean;
   status: "idle" | "watching" | "paused" | "missing-log" | "error";
   trackerMode?: TrackerMode;
