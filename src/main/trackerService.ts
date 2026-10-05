@@ -94,6 +94,7 @@ export class TrackerService {
   private arenaRatingsLoadedAt = new Map<string, number>();
   private lastArenaDeckSignature: string | undefined;
   private latestArenaDeckEventAtMs: number | undefined;
+  private latestArenaRedraftAtMs: number | undefined;
   private waitingForFirstPowerLog = false;
   private sessionRefreshTimer: NodeJS.Timeout | undefined;
   private sessionRefreshKey: SessionKey | undefined;
@@ -366,6 +367,11 @@ export class TrackerService {
     }
     const currentArenaText = selectCurrentArenaLogText(arenaContent);
     this.arena.applyArenaText(currentArenaText);
+    const arenaStat = arenaLogPath ? await fs.stat(arenaLogPath).catch(() => undefined) : undefined;
+    if (!this.isCurrentSession(sessionContext)) return this.getState();
+    this.latestArenaRedraftAtMs = arenaStat
+      ? resolveLatestLogEventAt(currentArenaText, arenaStat.mtimeMs, isArenaRedraftStartLine)
+      : undefined;
     this.syncArenaInsightsFromState();
     await this.applyInitialExactArenaDeck(selectedCollectionDeck, arenaLogPath, sessionContext);
     if (!this.isCurrentSession(sessionContext)) {
@@ -376,7 +382,6 @@ export class TrackerService {
     this.syncArenaDeckToTracker();
     if (arenaLogPath) {
       this.offsets.set(arenaLogPath, Buffer.byteLength(arenaContent));
-      const arenaStat = await fs.stat(arenaLogPath).catch(() => undefined);
       if (!this.isCurrentSession(sessionContext)) {
         return this.getState();
       }
@@ -637,7 +642,6 @@ export class TrackerService {
       if (this.isArenaLog(logPath, sessionContext)) {
         const arenaRunBeforeUpdate = this.activeArenaRunId;
         this.arena.setPreferArenaLogPicks(true);
-        const previousRedraftGenerationId = this.arena.getState().redraftGenerationId;
         if (wasTruncated) {
           this.arena.reset();
           this.arena.setPreferArenaLogPicks(true);
@@ -650,12 +654,17 @@ export class TrackerService {
           this.arena.applyArenaText(text);
         }
         const latestEventAtMs = resolveLatestLogEventAt(text, modifiedAtMs, isArenaDeckStateLine);
+        const redraftAtMs = resolveLatestLogEventAt(text, modifiedAtMs, isArenaRedraftStartLine);
+        if (wasTruncated || (redraftAtMs !== undefined && redraftAtMs > (this.latestArenaRedraftAtMs ?? 0))) {
+          this.latestArenaRedraftAtMs = redraftAtMs;
+          this.pendingExactArenaDeck = undefined;
+        }
         if (wasTruncated) {
           this.latestArenaDeckEventAtMs = latestEventAtMs;
         } else if (latestEventAtMs !== undefined) {
           this.latestArenaDeckEventAtMs = Math.max(this.latestArenaDeckEventAtMs ?? latestEventAtMs, latestEventAtMs);
         }
-        this.bindLatestExactArenaDeckToNewRedraft(previousRedraftGenerationId, text, modifiedAtMs, sessionContext);
+        this.bindLatestExactArenaDeckToNewRedraft(text, modifiedAtMs, sessionContext);
         this.applyPendingExactArenaDeck(sessionContext);
         this.syncArenaInsightsFromState();
         if (/SetDraftMode\s*-\s*NO_ACTIVE_DRAFT\b/i.test(text) && arenaRunBeforeUpdate) {
@@ -679,8 +688,8 @@ export class TrackerService {
           return;
         }
         if (isArenaCollectionDeck(selectedCollectionDeck)) {
-          this.rememberLatestExactArenaDeck(selectedCollectionDeck, text, modifiedAtMs, sessionContext);
-          if (!this.applyExactArenaDeck(selectedCollectionDeck, sessionContext)) {
+          if (this.rememberLatestExactArenaDeck(selectedCollectionDeck, text, modifiedAtMs, sessionContext) &&
+              !this.applyExactArenaDeck(selectedCollectionDeck, sessionContext)) {
             this.deferExactArenaDeck(selectedCollectionDeck, sessionContext);
           }
         } else if (selectedCollectionDeck && this.arena.getState().status === "inactive" && !this.activeArenaGame) {
@@ -819,6 +828,7 @@ export class TrackerService {
     this.pendingExactArenaDeck = undefined;
     this.latestExactArenaDeckObservation = undefined;
     this.latestArenaDeckEventAtMs = undefined;
+    this.latestArenaRedraftAtMs = undefined;
     this.activeArenaGame = false;
     this.activeArenaRunId = undefined;
     this.lastArenaRunSnapshotSignature = undefined;
@@ -1767,9 +1777,8 @@ export class TrackerService {
     if (!this.isCurrentSession(sessionContext)) {
       return false;
     }
-    const eventAtMs = resolveLatestLogEventAt(`${appendedText}\n${deck.rawText}`, modifiedAtMs);
-    if (eventAtMs === undefined) {
-      this.latestExactArenaDeckObservation = undefined;
+    const eventAtMs = resolveExactArenaDeckEventAt(deck, appendedText, modifiedAtMs);
+    if (eventAtMs === undefined || eventAtMs < (this.latestArenaRedraftAtMs ?? 0)) {
       return false;
     }
 
@@ -1785,7 +1794,6 @@ export class TrackerService {
   }
 
   private bindLatestExactArenaDeckToNewRedraft(
-    previousRedraftGenerationId: string | undefined,
     arenaText: string,
     modifiedAtMs: number,
     sessionContext: SessionContext
@@ -1794,17 +1802,12 @@ export class TrackerService {
       return false;
     }
     const state = this.arena.getState();
-    if (!state.redraftGenerationId || state.redraftGenerationId === previousRedraftGenerationId) {
+    const redraftAtMs = resolveLatestLogEventAt(arenaText, modifiedAtMs, isArenaRedraftStartLine);
+    if (!state.redraftGenerationId || redraftAtMs === undefined) {
       return false;
     }
 
     const observation = this.latestExactArenaDeckObservation;
-    this.latestExactArenaDeckObservation = undefined;
-    const redraftAtMs = resolveLatestLogEventAt(
-      arenaText,
-      modifiedAtMs,
-      (line) => /SetDraftMode\s*-\s*REDRAFTING\b|OnRedraftBegin\b/i.test(line)
-    );
     if (
       !observation ||
       observation.sessionKey !== sessionContext.key ||
@@ -1863,11 +1866,12 @@ export class TrackerService {
       return false;
     }
 
-    const [arenaStat, decksStat] = await Promise.all([
-      fs.stat(arenaLogPath).catch(() => undefined),
+    const [decksText, decksStat] = await Promise.all([
+      fs.readFile(deck.sourcePath, "utf8").catch(() => ""),
       fs.stat(deck.sourcePath).catch(() => undefined)
     ]);
-    if (!this.isCurrentSession(sessionContext) || !arenaStat || !decksStat || decksStat.mtimeMs < arenaStat.mtimeMs) {
+    if (!this.isCurrentSession(sessionContext) || !decksStat ||
+        !this.rememberLatestExactArenaDeck(deck, decksText, decksStat.mtimeMs, sessionContext)) {
       return false;
     }
     return this.applyExactArenaDeck(deck, sessionContext);
@@ -2067,6 +2071,19 @@ function expectedDecksLogPath(sessionDir: string | undefined, discoveredPath: st
 
 function isArenaDeckStateLine(line: string) {
   return /SetDraftMode|DraftManager\.OnChoicesAndContents|Client chooses:|DraftManager\.OnRedraftBegin/i.test(line);
+}
+
+function isArenaRedraftStartLine(line: string) {
+  return /SetDraftMode\s*-\s*REDRAFTING\b|OnRedraftBegin\b/i.test(line);
+}
+
+function resolveExactArenaDeckEventAt(deck: CollectionDeck, fallbackText: string, modifiedAtMs: number) {
+  // Warnings also update Decks.log's mtime. Only the selected deck block dates its cards.
+  const isDeckSnapshotLine = (line: string) =>
+    /(?:Starting Arena Game With Deck|Finished Editing Deck|#\s*Deck ID\s*[:=])/i.test(line) ||
+    Boolean(deck.rawDeckString && line.trimEnd().endsWith(deck.rawDeckString));
+  return resolveLatestLogEventAt(deck.rawText, modifiedAtMs, isDeckSnapshotLine) ??
+    resolveLatestLogEventAt(fallbackText, modifiedAtMs, isDeckSnapshotLine);
 }
 
 function resolveMatchEndedAt(resultLine: string, powerLogModifiedAtMs?: number): string | undefined {
@@ -2279,7 +2296,9 @@ function toTrackerCollectionDecks(
         mode: deck.mode,
         cards: deck.cards.map((card) => ({ ...card })),
         rawDeckString: deck.rawDeckString,
-        rawText: deck.rawDeckString ?? deck.name ?? deck.id,
+        rawText: "rawText" in deck && typeof deck.rawText === "string"
+          ? deck.rawText
+          : deck.rawDeckString ?? deck.name ?? deck.id,
         sourcePath: deck.sourcePath ?? fallbackSourcePath,
         updatedAt: deck.updatedAt ?? new Date(0).toISOString(),
         warnings: deck.warnings ?? []
@@ -2319,7 +2338,8 @@ function mergeActiveDeckMetadata(deck: CollectionDeck, activeDeck: CollectionDec
     heroClass: activeDeck.heroClass ?? deck.heroClass,
     format: activeDeck.format ?? deck.format,
     mode: activeDeck.mode ?? deck.mode,
-    rawDeckString: activeDeck.rawDeckString ?? deck.rawDeckString
+    rawDeckString: activeDeck.rawDeckString ?? deck.rawDeckString,
+    rawText: activeDeck.rawText || deck.rawText
   };
 }
 

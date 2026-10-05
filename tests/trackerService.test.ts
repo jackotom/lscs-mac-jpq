@@ -943,7 +943,7 @@ describe("TrackerService log selection", () => {
       [
         "D 20:00:14.3904530 GameState.DebugPrintPower() - CREATE_GAME",
         "D 20:00:14.3904530 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
-        "D 20:00:14.3904530 GameState.DebugPrintGame() - PlayerID=2, PlayerName=昏沉的幽灵#511319",
+        "D 20:00:14.3904530 GameState.DebugPrintGame() - PlayerID=2, PlayerName=TestPlayer#1234",
         "D 20:00:14.3904530 PowerTaskList.DebugPrintPower() - CREATE_GAME",
         "D 20:00:17.7867120 PowerTaskList.DebugPrintPower() - SHOW_ENTITY - Updating Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=37 zone=DECK zonePos=0 cardId= player=2] CardID=CORE_UNG_809",
         "D 20:00:17.7867120 PowerTaskList.DebugPrintPower() - tag=CONTROLLER value=2",

@@ -1,9 +1,6 @@
 import AppKit
 import CoreGraphics
 import Foundation
-import ImageIO
-import ScreenCaptureKit
-import UniformTypeIdentifiers
 
 func resolveFrontmostName(_ workspaceName: String?, frontWindowOwner: String?) -> String? {
   guard let name = workspaceName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
@@ -39,54 +36,40 @@ func frontNormalWindow() -> [String: Any]? {
 enum WindowCaptureError: Error {
   case permissionDenied
   case windowNotFound
-  case unsupportedSystem
-  case imageEncodingFailed
+  case captureFailed
 }
 
-func captureWindow(windowId: CGWindowID, ownerPid: pid_t) async throws -> CGImage {
+func captureWindow(windowId: CGWindowID, ownerPid: pid_t) throws -> Data {
   guard CGPreflightScreenCaptureAccess() else {
     throw WindowCaptureError.permissionDenied
   }
-  guard #available(macOS 14.0, *) else {
-    throw WindowCaptureError.unsupportedSystem
-  }
-  return try await captureWindowWithScreenCaptureKit(windowId: windowId, ownerPid: ownerPid)
-}
-
-@available(macOS 14.0, *)
-func captureWindowWithScreenCaptureKit(windowId: CGWindowID, ownerPid: pid_t) async throws -> CGImage {
-  let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-  guard let window = content.windows.first(where: {
-    $0.windowID == windowId && $0.owningApplication?.processID == ownerPid
-  }) else {
+  guard let windows = CGWindowListCopyWindowInfo(.optionIncludingWindow, windowId) as? [[String: Any]],
+        windows.contains(where: {
+          ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == windowId &&
+          ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == ownerPid &&
+          ($0[kCGWindowOwnerName as String] as? String)?.caseInsensitiveCompare("Hearthstone") == .orderedSame
+        }) else {
     throw WindowCaptureError.windowNotFound
   }
-  let filter = SCContentFilter(desktopIndependentWindow: window)
-  let contentRect = filter.contentRect
-  let scale = CGFloat(filter.pointPixelScale)
-  guard contentRect.width > 0, contentRect.height > 0, scale > 0 else {
-    throw WindowCaptureError.windowNotFound
-  }
-  let configuration = SCStreamConfiguration()
-  configuration.width = Int((contentRect.width * scale).rounded())
-  configuration.height = Int((contentRect.height * scale).rounded())
-  configuration.showsCursor = false
-  return try await SCScreenshotManager.captureImage(
-    contentFilter: filter,
-    configuration: configuration
-  )
-}
 
-func writePng(_ image: CGImage) throws {
-  let data = NSMutableData()
-  guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
-    throw WindowCaptureError.imageEncodingFailed
+  // SCContentFilter(desktopIndependentWindow:) aborts inside SkyLight for Hearthstone.
+  // Capture the verified window ID with the system tool; never fall back to the display.
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("hearthstone-screen-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
+                                        attributes: [.posixPermissions: 0o700])
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let imageURL = directory.appendingPathComponent("window.png")
+  let process = Process()
+  process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+  process.arguments = ["-x", "-o", "-l", String(windowId), imageURL.path]
+  try process.run()
+  process.waitUntilExit()
+  guard process.terminationStatus == 0 else { throw WindowCaptureError.captureFailed }
+  let image = try Data(contentsOf: imageURL)
+  guard image.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) else {
+    throw WindowCaptureError.captureFailed
   }
-  CGImageDestinationAddImage(destination, image, nil)
-  guard CGImageDestinationFinalize(destination) else {
-    throw WindowCaptureError.imageEncodingFailed
-  }
-  FileHandle.standardOutput.write(data as Data)
+  return image
 }
 
 if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--resolve" {
@@ -100,15 +83,12 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--resolve" {
 if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--capture-window",
    let windowId = UInt32(CommandLine.arguments[2]),
    let ownerPid = Int32(CommandLine.arguments[3]), windowId > 0, ownerPid > 0 {
-  Task {
-    do {
-      try writePng(try await captureWindow(windowId: CGWindowID(windowId), ownerPid: ownerPid))
-      exit(0)
-    } catch {
-      exit(1)
-    }
+  do {
+    FileHandle.standardOutput.write(try captureWindow(windowId: CGWindowID(windowId), ownerPid: ownerPid))
+    exit(0)
+  } catch {
+    exit(1)
   }
-  dispatchMain()
 }
 
 let frontmostApplication = NSWorkspace.shared.frontmostApplication
