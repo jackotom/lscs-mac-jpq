@@ -28,7 +28,7 @@ export interface ArenaScreenRecognitionOptions {
 
 export class ScreenCaptureError extends Error {
   constructor(
-    readonly status: "permission-denied" | "capture-failed",
+    readonly status: "permission-denied" | "capture-failed" | "window-not-found",
     message: string
   ) {
     super(message);
@@ -103,7 +103,7 @@ export class ArenaScreenRecognizer {
       captureDirectory = await mkdtemp(path.join(tmpdir(), SCREEN_CAPTURE_DIRECTORY_PREFIX));
       const imagePath = path.join(captureDirectory, "screen.png");
       try {
-        await writeFile(imagePath, await this.captureScreenImageWithTimeout());
+        await writeFile(imagePath, await this.captureScreenImageWithTimeout(), { mode: 0o600 });
       } catch (error) {
         const status = error instanceof ScreenCaptureError ? error.status : "permission-denied";
         if (status === "permission-denied") {

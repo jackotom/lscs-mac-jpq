@@ -17,15 +17,13 @@ function functionSource(contents: string, name: string, nextName: string): strin
 }
 
 describe("app permission integration", () => {
-  it("checks screen recording access before either automatic desktop capture path", () => {
+  it("checks screen recording access before the verified automatic capture boundary", () => {
     const main = source("src/main/main.ts");
     const capture = functionSource(main, "captureHearthstoneDisplay", "isAnyInteractiveOverlayFocused");
-    const display = functionSource(main, "resolveHearthstoneDisplay", "getMovableAuxiliaryOverlayWindow");
 
     expect(capture.indexOf("isScreenCaptureGranted()")).toBeGreaterThanOrEqual(0);
-    expect(capture.indexOf("isScreenCaptureGranted()")).toBeLessThan(capture.indexOf("desktopCapturer.getSources"));
-    expect(display.indexOf("isScreenCaptureGranted()")).toBeGreaterThanOrEqual(0);
-    expect(display.indexOf("isScreenCaptureGranted()")).toBeLessThan(display.indexOf("desktopCapturer.getSources"));
+    expect(capture.indexOf("isScreenCaptureGranted()")).toBeLessThan(capture.indexOf("captureVerifiedHearthstoneImage"));
+    expect(capture).toContain("captureWindow: getHearthstoneWindowImage");
     expect(capture).not.toContain("shell.openExternal");
   });
 

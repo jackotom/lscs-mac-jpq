@@ -1,7 +1,13 @@
 import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { createCardDatabase, getCardInfo, listCardInfos, type CardDatabase } from "../shared/cardDatabase.js";
+import { createCardDatabase, getCardInfo, listCardInfos, type CardDatabase, type CardInfo } from "../shared/cardDatabase.js";
+import {
+  CARD_SOURCE_PROVENANCE,
+  formatSourceLabel,
+  mergeSourceProvenance,
+  type DataSourceProvenance
+} from "../shared/dataSourceProvenance.js";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 
 const OFFICIAL_PAGE_URL = "https://hs.blizzard.cn/cards/";
@@ -23,7 +29,6 @@ const FOREIGN_FETCH_ATTEMPT_TIMEOUT_MS = 15000;
 const OVERALL_FETCH_BUDGET_MS = 15000;
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const CACHE_SCHEMA_VERSION = 1;
-const SOURCE_NAME = "Blizzard 官方卡牌浏览器";
 const FOREIGN_SUPPLEMENTAL_SOURCE_NAME = "Firestone 全量中文卡牌库";
 const FOREIGN_SUPPLEMENTAL_MIN_CARD_COUNT = 30_000;
 const FOREIGN_SUPPLEMENTAL_MIN_VALID_RATIO = 0.98;
@@ -38,6 +43,7 @@ export interface CardDatabaseLoadResult {
   readonly database?: CardDatabase;
   readonly warnings: readonly string[];
   readonly source?: string;
+  readonly sources?: readonly DataSourceProvenance[];
   readonly version?: string;
   readonly cardCount?: number;
 }
@@ -55,6 +61,11 @@ interface CachedCardDatabaseLoadResult extends CardDatabaseLoadResult {
   readonly isStale: boolean;
   readonly requiresRelatedCardRefresh: boolean;
   readonly requiresForeignSupplementRefresh: boolean;
+}
+
+interface LoadedCardDatabase {
+  readonly database?: CardDatabase;
+  readonly sources: readonly DataSourceProvenance[];
 }
 
 interface OfficialCardsResponse {
@@ -84,6 +95,7 @@ const sharedCardDatabaseLoads = new Map<string, SharedCardDatabaseLoad>();
 
 export class CardDataService {
   private cachedDatabase: CardDatabase | undefined;
+  private cachedSources: readonly DataSourceProvenance[] = [];
   private cachedForeignSupplementalDatabase: CardDatabase | undefined;
   private foreignSupplementalWarnings: string[] = [];
   private readonly cachePath: string;
@@ -102,7 +114,7 @@ export class CardDataService {
 
   async loadCardDatabase(options: CardDatabaseLoadOptions = {}): Promise<CardDatabaseLoadResult> {
     if (this.cachedDatabase && !options.forceRefresh && !options.preferCache) {
-      return this.toResult(this.cachedDatabase);
+      return this.toResult(this.cachedDatabase, undefined, [], this.cachedSources);
     }
 
     if (options.preferCache && !options.forceRefresh) {
@@ -137,19 +149,21 @@ export class CardDataService {
     if (cached?.database) {
       if (!options.forceRefresh && options.preferCache) {
         this.cachedDatabase = cached.database;
-        return this.toResult(cached.database, cached.version, cached.warnings);
+        this.cachedSources = cached.sources ?? [unknownCachedCardSource()];
+        return this.toResult(cached.database, cached.version, cached.warnings, cached.sources);
       }
 
       let readyCache = cached;
       let foreignRefreshAttempted = false;
       if (cached.requiresForeignSupplementRefresh) {
         foreignRefreshAttempted = true;
-        const foreignSupplementalDatabase = await this.readForeignSupplementalCardDatabase();
-        const database = mergeCardDatabases(cached.database, foreignSupplementalDatabase);
-        if (database && foreignSupplementalDatabase) {
+        const foreignSupplemental = await this.readForeignSupplementalCardDatabase();
+        const database = mergeCardDatabases(cached.database, foreignSupplemental.database);
+        if (database && foreignSupplemental.database) {
           readyCache = {
             ...cached,
             database,
+            sources: mergeSourceProvenance([...(cached.sources ?? [unknownCachedCardSource()]), ...foreignSupplemental.sources]),
             cardCount: Object.keys(database).length,
             requiresForeignSupplementRefresh: false
           };
@@ -165,7 +179,8 @@ export class CardDataService {
       ) {
         const readyDatabase = readyCache.database ?? cached.database;
         this.cachedDatabase = readyDatabase;
-        return this.toResult(readyDatabase, readyCache.version, readyCache.warnings);
+        this.cachedSources = readyCache.sources ?? [unknownCachedCardSource()];
+        return this.toResult(readyDatabase, readyCache.version, readyCache.warnings, readyCache.sources);
       }
 
       return this.refreshOfficial(
@@ -201,14 +216,16 @@ export class CardDataService {
         !cached.requiresRelatedCardRefresh &&
         !cached.requiresForeignSupplementRefresh
       ) {
-        return this.toResult(cached.database, version, currentWarnings());
+        return this.toResult(cached.database, version, currentWarnings(), cached.sources);
       }
 
       const officialCards = await this.fetchOfficialCards(overallStartTime);
-      legacyDatabase = await this.readLegacyCardDatabase({
+      const legacy = await this.readLegacyCardDatabase({
         refreshForeign: !foreignRefreshAttempted,
         allowForeignNetwork: !foreignRefreshAttempted
       });
+      legacyDatabase = legacy.database;
+      const sources = mergeSourceProvenance([CARD_SOURCE_PROVENANCE.blizzardCn, ...legacy.sources]);
       const mergedCards = mergeOfficialCards(officialCards, legacyDatabase);
       const database = createCardDatabase(mergedCards);
       if (Object.keys(database).length === 0) {
@@ -217,18 +234,17 @@ export class CardDataService {
       const fetchedAt = new Date().toISOString();
       await writeValidatedJsonCache(
         this.cachePath,
-        { schemaVersion: CACHE_SCHEMA_VERSION, source: SOURCE_NAME, version, fetchedAt, cards: mergedCards },
+        { schemaVersion: CACHE_SCHEMA_VERSION, source: formatSourceLabel(sources), sources, version, fetchedAt, cards: mergedCards },
         parseUsableCachedCards
       );
-      if (this.cachedForeignSupplementalDatabase) {
-        this.cachedDatabase = database;
-      }
+      this.cachedDatabase = database;
+      this.cachedSources = sources;
 
-      return this.toResult(database, version, currentWarnings());
+      return this.toResult(database, version, currentWarnings(), sources);
     } catch (error) {
       if (cached?.database) {
         return {
-          ...this.toResult(cached.database, cached.version),
+          ...this.toResult(cached.database, cached.version, [], cached.sources),
           warnings: [
             ...currentWarnings(),
             `官网卡牌库更新失败，继续使用本地 v${cached.version ?? "旧缓存"}：${formatError(error)}`
@@ -236,16 +252,16 @@ export class CardDataService {
         };
       }
 
-      legacyDatabase ??= await this.readLegacyCardDatabase({
+      const legacy = await this.readLegacyCardDatabase({
         refreshForeign: !foreignRefreshAttempted,
         allowForeignNetwork: !foreignRefreshAttempted
       });
+      legacyDatabase ??= legacy.database;
       if (legacyDatabase) {
-        if (this.cachedForeignSupplementalDatabase) {
-          this.cachedDatabase = legacyDatabase;
-        }
+        this.cachedDatabase = legacyDatabase;
+        this.cachedSources = legacy.sources;
         return {
-          ...this.toResult(legacyDatabase),
+          ...this.toResult(legacyDatabase, undefined, [], legacy.sources),
           warnings: [...currentWarnings(), `官网卡牌库读取失败，继续使用旧卡牌库：${formatError(error)}`]
         };
       }
@@ -265,15 +281,20 @@ export class CardDataService {
       );
       this.cachedForeignSupplementalDatabase = foreignSupplementalCache.value?.database;
       const database = mergeCardDatabases(parsed.database, foreignSupplementalCache.value?.database) ?? parsed.database;
+      const sources = mergeSourceProvenance([
+        ...(parsed.sources ?? [unknownCachedCardSource()]),
+        ...(foreignSupplementalCache.value?.database ? [CARD_SOURCE_PROVENANCE.firestoneCards] : [])
+      ]);
       const fetchedAt = parsed.fetchedAt ?? new Date(cache.mtimeMs ?? Date.now()).toISOString();
       const fetchedAtMs = Date.parse(fetchedAt);
       const requiresRelatedCardRefresh = hasMissingRelatedCards(database);
       return {
         cards: parsed.cards,
         database,
+        sources,
         warnings: [cache.warning, foreignSupplementalCache.warning]
           .filter((warning): warning is string => Boolean(warning)),
-        source: parsed.source ?? SOURCE_NAME,
+        source: formatSourceLabel(sources),
         version: parsed.version,
         cardCount: Object.keys(database).length,
         fetchedAt,
@@ -296,23 +317,26 @@ export class CardDataService {
   private async readLegacyCardDatabase(options: {
     readonly refreshForeign?: boolean;
     readonly allowForeignNetwork?: boolean;
-  } = {}): Promise<CardDatabase | undefined> {
-    const [legacyDatabase, foreignSupplementalDatabase] = await Promise.all([
+  } = {}): Promise<LoadedCardDatabase> {
+    const [legacy, foreignSupplemental] = await Promise.all([
       this.readPrimaryLegacyCardDatabase(),
       this.readForeignSupplementalCardDatabase(
         options.refreshForeign === true,
         options.allowForeignNetwork !== false
       )
     ]);
-    return mergeCardDatabases(legacyDatabase, foreignSupplementalDatabase);
+    return {
+      database: mergeCardDatabases(legacy.database, foreignSupplemental.database),
+      sources: mergeSourceProvenance([...legacy.sources, ...foreignSupplemental.sources])
+    };
   }
 
-  private async readPrimaryLegacyCardDatabase(): Promise<CardDatabase | undefined> {
+  private async readPrimaryLegacyCardDatabase(): Promise<LoadedCardDatabase> {
     const cachedAll = await readJsonArray(this.legacyAllCachePath);
     if (cachedAll) {
       const database = createCardDatabase(cachedAll);
       if (Object.keys(database).length > 0) {
-        return database;
+        return { database, sources: [CARD_SOURCE_PROVENANCE.hearthstoneJson] };
       }
     }
 
@@ -323,7 +347,7 @@ export class CardDataService {
         await fs.writeFile(this.legacyAllCachePath, JSON.stringify(payload), "utf8");
         const database = createCardDatabase(payload);
         if (Object.keys(database).length > 0) {
-          return database;
+          return { database, sources: [CARD_SOURCE_PROVENANCE.hearthstoneJson] };
         }
       }
     } catch {
@@ -334,7 +358,7 @@ export class CardDataService {
     if (cachedCollectible) {
       const database = createCardDatabase(cachedCollectible);
       if (Object.keys(database).length > 0) {
-        return database;
+        return { database, sources: [CARD_SOURCE_PROVENANCE.hearthstoneJson] };
       }
     }
 
@@ -342,20 +366,23 @@ export class CardDataService {
       const payload = await this.fetchJson(LEGACY_COLLECTIBLE_DATABASE_URL);
       if (Array.isArray(payload)) {
         const database = createCardDatabase(payload);
-        return Object.keys(database).length > 0 ? database : undefined;
+        return {
+          database: Object.keys(database).length > 0 ? database : undefined,
+          sources: Object.keys(database).length > 0 ? [CARD_SOURCE_PROVENANCE.hearthstoneJson] : []
+        };
       }
-      return undefined;
+      return { sources: [] };
     } catch {
-      return undefined;
+      return { sources: [] };
     }
   }
 
   private async readForeignSupplementalCardDatabase(
     forceRefresh = false,
     allowNetwork = true
-  ): Promise<CardDatabase | undefined> {
+  ): Promise<LoadedCardDatabase> {
     if (this.cachedForeignSupplementalDatabase && !forceRefresh) {
-      return this.cachedForeignSupplementalDatabase;
+      return { database: this.cachedForeignSupplementalDatabase, sources: [CARD_SOURCE_PROVENANCE.firestoneCards] };
     }
     if (allowNetwork) {
       const refresh = await this.refreshForeignSupplementalCardDatabase();
@@ -364,7 +391,7 @@ export class CardDataService {
       }
       if (refresh.database) {
         this.cachedForeignSupplementalDatabase = refresh.database;
-        return refresh.database;
+        return { database: refresh.database, sources: [CARD_SOURCE_PROVENANCE.firestoneCards] };
       }
     }
 
@@ -374,7 +401,10 @@ export class CardDataService {
       "海外卡牌补充库"
     );
     this.cachedForeignSupplementalDatabase = cached.value?.database;
-    return this.cachedForeignSupplementalDatabase;
+    return {
+      database: this.cachedForeignSupplementalDatabase,
+      sources: this.cachedForeignSupplementalDatabase ? [CARD_SOURCE_PROVENANCE.firestoneCards] : []
+    };
   }
 
   private async refreshForeignSupplementalCardDatabase(): Promise<ForeignSupplementalRefreshResult> {
@@ -530,12 +560,14 @@ export class CardDataService {
   private toResult(
     database: CardDatabase,
     version?: string,
-    warnings: readonly string[] = []
+    warnings: readonly string[] = [],
+    sources: readonly DataSourceProvenance[] = [unknownCachedCardSource()]
   ): CardDatabaseLoadResult {
     return {
       database,
       warnings,
-      source: SOURCE_NAME,
+      source: formatSourceLabel(sources),
+      sources,
       version,
       cardCount: Object.keys(database).length
     };
@@ -547,6 +579,7 @@ function parseCachedCards(value: unknown): {
   readonly source?: string;
   readonly version?: string;
   readonly fetchedAt?: string;
+  readonly sources?: readonly DataSourceProvenance[];
 } | undefined {
   if (Array.isArray(value)) {
     return { cards: value };
@@ -565,7 +598,8 @@ function parseCachedCards(value: unknown): {
     cards: value.cards,
     source: typeof value.source === "string" ? value.source : undefined,
     version: typeof value.version === "string" ? value.version : undefined,
-    fetchedAt: value.fetchedAt
+    fetchedAt: value.fetchedAt,
+    sources: parseSourceProvenance(value.sources)
   };
 }
 
@@ -670,6 +704,13 @@ function parseForeignSupplementalCards(value: unknown): {
   ) {
     return undefined;
   }
+  const rawCardIds = value.map((card) => isRecord(card) && typeof card.id === "string" ? card.id.trim() : "");
+  if (
+    rawCardIds.some((cardId) => !/^[A-Za-z0-9_]{1,120}$/.test(cardId)) ||
+    !REQUIRED_AZEROTHS_MOST_WANTED_CARD_IDS.every((cardId) => rawCardIds.includes(cardId))
+  ) {
+    return undefined;
+  }
   const enrichedCards = value.map((card) => {
     if (!isRecord(card) || typeof card.id !== "string") return card;
     const cardId = card.id.trim();
@@ -682,12 +723,10 @@ function parseForeignSupplementalCards(value: unknown): {
     };
   });
   const database = createCardDatabase(enrichedCards);
-  const cards = listCardInfos(database);
-  const cardIds = new Set(cards.map((card) => card.cardId));
+  const parsedCardIds = new Set(Object.values(database).map((card) => (card as CardInfo).cardId));
   if (
-    cards.length / value.length < FOREIGN_SUPPLEMENTAL_MIN_VALID_RATIO ||
-    !REQUIRED_AZEROTHS_MOST_WANTED_CARD_IDS.every((cardId) => cardIds.has(cardId)) ||
-    cards.some((card) => !card.cardId || !/^[A-Za-z0-9_]{1,120}$/.test(card.cardId))
+    Object.keys(database).length / value.length < FOREIGN_SUPPLEMENTAL_MIN_VALID_RATIO ||
+    !REQUIRED_AZEROTHS_MOST_WANTED_CARD_IDS.every((cardId) => parsedCardIds.has(cardId))
   ) {
     return undefined;
   }
@@ -700,6 +739,27 @@ function parseForeignSupplementalCache(value: unknown): {
 } | undefined {
   const parsed = parseCachedCards(value);
   return parsed ? parseForeignSupplementalCards(parsed.cards) : undefined;
+}
+
+function unknownCachedCardSource(): DataSourceProvenance {
+  return {
+    id: "historical-card-cache",
+    label: "历史卡牌缓存（来源记录不完整）",
+    urls: [],
+    authorization: { status: "unknown", note: "该缓存生成时没有保存结构化来源链，需刷新后才能确认。" }
+  };
+}
+
+function parseSourceProvenance(value: unknown): readonly DataSourceProvenance[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const knownSources = new Map<string, DataSourceProvenance>(Object.values(CARD_SOURCE_PROVENANCE).map((source) => [source.id, source]));
+  const sources: DataSourceProvenance[] = [];
+  for (const source of value) {
+    if (!isRecord(source) || typeof source.id !== "string") return undefined;
+    // A cached origin cannot grant permission or replace the registered endpoint.
+    sources.push(knownSources.get(source.id) ?? unknownCachedCardSource());
+  }
+  return mergeSourceProvenance(sources);
 }
 
 function hasMissingRelatedCards(database: CardDatabase): boolean {

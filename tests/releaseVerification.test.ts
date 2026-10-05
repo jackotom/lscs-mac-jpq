@@ -10,16 +10,20 @@ function read(relativePath: string) {
 
 describe("release verification entrypoint", () => {
   it("keeps the visible app version aligned with package metadata", () => {
-    const packageJson = JSON.parse(read("package.json")) as { version: string };
+    const packageJson = JSON.parse(read("package.json")) as { version: string; scripts?: Record<string, string> };
     const packageLock = JSON.parse(read("package-lock.json")) as { version: string; packages: { "": { version: string } } };
     const appSource = read("src/renderer/App.tsx");
     const packageScript = read("scripts/package-mac-arm64.sh");
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.7.5");
+    expect(packageJson.version).toBe("0.7.7");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
+    expect(packageJson.scripts?.["package:mac-arm64"]).toContain("npm run build:native");
+    expect(packageJson.scripts?.["package:mac-arm64"]).toContain("npm run build");
+    expect(packageJson.scripts?.build).toContain("tsc --noEmit");
+    expect(packageJson.scripts?.build).toContain("vite build");
     expect(packageScript).toContain('app_version="$(node -p');
     expect(packageScript).toContain('--app-version="$app_version"');
     expect(packageScript).toContain('--build-version="$app_version"');
@@ -33,6 +37,33 @@ describe("release verification entrypoint", () => {
     expect(packageJson.scripts?.["verify:release"]).toBe("bash scripts/verify-release.sh");
   });
 
+  it("keeps a separate MAS package path with sandbox signing inputs", () => {
+    const packageJson = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
+    const masScript = read("scripts/package-mas-arm64.sh");
+    const masEntitlements = read("build/mas.entitlements.plist");
+
+    expect(packageJson.scripts?.["package:mas-arm64"]).toBe("bash scripts/package-mas-arm64.sh");
+    expect(masScript).toContain("--platform=mas");
+    expect(masScript).toContain("MAS_PROVISIONING_PROFILE");
+    expect(masScript).toContain("productbuild --component");
+    expect(masScript).toContain("productsign --sign");
+    expect(masScript).toContain('"炉石记牌器"');
+    expect(masScript).toContain('cc.acyg.hearthstonemactracker');
+    expect(masScript).not.toContain("hearthstone-deck-tracker.icns");
+    expect(masEntitlements).toContain("com.apple.security.app-sandbox");
+    expect(masEntitlements).toContain("com.apple.security.files.user-selected.read-write");
+  });
+
+  it("keeps the full tracker UI and local core available in MAS builds", () => {
+    const appSource = read("src/renderer/App.tsx");
+    const mainSource = read("src/main/main.ts");
+
+    expect(appSource).not.toContain("MasWorkbench");
+    expect(mainSource).not.toContain("本机发行版不加载外部卡牌资料");
+    expect(mainSource).toContain("securityScopedBookmarks: process.mas");
+    expect(mainSource).toContain("masLogAccessStore.restore()");
+  });
+
   it("regenerates the checksum for every newly packaged archive", () => {
     const packageScript = read("scripts/package-mac-arm64.sh");
 
@@ -40,13 +71,14 @@ describe("release verification entrypoint", () => {
     expect(packageScript).toContain('mv "$publish_checksum" "$target_checksum"');
   });
 
-  it("fails closed while checking tests, build, replay, screenshots, signing, architecture, and launch", () => {
+  it("runs the full test suite once before packaging, replay, signing, and launch checks", () => {
     const script = read("scripts/verify-release.sh");
 
     expect(script).toContain("set -euo pipefail");
-    expect(script).toContain("npm test");
-    expect(script).toContain("npm run typecheck");
-    expect(script).toContain("npm run build");
+    expect(script.match(/^npm test$/gm)).toHaveLength(1);
+    expect(script).toContain("npm run package:mac-arm64");
+    expect(script).not.toContain("npm run typecheck");
+    expect(script).not.toContain("npm run build");
     expect(script).toContain("fixtures/logs/session-2026-07-10");
     expect(script).toContain("fixtures/logs/auto-match-session");
     expect(script).toContain("fixtures/logs/constructed-duplicate-create");
@@ -221,14 +253,14 @@ describe("release verification entrypoint", () => {
     expect(mainSource).toContain("trackerSettings: rendererInspection.trackerSettings ?? trackerSettings");
   });
 
-  it("ties the manual, global-switch, fold, and bounds contracts to the release gate", () => {
+  it("uses the full suite instead of rerunning selected release tests", () => {
     const script = read("scripts/verify-release.sh");
 
-    expect(script).toContain("tests/mainWindowVisibility.test.ts");
-    expect(script).toContain("tests/automaticOverlayController.test.ts");
-    expect(script).toContain("tests/opponentOverlayWindowController.test.ts");
-    expect(script).toContain("tests/trackerSettingsStore.test.ts");
-    expect(script).toContain("tests/overlayWindowBounds.test.ts");
+    expect(script).not.toContain("tests/mainWindowVisibility.test.ts");
+    expect(script).not.toContain("tests/automaticOverlayController.test.ts");
+    expect(script).not.toContain("tests/opponentOverlayWindowController.test.ts");
+    expect(script).not.toContain("tests/trackerSettingsStore.test.ts");
+    expect(script).not.toContain("tests/overlayWindowBounds.test.ts");
   });
 
   it("documents generated evidence and manual-only screen recording acceptance", () => {

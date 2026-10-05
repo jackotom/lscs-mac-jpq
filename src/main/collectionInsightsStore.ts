@@ -12,10 +12,17 @@ export class CollectionInsightsStore {
 
   async read(): Promise<CollectionSnapshot | undefined> {
     await this.writeChain.catch(() => undefined);
+    let raw: string;
     try {
-      return parseCollectionSnapshot(JSON.parse(await fs.readFile(this.filePath, "utf8")));
+      raw = await fs.readFile(this.filePath, "utf8");
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") return undefined;
+      throw error;
+    }
+
+    try {
+      return parseCollectionSnapshot(JSON.parse(raw));
+    } catch {
       await this.quarantineCorruptFile();
       return undefined;
     }

@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -48,5 +48,14 @@ describe("CollectionInsightsStore", () => {
     const store = new CollectionInsightsStore(file);
     expect(await store.read()).toBeUndefined();
     expect((await readdir(path.dirname(file))).some((name) => name.includes(".corrupt-"))).toBe(true);
+  });
+
+  it("audit regression keeps an unreadable snapshot in place instead of quarantining it", async () => {
+    const file = await fixturePath();
+    await symlink(file, file);
+    const store = new CollectionInsightsStore(file);
+
+    await expect(store.read()).rejects.toMatchObject({ code: "ELOOP" });
+    expect((await readdir(path.dirname(file))).some((name) => name.includes(".corrupt-"))).toBe(false);
   });
 });

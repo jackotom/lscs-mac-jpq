@@ -45,3 +45,10 @@ cache/
 /code-review.md
 /docs/superpowers/
 /mika-v2-upgrade/
+
+# Local handoffs, audits, and store account correspondence
+/HANDOFF.md
+/.planning/
+/:-
+/docs/audit-repairs-*.md
+/docs/store/

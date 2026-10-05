@@ -78,7 +78,7 @@ function artwork(row: Element): HTMLImageElement | null {
 }
 
 describe("opponent used-history artwork", () => {
-  it("retries direct crop, direct image, then card-id artwork in order", () => {
+  it("retries current image, crop fallback, then rendered card-id artwork", () => {
     const item = historyItem("fallback", {
       cardId: "TEST_001",
       details: {
@@ -94,11 +94,11 @@ describe("opponent used-history artwork", () => {
     render(<CardTrackingGroups view={tracking({ used: [item] })} opponent />);
     const row = screen.getByText("卡牌 fallback").closest(".overlay-history-card-row")!;
 
-    expect(artwork(row)?.src).toBe("https://example.test/direct-crop.jpg");
-    fireEvent.error(artwork(row)!);
     expect(artwork(row)?.src).toBe("https://example.test/direct-image.png");
     fireEvent.error(artwork(row)!);
-    expect(artwork(row)?.src).toContain("/v1/tiles/TEST_001.jpg");
+    expect(artwork(row)?.src).toBe("https://example.test/direct-crop.jpg");
+    fireEvent.error(artwork(row)!);
+    expect(artwork(row)?.src).toContain("/v1/render/latest/zhCN/256x/TEST_001.png");
   });
 
   it("removes exhausted artwork but keeps the card name", () => {

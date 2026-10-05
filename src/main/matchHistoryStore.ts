@@ -5,8 +5,6 @@ import path from "node:path";
 import type { MatchHistoryResult, MatchMode, MatchRecord, MatchResult } from "../shared/types.js";
 
 const DATABASE_FILE_NAME = "match-history.json";
-const MATCH_HISTORY_LIMIT = 100;
-
 export class MatchHistoryStore {
   private writeChain: Promise<void> = Promise.resolve();
   private writeErrors = new Map<string, Error>();
@@ -42,8 +40,7 @@ export class MatchHistoryStore {
           return;
         }
         const matches = [...current, match]
-          .sort((left, right) => Date.parse(right.endedAt) - Date.parse(left.endedAt))
-          .slice(0, MATCH_HISTORY_LIMIT);
+          .sort((left, right) => Date.parse(right.endedAt) - Date.parse(left.endedAt));
         await this.writeMatches(matches);
         this.writeErrors.delete(match.id);
       } catch (error) {

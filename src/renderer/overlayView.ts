@@ -128,6 +128,16 @@ export function toOverlayDeckIdentity(state: PublicTrackerState): OverlayDeckIde
     };
   }
 
+  if (state.manualDeck) {
+    return {
+      name: "手动牌表",
+      compactName: "手动牌表",
+      status: "manual",
+      detail: "按导入牌表记牌",
+      compactDetail: "导入牌表"
+    };
+  }
+
   if (state.deckIdentity) {
     const identity = state.deckIdentity;
     if (identity.status === "confirmed") {
@@ -222,6 +232,7 @@ function waitingIdentityCopy(state: PublicTrackerState) {
 
 function isPublishedIdentityUnconfirmed(state: PublicTrackerState): boolean {
   return Boolean(
+    !state.manualDeck &&
     state.deckIdentity &&
     state.deckIdentity.status !== "confirmed" &&
     (!state.arena || state.arena.status === "inactive")
@@ -288,7 +299,7 @@ function toArenaView(state: ArenaState, maxDeckRows: number) {
         count: card.count,
         ...(showDeckStats ? { pickRate: card.pickRate, deckImpact: card.deckImpact } : {}),
         details: card.details,
-        thumbnailUrl: card.details?.cropImageUrl ?? card.details?.imageUrl,
+        thumbnailUrl: card.details?.imageUrl ?? card.details?.cropImageUrl,
         unresolved: card.unresolved
       }))
       .slice(0, maxDeckRows),
@@ -304,7 +315,7 @@ function toArenaChoice(
     id: `arena-choice-${choice.cardId ?? choice.name}`,
     name: choice.name,
     score: choice.score,
-    thumbnailUrl: choice.details?.cropImageUrl ?? choice.details?.imageUrl,
+    thumbnailUrl: choice.details?.imageUrl ?? choice.details?.cropImageUrl,
     details: choice.details,
     quality: choice.quality,
     rating: choice.rating,
@@ -357,7 +368,7 @@ function toRemainingDeckItems(rows: readonly CardTrackerRow[], maxRows: number):
       cost: row.details?.manaCost,
       count: row.remaining,
       detail: `剩 ${row.remaining}/${row.count}`,
-      thumbnailUrl: row.details?.cropImageUrl ?? row.details?.imageUrl,
+      thumbnailUrl: row.details?.imageUrl ?? row.details?.cropImageUrl,
       details: row.details,
       unresolved: row.unresolved
     }));
@@ -372,7 +383,7 @@ function toZoneCardItems(rows: readonly TrackerZoneCard[], prefix: string, maxRo
       name: row.name,
       cost: row.details?.manaCost,
       count: row.count,
-      thumbnailUrl: row.details?.cropImageUrl ?? row.details?.imageUrl,
+      thumbnailUrl: row.details?.imageUrl ?? row.details?.cropImageUrl,
       details: row.details
     }));
 }

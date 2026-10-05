@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -219,7 +219,9 @@ async function runElectronScenario(
     cwd: projectRoot,
     env: createChildEnvironment(
       process.env,
-      extraEnvironment,
+      process.env.QA_EVIDENCE_DIR
+        ? { QA_SCREENSHOT_PATH: join(userData, "screenshot.png"), ...extraEnvironment }
+        : extraEnvironment,
       userData,
       isolatedPowerLog,
       inspectPath
@@ -659,6 +661,14 @@ try {
     }
   }
 } finally {
+  const evidenceDirectory = process.env.QA_EVIDENCE_DIR;
+  if (evidenceDirectory && scenarioFilter) {
+    await mkdir(evidenceDirectory, { recursive: true });
+    const directory = join(temporaryRoot, scenarioFilter);
+    for (const name of ["inspection.json", "screenshot.png"]) {
+      await copyFile(join(directory, name), join(evidenceDirectory, name)).catch(() => undefined);
+    }
+  }
   await rm(temporaryRoot, { recursive: true, force: true });
 }
 

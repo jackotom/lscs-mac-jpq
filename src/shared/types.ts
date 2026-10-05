@@ -5,6 +5,7 @@ import type {
   RelatedCardInfo
 } from "./cardDatabase.js";
 import type { ArenaCardRating, ArenaScoreQuality } from "./arenaRatings.js";
+import type { DataSourceProvenance } from "./dataSourceProvenance.js";
 
 export type Zone = "DECK" | "HAND" | "PLAY" | "GRAVEYARD" | "REMOVEDFROMGAME" | "SETASIDE" | "SECRET" | "UNKNOWN";
 
@@ -146,6 +147,7 @@ export type CardDatabaseRefreshResult =
       readonly status: "updated" | "stale";
       readonly cardCount: number;
       readonly source?: string;
+      readonly sources?: readonly DataSourceProvenance[];
       readonly version?: string;
       readonly warnings: readonly string[];
     }
@@ -407,6 +409,7 @@ export interface TurnTimerState {
 }
 
 export interface PublicTrackerState {
+  readonly manualDeck?: boolean;
   status: "idle" | "watching" | "paused" | "missing-log" | "error";
   trackerMode?: TrackerMode;
   gameActive?: boolean;
@@ -471,6 +474,7 @@ export interface CardLibraryResult {
   readonly heroClasses: readonly string[];
   readonly cardTypes: readonly string[];
   readonly source?: string;
+  readonly sources?: readonly DataSourceProvenance[];
   readonly version?: string;
   readonly warnings: readonly string[];
   readonly error?: string;

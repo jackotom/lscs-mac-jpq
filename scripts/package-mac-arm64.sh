@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
-output_dir="$root_dir/outputs"
+output_dir="${MAC_OUTPUT_DIR:-$root_dir/outputs}"
 runtime_source="$output_dir/.mac-arm64-runtime"
 stage_dir="$output_dir/.mac-arm64-stage"
 publish_dir="$output_dir/.mac-arm64-publish"

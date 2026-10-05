@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,6 +39,15 @@ describe("ArenaRunStore", () => {
     expect((await readdir(path.dirname(file))).some((name) => name.includes(".corrupt-"))).toBe(true);
     await store.upsert(run("fresh", "2026-08-22T00:00:00.000Z"));
     expect(await store.read()).toHaveLength(1);
+  });
+
+  it("audit regression keeps an unreadable archive in place instead of quarantining it", async () => {
+    const file = await fixturePath();
+    await symlink(file, file);
+    const store = new ArenaRunStore(file);
+
+    await expect(store.read()).rejects.toMatchObject({ code: "ELOOP" });
+    expect((await readdir(path.dirname(file))).some((name) => name.includes(".corrupt-"))).toBe(false);
   });
 
   it("filters completed runs by 30, 90, and 180 day windows", async () => {

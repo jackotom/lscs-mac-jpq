@@ -34,7 +34,8 @@ export function parsePublicTrackerState(value: unknown): PublicTrackerState {
       !value.events.every(isTrackerEvent) || !isSummary(value.summary) ||
       (value.trackerMode !== undefined && (typeof value.trackerMode !== "string" || !trackerModes.has(value.trackerMode))) ||
       (value.constructedScreenMode !== undefined &&
-        (typeof value.constructedScreenMode !== "string" || !constructedScreenModes.has(value.constructedScreenMode)))) {
+        (typeof value.constructedScreenMode !== "string" || !constructedScreenModes.has(value.constructedScreenMode))) ||
+      (value.manualDeck !== undefined && typeof value.manualDeck !== "boolean")) {
     throw new Error("记牌器状态数据无效，已拒绝更新界面。");
   }
   if (value.arena !== undefined && !isArenaState(value.arena)) {

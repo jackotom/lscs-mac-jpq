@@ -59,7 +59,7 @@ function toCurrentGroup(
       name: card.name,
       count: card.count,
       cost: details?.manaCost,
-      thumbnailUrl: details?.cropImageUrl ?? details?.imageUrl,
+      thumbnailUrl: details?.imageUrl ?? details?.cropImageUrl,
       details
     };
   });

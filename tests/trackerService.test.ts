@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { promises as nodeFs } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
@@ -52,6 +52,102 @@ afterEach(async () => {
 });
 
 describe("TrackerService log selection", () => {
+  it("audit regression: replays a Power.log atomically replaced with a larger new game", async () => {
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    const initial = powerLogText("12", "Fireball", "CS2_029", "64");
+    await writeFile(powerLog, initial, "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+    await service.start({ logPath: powerLog, deckText: "1x Fireball\n1x Frostbolt" });
+    expect(service.getState().friendlyHand).toEqual([expect.objectContaining({ name: "Fireball" })]);
+
+    const replacement = `${powerLogText("13", "Frostbolt", "CS2_024", "164")}\n${powerLogPadding(40)}`;
+    expect(Buffer.byteLength(replacement)).toBeGreaterThanOrEqual(Buffer.byteLength(initial));
+    const replacementPath = `${powerLog}.replacement`;
+    await writeFile(replacementPath, replacement, "utf8");
+    await rename(replacementPath, powerLog);
+
+    await vi.waitFor(() => expect(service.getState().friendlyHand).toEqual([
+      expect.objectContaining({ name: "Frostbolt", cardId: "CS2_024" })
+    ]));
+    await service.dispose();
+  });
+
+  it("audit regression: replays a same-inode Power.log overwrite that is not shorter", async () => {
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    const initial = powerLogText("12", "Fireball", "CS2_029", "64");
+    await writeFile(powerLog, initial, "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+    await service.start({ logPath: powerLog, deckText: "1x Fireball\n1x Frostbolt" });
+
+    const replacement = `${powerLogText("13", "Frostbolt", "CS2_024", "164")}\n${powerLogPadding(40)}`;
+    expect(Buffer.byteLength(replacement)).toBeGreaterThanOrEqual(Buffer.byteLength(initial));
+    await writeFile(powerLog, replacement, "utf8");
+
+    await vi.waitFor(() => expect(service.getState().friendlyHand).toEqual([
+      expect.objectContaining({ name: "Frostbolt", cardId: "CS2_024" })
+    ]));
+    await service.dispose();
+  });
+
+  it("audit regression: keeps an ordinary Power.log append incremental", async () => {
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(powerLog, powerLogText("12", "Fireball", "CS2_029", "64"), "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+    await service.start({ logPath: powerLog, deckText: "1x Fireball\n1x Frostbolt" });
+
+    await appendFile(
+      powerLog,
+      "D 12:00:03.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Frostbolt id=65 zone=DECK zonePos=1 cardId=CS2_024 player=1] tag=ZONE value=HAND\n",
+      "utf8"
+    );
+
+    await vi.waitFor(() => expect(service.getState().friendlyHand).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Fireball", count: 1 }),
+      expect.objectContaining({ name: "Frostbolt", count: 1 })
+    ])));
+    expect(service.getState().friendlyHand).toHaveLength(2);
+    await service.dispose();
+  });
+
+  it("audit regression: extends a short Power.log fingerprint before a later non-shrinking overwrite", async () => {
+    vi.resetModules();
+    const { TrackerService } = await import("../src/main/trackerService.js");
+    const sessionDir = await createSessionDir();
+    const powerLog = join(sessionDir, "Power.log");
+    await writeFile(powerLog, "D 11:59:59.000 short header\n", "utf8");
+    const service = new TrackerService(undefined, {
+      recognize: vi.fn(async () => ({ status: "ok" as const, texts: [] }))
+    });
+    await service.start({ logPath: powerLog, deckText: "1x Fireball\n1x Frostbolt" });
+
+    await appendFile(powerLog, powerLogText("12", "Fireball", "CS2_029", "64"), "utf8");
+    await vi.waitFor(() => expect(service.getState().friendlyHand).toEqual([
+      expect.objectContaining({ name: "Fireball", cardId: "CS2_029" })
+    ]));
+    const replacement = `${powerLogText("13", "Frostbolt", "CS2_024", "164")}\n${powerLogPadding(40)}`;
+    await writeFile(powerLog, replacement, "utf8");
+
+    await vi.waitFor(() => expect(service.getState().friendlyHand).toEqual([
+      expect.objectContaining({ name: "Frostbolt", cardId: "CS2_024" })
+    ]));
+    await service.dispose();
+  });
+
   it("keeps reading until the complete appended log range is consumed", async () => {
     vi.resetModules();
     vi.doMock("../src/main/cardDataService.js", () => ({
@@ -5400,4 +5496,19 @@ async function createSessionDir() {
   const sessionDir = join(root, "session");
   await mkdir(sessionDir);
   return sessionDir;
+}
+
+function powerLogText(hour: string, cardName: string, cardId: string, entityId: string) {
+  return [
+    `D ${hour}:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=Local`,
+    `D ${hour}:00:01.000 PowerTaskList.DebugPrintPower() - CREATE_GAME GameType=GT_RANKED`,
+    `D ${hour}:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=${cardName} id=${entityId} zone=DECK zonePos=1 cardId=${cardId} player=1] tag=ZONE value=HAND`
+  ].join("\n") + "\n";
+}
+
+function powerLogPadding(lines: number) {
+  return Array.from(
+    { length: lines },
+    (_value, index) => `D 13:00:03.${String(index).padStart(3, "0")} PowerTaskList.DebugPrintPower() - audit padding`
+  ).join("\n");
 }

@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import { CircleHelp, Flame, Hand, ShieldQuestion, Swords, Timer } from "lucide-react";
 import type { OpponentOverview, OpponentPlayedCard } from "../types";
 import { CardDetailBody } from "./CardDetailBody";
@@ -64,7 +65,7 @@ export function OpponentPanel({ overview, playedCards }: OpponentPanelProps) {
                 <details className="card-detail-disclosure">
                   <summary className="played-card-row">
                     {card.details?.cropImageUrl || card.details?.imageUrl ? (
-                      <img className="card-thumb" src={card.details.cropImageUrl ?? card.details.imageUrl} alt="" loading="lazy" />
+                      <CardThumbnail className="card-thumb" card={card.details} />
                     ) : (
                       <span className="mana-cost">{card.cost ?? "—"}</span>
                     )}

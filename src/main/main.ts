@@ -14,7 +14,10 @@ import {
 import { CollectionDeckService } from "./collectionDeckService.js";
 import { shouldShowArenaChoiceOverlay } from "./arenaChoiceOverlayVisibility.js";
 import { AutomaticOverlayController } from "./automaticOverlayController.js";
-import { getFrontmostAppName, isHearthstoneFrontmost, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
+import { getFrontmostAppName, getHearthstoneCaptureContext, getHearthstoneWindowImage, isHearthstoneFrontmost, isHearthstoneOrTrackerFrontmost } from "./frontmostApp.js";
+import { captureVerifiedHearthstoneImage, HearthstoneCaptureBoundaryError } from "./hearthstoneScreenCapture.js";
+import type { TrackerStateCapability } from "./trackerStateProjection.js";
+import { CARD_SOURCE_PROVENANCE, type DataSourceProvenance } from "../shared/dataSourceProvenance.js";
 import { resolveFrontmostAppHelperPath } from "./frontmostApp.js";
 import { CardPreviewVisibilityGate } from "./cardPreviewVisibility.js";
 import {
@@ -72,12 +75,6 @@ import { registerFriendlyOverlayIpc } from "./friendlyOverlayIpc.js";
 import { registerOpponentOverlayIpc } from "./opponentOverlayIpc.js";
 import { OpponentOverlayWindowState } from "./opponentOverlayWindowState.js";
 import { OpponentOverlayWindowController } from "./opponentOverlayWindowController.js";
-import {
-  HEARTHSTONE_DISPLAY_CAPTURE_TYPES,
-  HEARTHSTONE_WINDOW_CAPTURE_TYPES,
-  selectHearthstoneWindowCaptureSource,
-  selectTargetDisplayCaptureSource
-} from "./screenCaptureSource.js";
 import { LadderDeckRecommendationService } from "./ladderDeckRecommendationService.js";
 import { LadderDeckOverlayController, resolveLadderDeckMode } from "./ladderDeckOverlayController.js";
 import { getLadderDeckOverlayBounds } from "./ladderDeckOverlayBounds.js";
@@ -108,6 +105,7 @@ import { ArenaInsightsService } from "./arenaInsightsService.js";
 import { CollectionInsightsStore } from "./collectionInsightsStore.js";
 import { CollectionInsightsService, parseCollectionCsvIpcInput } from "./collectionInsightsService.js";
 import { createAppPermissionManager } from "./appPermissions.js";
+import { MasLogAccessStore } from "./masLogAccess.js";
 
 if (process.env.QA_USER_DATA_DIR) {
   app.setPath("userData", process.env.QA_USER_DATA_DIR);
@@ -127,9 +125,21 @@ async function loadRendererPage(
   );
   if (devUrl) {
     await window.loadURL(devUrl);
-    return;
+  } else {
+    await window.loadFile(path.join(__dirname, "../../dist/index.html"), { query });
   }
-  await window.loadFile(path.join(__dirname, "../../dist/index.html"), { query });
+  const ready = await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const check = () => {
+        if (document.documentElement.dataset.rendererReady === "true") resolve(true);
+        else if (Date.now() >= deadline) resolve(false);
+        else setTimeout(check, 25);
+      };
+      check();
+    })
+  `);
+  if (!ready) throw new Error("窗口界面未完成初始化。");
 }
 
 const diagnosticLogger = new DiagnosticLogger(app.getPath("logs"));
@@ -163,10 +173,21 @@ const arenaInsights = new ArenaInsightsService(new ArenaRunStore());
 const collectionInsights = new CollectionInsightsService(new CollectionInsightsStore());
 const tracker = new TrackerService(collectionDecks, arenaScreenRecognizer, undefined, arenaInsights);
 const trackerSettingsStore = new TrackerSettingsStore(app.getPath("userData"));
+const masLogAccessStore = new MasLogAccessStore({
+  filePath: path.join(app.getPath("userData"), "mas-log-access.json"),
+  host: {
+    startAccessingSecurityScopedResource: (bookmarkData) => {
+      const stop = app.startAccessingSecurityScopedResource(bookmarkData);
+      return () => stop();
+    }
+  },
+  isMas: process.mas,
+  environment: process.env
+});
 const auxiliaryOverlayWindowStateStore = new AuxiliaryOverlayWindowStateStore(app.getPath("userData"));
 let trackerSettings: TrackerSettings = DEFAULT_TRACKER_SETTINGS;
 const homeNews = new HomeNewsService();
-let cardLibraryMetadata: { source?: string; version?: string } = {};
+let cardLibraryMetadata: { source?: string; sources?: readonly DataSourceProvenance[]; version?: string } = {};
 let mainWindow: BrowserWindow | undefined;
 let overlayWindow: BrowserWindow | undefined;
 let overlayWindowCreationPromise: Promise<BrowserWindow> | undefined;
@@ -271,6 +292,7 @@ const appQuitController = new AppQuitController({
     statusTray?.destroy();
     statusTray = undefined;
     await tracker.dispose();
+    masLogAccessStore.dispose();
     await appRunState.markClean().catch((error) => {
       diagnosticLogger.warn("保存正常退出状态失败", error);
     });
@@ -331,33 +353,16 @@ async function captureHearthstoneDisplay() {
     );
   }
   try {
-    const displays = screen.getAllDisplays();
-    const targetDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const thumbnailSize = displays.reduce(
-      (size, display) => ({
-        width: Math.max(size.width, Math.round(display.bounds.width * display.scaleFactor)),
-        height: Math.max(size.height, Math.round(display.bounds.height * display.scaleFactor))
-      }),
-      { width: 1, height: 1 }
-    );
-    const windowSources = await desktopCapturer.getSources({
-      types: [...HEARTHSTONE_WINDOW_CAPTURE_TYPES],
-      thumbnailSize
+    const image = await captureVerifiedHearthstoneImage({
+      readContext: getHearthstoneCaptureContext,
+      captureWindow: getHearthstoneWindowImage
     });
-    let source = selectHearthstoneWindowCaptureSource(windowSources);
-    if (!source || source.thumbnail.isEmpty()) {
-      const displaySources = await desktopCapturer.getSources({
-        types: [...HEARTHSTONE_DISPLAY_CAPTURE_TYPES],
-        thumbnailSize
-      });
-      source = selectTargetDisplayCaptureSource(displaySources, targetDisplay.id);
-    }
-    if (!source || source.thumbnail.isEmpty()) {
-      throw new Error("无法读取炉石所在屏幕。");
-    }
     lastCaptureDiagnostic = undefined;
-    return source.thumbnail.toPNG();
+    return image;
   } catch (error) {
+    if (error instanceof HearthstoneCaptureBoundaryError) {
+      throw new ScreenCaptureError("window-not-found", error.message);
+    }
     const diagnostic = error instanceof Error ? error.message : String(error);
     if (diagnostic !== lastCaptureDiagnostic) {
       lastCaptureDiagnostic = diagnostic;
@@ -592,6 +597,9 @@ if (hasSingleInstanceLock) {
       app.setActivationPolicy("regular");
       await app.dock?.show();
     }
+    await masLogAccessStore.restore().catch((error) => {
+      diagnosticLogger.warn("恢复商店版炉石日志授权失败", error);
+    });
     diagnosticLogger.info("应用启动");
     const previousRun = await appRunState.begin(app.getVersion()).catch((error) => {
       diagnosticLogger.warn("运行状态初始化失败，将继续启动", error);
@@ -618,7 +626,7 @@ if (hasSingleInstanceLock) {
       userDataDirectory: app.getPath("userData"),
       repairSettings: () => trackerSettingsStore.repairOnStartup(),
       repairLogConfig: () => autoRepairLogConfigOnStartup({
-        environment: process.env
+        environment: process.mas ? { ...process.env, QA_SKIP_LOG_CONFIG_REPAIR: "1" } : process.env
       }),
       requiredResources: [
         {
@@ -894,6 +902,12 @@ function registerIpc() {
   });
   secureHandle("tracker:discover-logs", () => discoverLogCandidates());
   secureHandle("tracker:get-home-news", () => homeNews.load());
+  secureHandle("tracker:open-data-source-url", async (event, url: unknown) => {
+    assertMainWindowSender(event);
+    const allowedUrls = Object.values(CARD_SOURCE_PROVENANCE).flatMap((source) => [...source.urls]);
+    if (typeof url !== "string" || !allowedUrls.includes(url)) throw new Error("数据来源地址无效");
+    await shell.openExternal(url);
+  });
   secureHandle("tracker:get-arena-hero-win-rate-ranking", () => arenaHeroStats.load());
   secureHandle("tracker:open-home-news-item", async (_event, itemId: unknown) => {
     if (typeof itemId !== "string" || !/^[a-zA-Z0-9_-]{1,120}$/.test(itemId)) {
@@ -904,7 +918,7 @@ function registerIpc() {
     if (!item) throw new Error("资讯不存在或已更新");
     await shell.openExternal(item.url);
   });
-  secureHandle("tracker:get-state", () => tracker.getState());
+  secureHandle("tracker:get-state", (event) => tracker.getStateForWebContents(event.sender.id));
   secureHandle("tracker:get-settings", () => trackerSettings);
   secureHandle("tracker:close-arena-hero-win-rate-ranking", (event) => {
     if (event.sender !== arenaHeroRankingWindow?.webContents) return;
@@ -981,11 +995,12 @@ function registerIpc() {
       if (!result.database) {
         return { status: "error" as const, error: result.warnings[0] ?? "卡牌数据库不可用", warnings: result.warnings };
       }
-      cardLibraryMetadata = { source: result.source, version: result.version };
+      cardLibraryMetadata = { source: result.source, sources: result.sources, version: result.version };
       return {
         status: result.warnings.length > 0 ? "stale" as const : "updated" as const,
         cardCount: result.cardCount ?? Object.keys(result.database).length,
         source: result.source,
+        sources: result.sources,
         version: result.version,
         warnings: result.warnings
       };
@@ -1075,6 +1090,7 @@ function registerIpc() {
       const loaded = await tracker.loadCardDatabase(getConfiguredCardDatabaseLoadOptions());
       cardLibraryMetadata = {
         source: loaded.source ?? cardLibraryMetadata.source,
+        sources: loaded.sources ?? cardLibraryMetadata.sources,
         version: loaded.version ?? cardLibraryMetadata.version
       };
       if (!loaded.database) {
@@ -1105,7 +1121,12 @@ function registerIpc() {
 
     return tracker.importDeck(deck.rawDeckString ?? deck.rawText);
   });
-  secureHandle("tracker:ensure-log-config", () => ensureLogConfig());
+  secureHandle("tracker:ensure-log-config", () => {
+    if (process.mas) {
+      throw new Error("Mac App Store 版不能直接修改炉石配置，请先在炉石客户端中开启日志。");
+    }
+    return ensureLogConfig();
+  });
   secureHandle("tracker:inspect-log-config", () => inspectLogConfig());
   secureHandle("tracker:toggle-overlay", async () => {
     if (!isDeckTrackerEnabled("friendlyDeckTracker")) return false;
@@ -1170,10 +1191,17 @@ function registerIpc() {
   secureHandle("tracker:select-log-path", async () => {
     const result = await dialog.showOpenDialog({
       title: "选择炉石日志文件或 Logs 目录",
-      properties: ["openFile", "openDirectory"],
-      filters: [{ name: "Log", extensions: ["log"] }]
+      properties: process.mas ? ["openDirectory"] : ["openFile", "openDirectory"],
+      filters: process.mas ? undefined : [{ name: "Log", extensions: ["log"] }],
+      securityScopedBookmarks: process.mas
     });
-    return result.canceled ? undefined : result.filePaths[0];
+    if (result.canceled || !result.filePaths[0]) return undefined;
+    if (process.mas) {
+      const bookmark = result.bookmarks?.[0];
+      if (!bookmark) throw new Error("未获取到日志目录授权，请重新选择。");
+      await masLogAccessStore.save({ path: result.filePaths[0], bookmark });
+    }
+    return result.filePaths[0];
   });
 }
 
@@ -1475,7 +1503,7 @@ async function createOverlayWindowInstance(qaDemo = false): Promise<BrowserWindo
   configureSecureNavigation(createdWindow);
   createdWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
-  tracker.attachWindow(createdWindow);
+  tracker.attachWindow(createdWindow, "friendly");
 
   createdWindow.on("move", () => {
     overlayInteractionActiveUntil = Date.now() + 1_200;
@@ -1682,7 +1710,7 @@ async function createOpponentOverlayWindowInstance(qaDemo: boolean): Promise<Bro
   createdWindow.setMinimumSize(100, 150);
   createdWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
-  tracker.attachWindow(createdWindow);
+  tracker.attachWindow(createdWindow, "opponent");
 
   createdWindow.on("will-move", markOpponentOverlayInteraction);
   createdWindow.on("will-resize", markOpponentOverlayInteraction);
@@ -1906,23 +1934,9 @@ async function resolveHearthstoneDisplay() {
     if (cached) return cached;
   }
 
-  if (!appPermissionManager.isScreenCaptureGranted()) {
-    const fallback = screen.getPrimaryDisplay();
-    cachedHearthstoneDisplay = { id: fallback.id, expiresAt: now + 2_000 };
-    return fallback;
-  }
-
   try {
-    const sources = await desktopCapturer.getSources({
-      types: [...HEARTHSTONE_WINDOW_CAPTURE_TYPES],
-      thumbnailSize: { width: 1, height: 1 },
-      fetchWindowIcons: false
-    });
-    const source = selectHearthstoneWindowCaptureSource(sources);
-    const displayId = Number(source?.display_id);
-    const display = Number.isFinite(displayId)
-      ? screen.getAllDisplays().find((candidate) => candidate.id === displayId)
-      : undefined;
+    const context = await getHearthstoneCaptureContext();
+    const display = context ? screen.getDisplayMatching(context.bounds) : undefined;
     if (display) {
       cachedHearthstoneDisplay = { id: display.id, expiresAt: now + 2_000 };
       return display;
@@ -2342,6 +2356,17 @@ function releaseAllSmartCounterOverlayWindows(): void {
   for (const counterId of counterIds) releaseSmartCounterOverlayWindow(counterId);
 }
 
+function resolveAuxiliaryStateCapability(query: Readonly<Record<string, string>>): TrackerStateCapability {
+  const counterId = query["smart-counter-id"]?.trim();
+  if (query["smart-counter-overlay"] === "1" && counterId) return `smart-counter:${counterId}`;
+  const routes: ReadonlyArray<readonly [string, TrackerStateCapability]> = [
+    ["friendly-attack-overlay", "friendly-attack"], ["opponent-attack-overlay", "opponent-attack"],
+    ["friendly-health-overlay", "friendly-health"], ["opponent-health-overlay", "opponent-health"],
+    ["secret-overlay", "secret"], ["smart-counter-overlay", "smart-counter"], ["board-attack-overlay", "board-attack"]
+  ];
+  return routes.find(([key]) => query[key] === "1")?.[1] ?? "full";
+}
+
 async function createAuxiliaryOverlayWindow(
   kind: MovableAuxiliaryOverlayKind,
   bounds: { x: number; y: number; width: number; height: number },
@@ -2364,11 +2389,19 @@ async function createAuxiliaryOverlayWindow(
     window,
     !trackerSettings.overlay.hideInFullscreen
   );
-  tracker.attachWindow(window);
+  tracker.attachWindow(window, resolveAuxiliaryStateCapability(query));
   try {
     await loadRendererPage(window, query);
     const rendererReady = await window.webContents.executeJavaScript(`
-      (() => document.documentElement.dataset.rendererReady === "true" && Boolean(document.querySelector(${JSON.stringify(rootSelector)})))()
+      new Promise((resolve) => {
+        const deadline = Date.now() + 2500;
+        const check = () => {
+          if (document.documentElement.dataset.rendererReady === "true" && document.querySelector(${JSON.stringify(rootSelector)})) resolve(true);
+          else if (Date.now() >= deadline) resolve(false);
+          else setTimeout(check, 25);
+        };
+        check();
+      })
     `);
     if (rendererReady) return window;
   } catch {
@@ -2404,7 +2437,7 @@ async function createArenaChoiceOverlayWindow(options: { qaDemo?: boolean } = {}
   arenaChoiceOverlayWindow.setAlwaysOnTop(true, "screen-saver");
   applyOverlayWindowAppearance();
   arenaChoiceOverlayWindow.setIgnoreMouseEvents(true, { forward: true });
-  tracker.attachWindow(arenaChoiceOverlayWindow);
+  tracker.attachWindow(arenaChoiceOverlayWindow, "arena-choice");
   const createdWindow = arenaChoiceOverlayWindow;
 
   createdWindow.on("closed", () => {
@@ -3091,7 +3124,11 @@ async function captureQaScreenshotIfRequested(window: BrowserWindow) {
   }
 
   if (process.env.QA_DECK_TEXT) {
-    await tracker.importDeck(process.env.QA_DECK_TEXT);
+    if (process.env.QA_LOCK_LOG_PATH === "1" && process.env.QA_LOG_PATH) {
+      await tracker.start({ logPath: process.env.QA_LOG_PATH, deckText: process.env.QA_DECK_TEXT });
+    } else {
+      await tracker.importDeck(process.env.QA_DECK_TEXT);
+    }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
@@ -3601,6 +3638,7 @@ async function inspectQaRenderer(window: BrowserWindow): Promise<Record<string, 
       .map((element) => element.textContent?.trim() ?? "");
     return JSON.stringify({
       hasApi: Boolean(window.hearthstoneTracker),
+      rendererReady: document.documentElement.dataset.rendererReady === "true",
       location: window.location.href,
       appliedTheme: document.documentElement.dataset.trackerTheme ?? null,
       bodyComputed: {

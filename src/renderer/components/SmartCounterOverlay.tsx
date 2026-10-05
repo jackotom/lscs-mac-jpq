@@ -50,13 +50,13 @@ function SmartCounter({ counter }: { readonly counter: OverlaySmartCounter }) {
 
 function artworkSources(counter: OverlaySmartCounter): readonly string[] {
   if (counter.details) {
-    return cardArtworkSources(counter.details);
+    return cardArtworkSources(counter.details, "image-first");
   }
   if (counter.imageUrl) {
     return [counter.imageUrl];
   }
   if (counter.cardId) {
-    return cardArtworkSources({ cardId: counter.cardId });
+    return cardArtworkSources({ cardId: counter.cardId }, "image-first");
   }
   return [];
 }

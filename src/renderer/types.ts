@@ -76,6 +76,7 @@ export interface HearthstoneTrackerApi {
   getHomeNews?: () => Promise<HomeNewsResult>;
   getArenaHeroWinRateRanking?: () => Promise<ArenaHeroWinRateRankingResult>;
   openHomeNewsItem?: (itemId: string) => Promise<void>;
+  openDataSourceUrl?: (url: string) => Promise<void>;
   getTrackerSettings?: () => Promise<TrackerSettings>;
   setTrackerSettings?: (settings: TrackerSettings) => Promise<TrackerSettings>;
   restoreDefaultSettings?: () => Promise<TrackerSettings>;
@@ -222,7 +223,7 @@ export interface OverlayDeckSummary {
   drawnCards: number;
 }
 
-export type OverlayDeckIdentityStatus = "confirmed" | "candidates" | "automatic" | "waiting" | "arena";
+export type OverlayDeckIdentityStatus = "confirmed" | "candidates" | "automatic" | "manual" | "waiting" | "arena";
 
 export interface OverlayDeckIdentity {
   name: string;

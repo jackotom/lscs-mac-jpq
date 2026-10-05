@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, CircleCheck, Clock3, Hand, Layers3, Settings, X } from "lucide-react";
 import type { OverlayCardItem, OverlayCardTrackingView, OverlayPanelProps, OverlayStatusTone } from "../types";
@@ -324,7 +325,7 @@ export function CompactCardList({
               </span>
               <span className="overlay-card-art">
                 {item.thumbnailUrl ? (
-                  <img className="overlay-card-art-image" src={item.thumbnailUrl} alt="" loading="lazy" />
+                  <CardThumbnail className="overlay-card-art-image" card={item.details} fallbackUrl={item.thumbnailUrl} />
                 ) : null}
                 <strong title={item.name}>
                   {item.unresolved ? `${item.name} ×${count}` : item.name}
@@ -508,7 +509,7 @@ function ArenaDeckStatsList({ items }: { items: readonly OverlayCardItem[] }) {
             </span>
             <span className="overlay-arena-stat-card">
               <span className="overlay-cost" aria-label={`费用 ${item.cost ?? "?"}`}>{item.cost ?? "?"}</span>
-              {item.thumbnailUrl ? <img className="overlay-card-thumb" src={item.thumbnailUrl} alt="" loading="lazy" /> : null}
+              {item.thumbnailUrl ? <CardThumbnail className="overlay-card-thumb" card={item.details} fallbackUrl={item.thumbnailUrl} /> : null}
               <strong title={item.name}>{item.name}</strong>
               {(item.count ?? 1) > 1 ? <em aria-label={`数量 ${item.count}`}>{item.count}</em> : null}
             </span>

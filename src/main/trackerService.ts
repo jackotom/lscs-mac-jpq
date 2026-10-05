@@ -6,6 +6,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { ArenaDraftEngine } from "../shared/arenaDraftEngine.js";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
 import { TrackerEngine } from "../shared/trackerEngine.js";
+import { projectTrackerState, type TrackerStateCapability } from "./trackerStateProjection.js";
 import type { CollectionDeck, CollectionDeckScanResult, MatchMode, MatchRecord, PublicTrackerState, TrackerMode } from "../shared/types.js";
 import { CardDataService, type CardDatabaseLoadOptions, type CardDatabaseLoadResult } from "./cardDataService.js";
 import { ArenaRatingService } from "./arenaRatingService.js";
@@ -112,10 +113,10 @@ export class TrackerService {
   private activeArenaGame = false;
   private pendingArenaExitDeckKey: string | undefined;
   private pendingArenaExitConfirmations = 0;
-  private lastPublishedStateSignature: string | undefined;
+  private lastPublishedStateSignatures = new Map<TrackerStateCapability, string>();
   private sessionSequence = 0;
   private sessionContext = createSessionContext(createSessionKey(0));
-  private windows = new Set<BrowserWindow>();
+  private windows = new Map<BrowserWindow, TrackerStateCapability>();
   private activeMatchId: string | undefined;
   private activeMatchDeckName: string | undefined;
   private activeMatchMode: MatchMode = "unknown";
@@ -157,16 +158,16 @@ export class TrackerService {
     return this.sessionContext.playerLogPath;
   }
 
-  attachWindow(window: BrowserWindow) {
-    this.windows.add(window);
+  attachWindow(window: BrowserWindow, capability: TrackerStateCapability = "full") {
+    this.windows.set(window, capability);
     window.on("closed", () => {
       this.windows.delete(window);
     });
   }
 
-  getState(): PublicTrackerState {
+  getState(capability: TrackerStateCapability = "full"): PublicTrackerState {
     const state = this.engine.getState();
-    return {
+    const fullState = {
       ...state,
       arenaLogPath: this.arenaLogPath,
       constructedScreenMode: this.constructedScreenMode,
@@ -174,6 +175,14 @@ export class TrackerService {
       arena: this.arena.getState(),
       error: state.error ?? this.arenaInsightsWriteError
     };
+    return projectTrackerState(capability, fullState);
+  }
+
+  getStateForWebContents(webContentsId: number): PublicTrackerState {
+    const capability = [...this.windows.entries()].find(([window]) =>
+      !window.isDestroyed() && window.webContents.id === webContentsId
+    )?.[1] ?? "full";
+    return this.getState(capability);
   }
 
   async getMatchHistory() {
@@ -403,6 +412,12 @@ export class TrackerService {
         true
       );
       this.offsets.set(session.powerLogPath, contentBuffer.length);
+      if (powerStat) {
+        this.logFileFingerprints.set(
+          session.powerLogPath,
+          createLogFileFingerprint(contentBuffer, powerStat)
+        );
+      }
       const playerLogMayRecoverStalledPower = loadingScreenMode === undefined || loadingScreenMode === "GAMEPLAY";
       if (
         playerLogMayRecoverStalledPower &&
@@ -421,6 +436,16 @@ export class TrackerService {
     this.ensureArenaRatingsForCurrentArena(sessionContext);
     if (this.playerLogPath) {
       this.offsets.set(this.playerLogPath, Buffer.byteLength(playerContent));
+      const playerStat = await fs.stat(this.playerLogPath).catch(() => undefined);
+      if (!this.isCurrentSession(sessionContext)) {
+        return this.getState();
+      }
+      if (playerStat) {
+        this.logFileFingerprints.set(
+          this.playerLogPath,
+          createLogFileFingerprint(Buffer.from(playerContent), playerStat)
+        );
+      }
     }
     if (session?.decksLogPath) {
       const decksStat = await fs.stat(session.decksLogPath).catch(() => undefined);
@@ -572,10 +597,7 @@ export class TrackerService {
         if (stat.size < offset) {
           wasTruncated = true;
           offset = 0;
-        } else if (
-          this.isArenaLog(logPath, sessionContext) &&
-          await hasLogFileFingerprintChanged(handle, stat, this.logFileFingerprints.get(logPath))
-        ) {
+        } else if (await hasLogFileFingerprintChanged(handle, stat, this.logFileFingerprints.get(logPath))) {
           wasTruncated = true;
           offset = 0;
         }
@@ -587,9 +609,8 @@ export class TrackerService {
         }
 
         buffer = await readFileRange(handle, offset, length);
-        if (this.isArenaLog(logPath, sessionContext) && (wasTruncated || !this.logFileFingerprints.has(logPath))) {
-          replacementFingerprint = createLogFileFingerprint(buffer, stat);
-        }
+        const fingerprintPrefix = await readFileRange(handle, 0, Math.min(stat.size, 4_096));
+        replacementFingerprint = createLogFileFingerprint(fingerprintPrefix, stat);
       } finally {
         await handle.close();
       }
@@ -676,8 +697,21 @@ export class TrackerService {
           this.engine.setFriendlyController(friendlyPlayerId);
         }
       } else {
+        let selectedCollectionDeck: CollectionDeck | undefined;
+        if (wasTruncated && isPowerLogPath(logPath)) {
+          this.resetForPowerLogReplay();
+          selectedCollectionDeck = await this.refreshCollectionDecks(logPath, sessionContext);
+          if (!this.isCurrentSession(sessionContext)) {
+            return;
+          }
+        }
         this.updateFriendlyControllerFromPowerText(text);
-        this.applyPowerText(text, undefined, modifiedAtMs);
+        this.applyPowerText(
+          text,
+          isArenaCollectionDeck(selectedCollectionDeck) ? undefined : selectedCollectionDeck,
+          modifiedAtMs,
+          isArenaCollectionDeck(selectedCollectionDeck)
+        );
       }
       this.ensureArenaRatingsForCurrentArena(sessionContext);
       this.syncArenaDeckToTracker();
@@ -757,6 +791,20 @@ export class TrackerService {
       this.activeLogPath ?? this.engine.getState().logPath,
       "对局已开始，但 Power.log 暂未更新。记牌小窗已保留；若牌库不变，请重启炉石恢复日志。"
     );
+  }
+
+  private resetForPowerLogReplay() {
+    this.engine.resetForLogSession();
+    this.constructedScreenMode = undefined;
+    this.collectionDeckPreviewSource = undefined;
+    this.pendingPowerGameText = "";
+    this.activeArenaGame = false;
+    this.activeMatchId = undefined;
+    this.activeMatchDeckName = undefined;
+    this.activeMatchMode = "unknown";
+    this.powerGameExplicitLocalPlayerIds.clear();
+    this.powerGamePlayerNames.clear();
+    this.powerGameStartTimestamp = undefined;
   }
 
   private beginSession() {
@@ -1880,26 +1928,37 @@ export class TrackerService {
   }
 
   private pushState() {
-    const state: PublicTrackerState = this.getState();
-    const { lastUpdated: _lastUpdated, ...stableState } = state;
-    const signature = JSON.stringify(stableState);
-    if (signature === this.lastPublishedStateSignature) {
-      return;
+    const state = this.getState();
+    const windowsByCapability = new Map<TrackerStateCapability, BrowserWindow[]>();
+    for (const [window, capability] of this.windows) {
+      if (window.isDestroyed()) {
+        continue;
+      }
+      const windows = windowsByCapability.get(capability) ?? [];
+      windows.push(window);
+      windowsByCapability.set(capability, windows);
     }
 
-    let attempted = false;
-    for (const window of this.windows) {
-      if (!window.isDestroyed()) {
+    for (const [capability, windows] of windowsByCapability) {
+      const projectedState = projectTrackerState(capability, state);
+      const { lastUpdated: _lastUpdated, ...stableState } = projectedState;
+      const signature = JSON.stringify(stableState);
+      if (signature === this.lastPublishedStateSignatures.get(capability)) {
+        continue;
+      }
+
+      let attempted = false;
+      for (const window of windows) {
         attempted = true;
         try {
-          window.webContents.send("tracker:update", state);
+          window.webContents.send("tracker:update", projectedState);
         } catch {
           // A closing renderer must not turn an already-processed log chunk into a retry.
         }
       }
-    }
-    if (attempted) {
-      this.lastPublishedStateSignature = signature;
+      if (attempted) {
+        this.lastPublishedStateSignatures.set(capability, signature);
+      }
     }
   }
 }

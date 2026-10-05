@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import { useState, type ReactNode } from "react";
 import {
   cardArtworkSources,
@@ -423,7 +424,7 @@ function RelatedCardRow({
     <div className="card-related-card" role={role}>
       <div className="card-related-art">
         {card.cropImageUrl || card.imageUrl ? (
-          <img src={card.cropImageUrl ?? card.imageUrl} alt="" loading="eager" />
+          <CardThumbnail card={card} loading="eager" />
         ) : (
           <span aria-label={`${card.name}无卡图`}>无图</span>
         )}

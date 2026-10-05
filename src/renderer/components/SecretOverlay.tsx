@@ -224,7 +224,7 @@ function SecretCandidateArtwork({ candidate }: { readonly candidate: OverlaySecr
     cardId: candidate.details?.cardId ?? candidate.id,
     cropImageUrl: candidate.details?.cropImageUrl,
     imageUrl: candidate.details?.imageUrl
-  });
+  }, "image-first");
   const sourcesKey = sources.join("\n");
   const [sourceState, setSourceState] = useState({ key: sourcesKey, index: 0 });
   const sourceIndex = sourceState.key === sourcesKey ? sourceState.index : 0;

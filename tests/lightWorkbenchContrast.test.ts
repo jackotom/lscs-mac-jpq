@@ -16,20 +16,11 @@ const linkedStyleFiles = [
   "homeNewsStyles.css",
   "arenaHeroRankingStyles.css",
   "lightOverlayStyles.css",
+  "workbenchStyles.css",
 ] as const;
 
-function rendererStyles(): string {
-  const source = readFileSync(join(rendererDirectory, "App.tsx"), "utf8");
-  const match = source.match(/const rendererStyles = `([\s\S]*?)`;\s*\n\s*export default App;/);
-  if (!match) throw new Error("无法读取 App 内嵌样式");
-  return match[1];
-}
-
 function installActualStyles() {
-  for (const cssText of [
-    ...linkedStyleFiles.map((file) => readFileSync(join(rendererDirectory, file), "utf8")),
-    rendererStyles(),
-  ]) {
+  for (const cssText of linkedStyleFiles.map((file) => readFileSync(join(rendererDirectory, file), "utf8"))) {
     const style = document.createElement("style");
     style.textContent = cssText;
     document.head.append(style);

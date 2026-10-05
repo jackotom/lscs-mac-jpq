@@ -50,12 +50,19 @@ export class ArenaRunStore {
   }
 
   private async readFile(): Promise<ArenaRunRecord[]> {
+    let raw: string;
     try {
-      const value = JSON.parse(await fs.readFile(this.filePath, "utf8")) as unknown;
-      if (!isRecord(value) || !Array.isArray(value.runs)) throw new Error("竞技场档案格式无效");
-      return parseArenaRuns(value.runs);
+      raw = await fs.readFile(this.filePath, "utf8");
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") return [];
+      throw error;
+    }
+
+    try {
+      const value = JSON.parse(raw) as unknown;
+      if (!isRecord(value) || !Array.isArray(value.runs)) throw new Error("竞技场档案格式无效");
+      return parseArenaRuns(value.runs);
+    } catch {
       await this.quarantineCorruptFile();
       return [];
     }

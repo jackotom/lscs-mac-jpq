@@ -1,8 +1,11 @@
+import { formatSourceLabel, type DataSourceProvenance } from "./dataSourceProvenance.js";
+
 export interface ArenaRatingTable {
   readonly source: string;
   readonly version: number;
   readonly fetchedAt: string;
   readonly ratings: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  readonly sources?: readonly DataSourceProvenance[];
   readonly hearthArenaWeb?: HearthArenaWebRatingSource;
   readonly firestone?: FirestoneRatingSource;
   readonly firestoneClasses?: Readonly<Record<string, FirestoneClassRatingSource>>;
@@ -162,7 +165,7 @@ export function getArenaScoreSourceLabel(table: ArenaRatingTable | undefined): s
     return undefined;
   }
 
-  const parts = [`${table.source} v${table.version}`];
+  const parts = [formatSourceLabel(table.sources ?? []) ?? table.source, `v${table.version}`];
   if (table.hearthArenaWeb) {
     parts.push("HearthArena官网");
   }

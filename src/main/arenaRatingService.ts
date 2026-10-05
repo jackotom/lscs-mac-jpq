@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
+import { ARENA_SOURCE_PROVENANCE, mergeSourceProvenance, type DataSourceProvenance } from "../shared/dataSourceProvenance.js";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 import type {
   ArenaRatingTable,
@@ -14,7 +15,7 @@ import type {
   HearthArenaWebRatingSource
 } from "../shared/arenaRatings.js";
 
-const SOURCE = "Arena Tracker / HearthArena";
+const SOURCE = "混合竞技场来源";
 const VERSION_URL = "https://raw.githubusercontent.com/supertriodo/Arena-Tracker/master/HearthArena/haVersion.json";
 const RATINGS_URL = "https://raw.githubusercontent.com/supertriodo/Arena-Tracker/master/HearthArena/hearthArena.json";
 const FIRESTONE_CARD_STATS_URL = "https://static.zerotoheroes.com/api/arena/stats/cards/arena-underground/last-patch/global.gz.json?v=6";
@@ -375,6 +376,11 @@ export class ArenaRatingService {
         version,
         fetchedAt: new Date().toISOString(),
         ratings,
+        sources: mergeSourceProvenance([
+          ARENA_SOURCE_PROVENANCE.arenaTracker,
+          ...(hearthArenaWeb ? [ARENA_SOURCE_PROVENANCE.hearthArenaWeb] : []),
+          ...(firestone ? [ARENA_SOURCE_PROVENANCE.firestoneArena] : [])
+        ]),
         hearthArenaWeb,
         firestone,
         firestoneClasses: this.cachedTable?.firestoneClasses ?? cached?.firestoneClasses
@@ -553,7 +559,26 @@ function parseCachedTable(value: unknown): ArenaRatingTable | undefined {
   const ratings = parseRatings(value.ratings);
   const hearthArenaWeb = parseHearthArenaWebCache(value.hearthArenaWeb);
   const firestone = parseFirestoneCache(value.firestone);
-  return { source: value.source, version: value.version, fetchedAt: value.fetchedAt, ratings, hearthArenaWeb, firestone };
+  return {
+    source: value.source,
+    version: value.version,
+    fetchedAt: value.fetchedAt,
+    ratings,
+    sources: parseSourceProvenance(value.sources),
+    hearthArenaWeb,
+    firestone
+  };
+}
+
+function parseSourceProvenance(value: unknown): readonly DataSourceProvenance[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sources = value.filter((source): source is DataSourceProvenance =>
+    isRecord(source) && typeof source.id === "string" && typeof source.label === "string" &&
+    Array.isArray(source.urls) && isRecord(source.authorization) &&
+    (source.authorization.status === "authorized" || source.authorization.status === "pending-confirmation" || source.authorization.status === "unknown") &&
+    typeof source.authorization.note === "string"
+  );
+  return sources.length === value.length ? mergeSourceProvenance(sources) : undefined;
 }
 
 function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | undefined {
