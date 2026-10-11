@@ -1,10 +1,10 @@
 # 炉石 Mac 记牌器
 
-**v0.7.9 · Apple 芯片 Mac · 本机运行**
+**源码 v0.8 · 可下载桌面版 v0.7.9 · Apple 芯片 Mac · 本机运行**
 
 自动识别当前套牌，在对局中显示牌库变化、对手已出牌、竞技场选牌数据和关键计数。
 
-[下载公开版](https://github.com/jackotom/lscs-mac-jpq/releases/latest) · [查看 v0.7.9 更新](docs/releases/v0.7.9.md)
+[下载桌面版 v0.7.9](https://github.com/jackotom/lscs-mac-jpq/releases/tag/v0.7.9) · [查看源码 v0.8 更新](docs/releases/v0.8.md)
 
 ![炉石记牌器首页，显示当前套牌、对局统计、天梯卡组与竞技场排行](docs/screenshots/home-dashboard.png)
 
