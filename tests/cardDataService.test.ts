@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import sampleCardDb from "../fixtures/cards.sample.json";
+import { CURRENT_CARD_METADATA } from "../src/shared/currentCardMetadata.js";
+import { HEARTH_ARENA_CURRENT_CARDS } from "../src/shared/hearthArenaCurrentCards.js";
 
 vi.mock("electron", () => ({
   app: {
@@ -20,6 +22,18 @@ afterEach(async () => {
 });
 
 describe("CardDataService", () => {
+  it("ships complete lightweight metadata for all current arena cards", () => {
+    const arenaCardIds = Object.keys(HEARTH_ARENA_CURRENT_CARDS);
+    const metadata = Object.values(CURRENT_CARD_METADATA);
+
+    expect(arenaCardIds).toHaveLength(136);
+    expect(metadata.map((card) => card.cardId).sort()).toEqual(arenaCardIds.sort());
+    expect(new Set(metadata.map((card) => card.dbfId)).size).toBe(136);
+    expect(metadata.filter((card) =>
+      (card.cardType === "随从" || card.cardType === "武器") && card.attack === undefined
+    )).toEqual([]);
+  });
+
   it("audit regression uses registered provenance instead of a cached permission claim", async () => {
     const { CardDataService } = await import("../src/main/cardDataService.js");
     const root = await mkdtemp(path.join(os.tmpdir(), "card-source-claim-"));
@@ -260,7 +274,7 @@ describe("CardDataService", () => {
       "blizzard-cn-cards",
       "hearthstonejson-cards"
     ]);
-    expect(result.cardCount).toBe(4);
+    expect(result.cardCount).toBe(140);
     expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "官网新名字", cardId: "TEST_001" }));
     expect(result.database?.["1003"]).toEqual(expect.objectContaining({ name: "旧库额外卡" }));
     expect(result.database?.["1004"]).toEqual(
@@ -951,6 +965,81 @@ describe("CardDataService", () => {
 
     expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "缓存卡" }));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("hydrates current card ids and refreshes when the official version page is unavailable", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "current-card-id-refresh-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "official-cards.json");
+    await writeFile(
+      cachePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        source: "Blizzard 官方卡牌浏览器",
+        version: "old-version",
+        fetchedAt: "2020-01-01T00:00:00.000Z",
+        cards: [{ dbfId: 131432, id: 131432, name: "锋线铁裔", collectible: 1 }]
+      }),
+      "utf8"
+    );
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://hs.blizzard.cn/cards/") throw new Error("version page slow");
+      if (url.includes("hs-cards-api-server")) {
+        return responseJson({ code: 0, data: { total: 1, list: [{ id: 131432, name: "锋线铁裔", collectible: 1 }] } });
+      }
+      if (url.includes("api.hearthstonejson.com")) return response([]);
+      if (url.includes("static.zerotoheroes.com") || url.includes("static.firestoneapp.com")) return response([]);
+      throw new Error(`unexpected URL: ${url}`);
+    });
+    const service = new CardDataService(cachePath, fetchMock as never);
+
+    const cached = await service.loadCardDatabase({ preferCache: true });
+    const refreshed = await service.loadCardDatabase({ forceRefresh: true });
+
+    expect(cached.database?.["131432"]).toEqual(expect.objectContaining({
+      cardId: "BE_996",
+      name: "锋线铁裔",
+      manaCost: 5,
+      cardType: "随从"
+    }));
+    expect(cached.database?.["129818"]).toEqual(expect.objectContaining({
+      cardId: "BE_EVENT_103",
+      name: "盗宝邪魔",
+      manaCost: 2
+    }));
+    expect(refreshed.database?.["131432"]).toEqual(expect.objectContaining({ cardId: "BE_996", name: "锋线铁裔" }));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("hs-cards-api-server"), expect.any(Object));
+  });
+
+  it("adds current card metadata when only the legacy database is available", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "current-card-legacy-fallback-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "official-cards.json");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("hs-cards-api-server")) throw new Error("official cards unavailable");
+      if (url.includes("api.hearthstonejson.com")) {
+        return response([{ dbfId: 1001, id: "TEST_001", name: "旧卡" }]);
+      }
+      if (url.includes("static.zerotoheroes.com") || url.includes("static.firestoneapp.com")) return response([]);
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await new CardDataService(cachePath, fetchMock as never).loadCardDatabase({ forceRefresh: true });
+
+    expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "旧卡" }));
+    expect(result.database?.["131432"]).toEqual(expect.objectContaining({
+      cardId: "BE_996",
+      name: "锋线铁裔",
+      manaCost: 5,
+      attack: 3,
+      health: 5
+    }));
+    expect(result.database?.["129814"]).toEqual(expect.objectContaining({
+      cardId: "BE_850T",
+      collectible: false
+    }));
   });
 
   it("keeps a stale cache when an official refresh returns no usable cards", async () => {

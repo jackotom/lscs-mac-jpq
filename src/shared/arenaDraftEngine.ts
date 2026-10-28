@@ -688,9 +688,6 @@ export class ArenaDraftEngine {
     this.picks.push(pick);
     this.lastPick = { cardId: chosen.cardId, name: chosen.name, source };
     this.clearCurrentChoices();
-    if (this.status === "drafting" && this.picks.length + this.teamBonusCount >= 30) {
-      this.status = "complete";
-    }
     this.touch();
   }
 

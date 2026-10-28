@@ -3,6 +3,7 @@ import { toOverlayPanelViewModel } from "./overlayView";
 import { OverlayPanel } from "./components/OverlayPanel";
 import { OpponentOverlayPanel } from "./components/OpponentOverlayPanel";
 import { useDisplayState } from "./useDisplayState";
+import { parseTrackerSettings } from "./runtimeValidation";
 import "./overlayStyles.css";
 import "./opponentOverlayStyles.css";
 import "./cardHoverStyles.css";
@@ -13,7 +14,35 @@ export default function TrackerOverlayEntry() {
   const state = useDisplayState();
   const isOpponent = params.get("opponent-overlay") === "1";
   const [collapsed, setCollapsed] = useState(false);
+  const [showMulliganGuide, setShowMulliganGuide] = useState(true);
   const changeVersion = useRef(0);
+  const settingsVersion = useRef(0);
+
+  useEffect(() => {
+    const api = window.hearthstoneTracker;
+    if (!api?.getTrackerSettings) return;
+    let disposed = false;
+    const apply = (value: unknown) => {
+      try {
+        const next = parseTrackerSettings(value);
+        if (!disposed) setShowMulliganGuide(next.overlay.mulliganGuide);
+      } catch {
+        // Invalid cross-window settings are ignored; the main settings screen reports the error.
+      }
+    };
+    const unsubscribe = api.onTrackerSettingsUpdate?.((value) => {
+      settingsVersion.current += 1;
+      apply(value);
+    });
+    const initialVersion = settingsVersion.current;
+    void api.getTrackerSettings().then((value) => {
+      if (settingsVersion.current === initialVersion) apply(value);
+    }).catch(() => undefined);
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpponent || !window.hearthstoneTracker?.getOpponentOverlayCollapsed) return;
@@ -31,6 +60,7 @@ export default function TrackerOverlayEntry() {
   if (!state) return null;
   if (!isOpponent) {
     return <OverlayPanel view={toOverlayPanelViewModel(state, { maxDeckRows: 40, maxRecentRows: 3 })}
+      showMulliganGuide={showMulliganGuide}
       onClose={window.hearthstoneTracker?.closeFriendlyOverlay ? () => { void window.hearthstoneTracker?.closeFriendlyOverlay?.(); } : undefined}
       onOpenSettings={window.hearthstoneTracker?.openSettings ? () => { void window.hearthstoneTracker?.openSettings?.(); } : undefined} />;
   }

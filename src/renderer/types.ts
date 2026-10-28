@@ -341,6 +341,7 @@ export interface OverlayPanelProps {
   onOpenSettings?: () => void;
   isLoading?: boolean;
   loadError?: string;
+  showMulliganGuide?: boolean;
 }
 
 export interface OpponentOverlayPanelProps {

@@ -951,7 +951,7 @@ describe("ArenaRatingService", () => {
             105,
             "any",
             "any commons",
-            "滑行者巨怪\n<span class=\"new\">新</span>"
+            "滑行者巨怪\n<span class=\"new\">新</span> 99 &darr; 旧名"
           )
         } as Response;
       }

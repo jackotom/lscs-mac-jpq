@@ -596,7 +596,7 @@ describe("ArenaDraftEngine", () => {
     expect(engine.getState().deck.some((card) => card.cardId === "END_007")).toBe(false);
   });
 
-  it("counts only the final legendary preview as a three-card team before normal picks", () => {
+  it("continues reading the final pick until the game marks the draft complete", () => {
     const engine = new ArenaDraftEngine({ cardDatabase: teamDraftCardDb, preferArenaLogPicks: true });
     engine.applyArenaLine("D 12:00:00.000 SetDraftMode - DRAFTING");
     expect(engine.applyScreenChoices(["传说预览甲", "传说预览乙", "传说预览丙"])).toBe(true);
@@ -624,9 +624,12 @@ describe("ArenaDraftEngine", () => {
     expect(engine.getState().unresolvedCount).toBe(3);
 
     engine.applyArenaLine("D 12:02:00.000 Client chooses: 普通选牌 (TEST_001)");
-    expect(engine.getState()).toMatchObject({ status: "complete", draftCount: 30 });
+    expect(engine.getState()).toMatchObject({ status: "drafting", draftCount: 30 });
     expect(engine.getState().deck.reduce((total, card) => total + card.count, 0)).toBe(28);
     expect(engine.getState().unresolvedCount).toBe(2);
+
+    engine.applyArenaLine("D 12:02:01.000 SetDraftMode - ACTIVE_DRAFT_DECK");
+    expect(engine.getState()).toMatchObject({ status: "complete", draftCount: 30 });
   });
 
   it("scores the live choices and builds the arena deck from selected cards", () => {

@@ -364,10 +364,10 @@ function isGeneralSettings(value: unknown): boolean {
 
 function isOverlaySettings(value: unknown): boolean {
   return isRecord(value) && hasOnlyKeys(value, [
-    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "smartCardCounters", "healthChange", "position",
+    "enabled", "showOnlyInGame", "theme", "arenaHeroWinRateRanking", "showFriendlyAttack", "showOpponentAttack", "secretPrediction", "mulliganGuide", "smartCardCounters", "healthChange", "position",
     "offsetX", "offsetY", "opacity", "hideInFullscreen", "hiddenSmartCounterIds"
   ]) &&
-    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.smartCardCounters, value.healthChange, value.hideInFullscreen]
+    [value.enabled, value.showOnlyInGame, value.arenaHeroWinRateRanking, value.showFriendlyAttack, value.showOpponentAttack, value.secretPrediction, value.mulliganGuide, value.smartCardCounters, value.healthChange, value.hideInFullscreen]
       .every((item) => typeof item === "boolean") &&
     isOneOf(value.theme, ["light", "dark"]) &&
     isOneOf(value.position, ["left", "right"]) &&

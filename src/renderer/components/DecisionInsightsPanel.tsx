@@ -1,8 +1,11 @@
 import type { DecisionInsight } from "../../shared/decisionInsights";
 import "../decisionInsightsStyles.css";
 
-export function DecisionInsightsPanel({ insight }: { insight?: DecisionInsight }) {
-  if (!insight) return null;
+export function DecisionInsightsPanel({ insight, showMulliganGuide = true }: {
+  insight?: DecisionInsight;
+  showMulliganGuide?: boolean;
+}) {
+  if (!insight || (insight.kind === "mulligan" && !showMulliganGuide)) return null;
   const title = insight.kind === "mulligan" ? "起手留牌参考" : "发现 / 选牌参考";
   const updatedAt = insight.updatedAt ? new Date(insight.updatedAt) : undefined;
   const hasTime = updatedAt && Number.isFinite(updatedAt.getTime());

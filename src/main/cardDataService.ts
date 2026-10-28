@@ -8,6 +8,8 @@ import {
   mergeSourceProvenance,
   type DataSourceProvenance
 } from "../shared/dataSourceProvenance.js";
+import { CURRENT_CARD_METADATA } from "../shared/currentCardMetadata.js";
+import { HEARTH_ARENA_CURRENT_CARDS } from "../shared/hearthArenaCurrentCards.js";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 
 const OFFICIAL_PAGE_URL = "https://hs.blizzard.cn/cards/";
@@ -92,6 +94,9 @@ interface SharedCardDatabaseLoad {
 
 const foreignSupplementalRefreshes = new Map<string, Promise<ForeignSupplementalRefreshResult>>();
 const sharedCardDatabaseLoads = new Map<string, SharedCardDatabaseLoad>();
+const currentCardMetadataByName = new Map(
+  Object.values(HEARTH_ARENA_CURRENT_CARDS).map((card) => [normalizeCardName(card.name), card])
+);
 
 export class CardDataService {
   private cachedDatabase: CardDatabase | undefined;
@@ -206,7 +211,7 @@ export class CardDataService {
     const currentWarnings = () => [...baseWarnings, ...this.foreignSupplementalWarnings];
 
     try {
-      const version = await this.fetchOfficialSourceVersion();
+      const version = await this.fetchOfficialSourceVersion().catch(() => cached?.version ?? "official-cards");
       if (
         !forceRefresh &&
         cached?.database &&
@@ -227,7 +232,7 @@ export class CardDataService {
       legacyDatabase = legacy.database;
       const sources = mergeSourceProvenance([CARD_SOURCE_PROVENANCE.blizzardCn, ...legacy.sources]);
       const mergedCards = mergeOfficialCards(officialCards, legacyDatabase);
-      const database = createCardDatabase(mergedCards);
+      const database = mergeCurrentCardMetadata(createCardDatabase(mergedCards));
       if (Object.keys(database).length === 0) {
         throw new Error("官网卡牌库没有返回可用卡牌");
       }
@@ -258,10 +263,11 @@ export class CardDataService {
       });
       legacyDatabase ??= legacy.database;
       if (legacyDatabase) {
-        this.cachedDatabase = legacyDatabase;
+        const database = mergeCurrentCardMetadata(legacyDatabase);
+        this.cachedDatabase = database;
         this.cachedSources = legacy.sources;
         return {
-          ...this.toResult(legacyDatabase, undefined, [], legacy.sources),
+          ...this.toResult(database, undefined, [], legacy.sources),
           warnings: [...currentWarnings(), `官网卡牌库读取失败，继续使用旧卡牌库：${formatError(error)}`]
         };
       }
@@ -280,7 +286,9 @@ export class CardDataService {
         "海外卡牌补充库"
       );
       this.cachedForeignSupplementalDatabase = foreignSupplementalCache.value?.database;
-      const database = mergeCardDatabases(parsed.database, foreignSupplementalCache.value?.database) ?? parsed.database;
+      const database = mergeCurrentCardMetadata(
+        mergeCardDatabases(parsed.database, foreignSupplementalCache.value?.database) ?? parsed.database
+      );
       const sources = mergeSourceProvenance([
         ...(parsed.sources ?? [unknownCachedCardSource()]),
         ...(foreignSupplementalCache.value?.database ? [CARD_SOURCE_PROVENANCE.firestoneCards] : [])
@@ -691,6 +699,80 @@ function mergeCardDatabases(
     } : supplemental);
   }
   return createCardDatabase([...merged.values()]);
+}
+
+function mergeCurrentCardMetadata(database: CardDatabase): CardDatabase {
+  const cards = listCardInfos(database);
+  const cardsByName = new Map<string, CardInfo[]>();
+  const mergedByDbfId = new Map<number, CardInfo>();
+  for (const card of cards) {
+    mergedByDbfId.set(card.dbfId, card);
+    const key = normalizeCardName(card.name);
+    const matchingCards = cardsByName.get(key);
+    if (matchingCards) {
+      matchingCards.push(card);
+    } else {
+      cardsByName.set(key, [card]);
+    }
+  }
+
+  for (const current of Object.values(CURRENT_CARD_METADATA)) {
+    const metadata = HEARTH_ARENA_CURRENT_CARDS[current.cardId];
+    if (!metadata) continue;
+    const existing = mergedByDbfId.get(current.dbfId);
+    mergedByDbfId.set(current.dbfId, existing ? {
+      ...existing,
+      cardId: existing.cardId ?? current.cardId,
+      id: existing.id ?? current.cardId,
+      manaCost: existing.manaCost ?? current.manaCost,
+      attack: existing.attack ?? current.attack,
+      health: existing.health ?? current.health,
+      cardType: existing.cardType ?? current.cardType,
+      collectible: existing.collectible ?? current.collectible ?? true,
+      rarity: existing.rarity ?? metadata.rarity,
+      heroClasses: existing.heroClasses?.length ? existing.heroClasses : metadata.heroClasses,
+      imageUrl: existing.imageUrl ?? metadata.imageUrl
+    } : {
+      dbfId: current.dbfId,
+      cardId: current.cardId,
+      id: current.cardId,
+      name: metadata.name,
+      manaCost: current.manaCost,
+      attack: current.attack,
+      health: current.health,
+      cardType: current.cardType,
+      collectible: current.collectible ?? true,
+      rarity: metadata.rarity,
+      heroClasses: metadata.heroClasses,
+      imageUrl: metadata.imageUrl
+    });
+  }
+
+  for (const card of cards) {
+    if (card.cardId) continue;
+    const matchingCards = cardsByName.get(normalizeCardName(card.name));
+    const metadata = matchingCards?.length === 1 ? currentCardMetadataByName.get(normalizeCardName(card.name)) : undefined;
+    const current = metadata ? CURRENT_CARD_METADATA[metadata.cardId] : undefined;
+    const merged = current ? mergedByDbfId.get(current.dbfId) : undefined;
+    if (!metadata || !current || !merged) continue;
+    mergedByDbfId.set(current.dbfId, {
+      ...merged,
+      cardId: merged.cardId ?? metadata.cardId,
+      id: merged.id ?? metadata.cardId,
+      name: metadata.name,
+      manaCost: merged.manaCost ?? current.manaCost,
+      attack: merged.attack ?? current.attack,
+      health: merged.health ?? current.health,
+      cardType: merged.cardType ?? current.cardType
+    });
+  }
+  return Object.fromEntries(
+    [...mergedByDbfId].map(([dbfId, card]) => [String(dbfId), card])
+  );
+}
+
+function normalizeCardName(name: string): string {
+  return name.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("zh-CN");
 }
 
 function parseForeignSupplementalCards(value: unknown): {

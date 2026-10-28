@@ -236,6 +236,7 @@ describe("frontend stability helpers", () => {
         showFriendlyAttack: true,
         showOpponentAttack: true,
         secretPrediction: true,
+        mulliganGuide: true,
         smartCardCounters: true,
         healthChange: true,
         position: "left",

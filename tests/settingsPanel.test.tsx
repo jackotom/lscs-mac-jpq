@@ -25,6 +25,7 @@ const settings: TrackerSettings = {
     showFriendlyAttack: true,
     showOpponentAttack: true,
     secretPrediction: true,
+    mulliganGuide: true,
     smartCardCounters: true,
     healthChange: true,
     position: "right",
@@ -172,6 +173,17 @@ describe("software settings", () => {
     expect(onChange).toHaveBeenLastCalledWith({
       ...settings,
       overlay: { ...settings.overlay, healthChange: false }
+    });
+  });
+
+  it("controls the mulligan guide independently", () => {
+    const onChange = vi.fn();
+    renderPanel({ onChange });
+
+    fireEvent.click(screen.getByRole("switch", { name: /起手留牌参考/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...settings,
+      overlay: { ...settings.overlay, mulliganGuide: false }
     });
   });
 

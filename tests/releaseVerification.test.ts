@@ -17,7 +17,7 @@ describe("release verification entrypoint", () => {
     const releaseScript = read("scripts/verify-release.sh");
 
     expect(appSource).toContain(`<small>v${packageJson.version}</small>`);
-    expect(packageJson.version).toBe("0.8.0");
+    expect(packageJson.version).toBe("0.8.3");
     expect(packageLock.version).toBe(packageJson.version);
     expect(packageLock.packages[""]?.version).toBe(packageJson.version);
     expect(packageJson.scripts?.["package:mac-arm64"]).toContain("npm run build:native");

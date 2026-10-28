@@ -1718,6 +1718,7 @@ function App() {
           onOpenSettings={api ? openSettingsInMainWindow : undefined}
           isLoading={isQaFriendlyOverlay ? false : isInitializing}
           loadError={isQaFriendlyOverlay || hasAcceptedTrackerState ? undefined : initializationError}
+          showMulliganGuide={trackerSettings?.overlay.mulliganGuide ?? true}
         />
       </>
     );
@@ -1862,7 +1863,10 @@ function App() {
         ) : (
           <>
             <DashboardOverview state={deckDisplayState} status={trackerStatus} />
-            <DecisionInsightsPanel insight={state.gameActive === true && state.status === "watching" ? state.decisionInsight : undefined} />
+            <DecisionInsightsPanel
+              insight={state.gameActive === true && state.status === "watching" ? state.decisionInsight : undefined}
+              showMulliganGuide={trackerSettings?.overlay.mulliganGuide ?? true}
+            />
             <section className="dashboard-grid" aria-label="记牌器工作区">
               <DeckPanel cards={deckCards} summary={deckSummary} logIssue={logRepairNotice ? undefined : logIssue} />
               <EventFeed events={events} />
@@ -2009,7 +2013,7 @@ function DesktopSidebar({
         </span>
         <span>
           <strong>炉石记牌器</strong>
-          <small>v0.8.0</small>
+          <small>v0.8.3</small>
         </span>
       </section>
       <nav className="sidebar-nav" aria-label="工作台功能">
@@ -2268,13 +2272,15 @@ function OverlayWindow({
   onClose,
   onOpenSettings,
   isLoading,
-  loadError
+  loadError,
+  showMulliganGuide
 }: {
   state: PublicTrackerState;
   onClose?: () => void;
   onOpenSettings?: () => void;
   isLoading: boolean;
   loadError?: string;
+  showMulliganGuide: boolean;
 }) {
   const overlayView = toOverlayPanelViewModel(state, { maxDeckRows: 40, maxRecentRows: 3 });
   return (
@@ -2284,6 +2290,7 @@ function OverlayWindow({
       onOpenSettings={onOpenSettings}
       isLoading={isLoading}
       loadError={loadError}
+      showMulliganGuide={showMulliganGuide}
     />
   );
 }

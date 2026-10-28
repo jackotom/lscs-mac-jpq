@@ -92,6 +92,7 @@ export interface TrackerOverlaySettings {
   readonly showFriendlyAttack: boolean;
   readonly showOpponentAttack: boolean;
   readonly secretPrediction: boolean;
+  readonly mulliganGuide: boolean;
   readonly smartCardCounters: boolean;
   readonly healthChange: boolean;
   readonly hiddenSmartCounterIds?: readonly string[];

@@ -30,6 +30,7 @@ const expectedDefaults = {
     showFriendlyAttack: false,
     showOpponentAttack: false,
     secretPrediction: true,
+    mulliganGuide: true,
     smartCardCounters: true,
     healthChange: true,
     hiddenSmartCounterIds: [],
@@ -189,6 +190,25 @@ describe("TrackerSettingsStore", () => {
     });
     await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toMatchObject({
       overlay: { healthChange: true, secretPrediction: false }
+    });
+  });
+
+  it("adds the mulligan-guide switch without losing existing overlay preferences", async () => {
+    const userDataDirectory = await createUserDataDirectory();
+    const filePath = path.join(userDataDirectory, "tracker-settings.json");
+    const { mulliganGuide: _missing, ...oldOverlay } = expectedDefaults.overlay;
+    const saved = {
+      ...expectedDefaults,
+      overlay: { ...oldOverlay, secretPrediction: false }
+    };
+    await writeFile(filePath, JSON.stringify(saved), "utf8");
+
+    await expect(new TrackerSettingsStore(userDataDirectory).read()).resolves.toEqual({
+      ...expectedDefaults,
+      overlay: { ...expectedDefaults.overlay, secretPrediction: false }
+    });
+    await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toMatchObject({
+      overlay: { mulliganGuide: true, secretPrediction: false }
     });
   });
 

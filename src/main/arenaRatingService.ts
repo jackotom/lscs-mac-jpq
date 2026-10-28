@@ -781,6 +781,7 @@ function parseHearthArenaCardName(value: string): string {
     .replace(/&nbsp;/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/\s+(?:新|New)\s+\d+\b.*$/iu, "")
     .replace(/\s+(?:新|New)$/iu, "")
     .trim();
 }

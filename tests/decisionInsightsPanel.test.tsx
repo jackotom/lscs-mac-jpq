@@ -28,6 +28,17 @@ describe("decision insights", () => {
     expect(document.querySelector("time")).toHaveAttribute("datetime", "2026-10-05T08:00:00Z");
   });
 
+  it("hides only the mulligan guide when its setting is off", () => {
+    const preview = render(<DecisionInsightsPanel insight={insight()} showMulliganGuide={false} />);
+    expect(preview.container).toBeEmptyDOMElement();
+
+    preview.rerender(<DecisionInsightsPanel
+      insight={insight({ kind: "discover" })}
+      showMulliganGuide={false}
+    />);
+    expect(screen.getByText("发现 / 选牌参考")).toBeInTheDocument();
+  });
+
   it.each([
     ["discovered", "发现后胜率"], ["drawn", "抽到后胜率参考"]
   ] as const)("labels %s data accurately", (metric, label) => {

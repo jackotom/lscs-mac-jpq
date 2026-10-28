@@ -13,7 +13,7 @@ import { PublicMatchCounters } from "./PublicMatchCounters";
 import { MatchPulse } from "./MatchPulse";
 import { DecisionInsightsPanel } from "./DecisionInsightsPanel";
 
-export function OverlayPanel({ view, className = "overlay-shell", style, onClose, onOpenSettings, isLoading = false, loadError }: OverlayPanelProps) {
+export function OverlayPanel({ view, className = "overlay-shell", style, onClose, onOpenSettings, isLoading = false, loadError, showMulliganGuide = true }: OverlayPanelProps) {
   const needsLogRepair = view.status.tone === "offline";
   const displayedStatus = isLoading
     ? { tone: "offline" as const, label: "读取中", detail: "正在读取本机状态" }
@@ -65,7 +65,7 @@ export function OverlayPanel({ view, className = "overlay-shell", style, onClose
         </section>
       ) : (
         <>
-          <DecisionInsightsPanel insight={view.decisionInsight} />
+          <DecisionInsightsPanel insight={view.decisionInsight} showMulliganGuide={showMulliganGuide} />
           {view.arena?.showDeckStats ? (
             <ArenaOverlay arena={view.arena} globalEffects={view.globalEffects ?? []} />
           ) : (

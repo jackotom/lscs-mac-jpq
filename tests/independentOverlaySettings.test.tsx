@@ -29,7 +29,7 @@ function settingsWithSmartCounters(enabled = true): TrackerSettings {
 }
 
 describe("independent auxiliary-overlay settings", () => {
-  it("exposes four independent switches and updates only the selected switch", () => {
+  it("exposes independent switches and updates only the selected switch", () => {
     const settings = settingsWithSmartCounters(true);
     const onChange = vi.fn();
     render(<SettingsPanel settings={settings} onChange={onChange} />);
@@ -38,6 +38,7 @@ describe("independent auxiliary-overlay settings", () => {
       [/我方场攻/, "showFriendlyAttack"],
       [/对手场攻/, "showOpponentAttack"],
       [/奥秘预测/, "secretPrediction"],
+      [/起手留牌参考/, "mulliganGuide"],
       [/智能卡牌计数/, "smartCardCounters"]
     ] as const;
 

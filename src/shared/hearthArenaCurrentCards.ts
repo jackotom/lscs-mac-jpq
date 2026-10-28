@@ -3,7 +3,7 @@ import type { HearthArenaCardMetadata } from "./arenaRatings.js";
 // Generated from HearthArena zh-cn for Arena cards missing from the latest local 2026-10-28 database.
 export const HEARTH_ARENA_CURRENT_CARDS: Readonly<Record<string, HearthArenaCardMetadata>> = {
   "BE_000": {"cardId":"BE_000","name":"唤光长枪","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_000.webp","heroClasses":["圣骑士"],"rarity":"COMMON"},
-  "BE_004": {"cardId":"BE_004","name":"拉夏 新 129 &darr; 尤格-萨隆的监狱","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_004.webp","heroClasses":["圣骑士"],"rarity":"LEGENDARY"},
+  "BE_004": {"cardId":"BE_004","name":"拉夏","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_004.webp","heroClasses":["圣骑士"],"rarity":"LEGENDARY"},
   "BE_008": {"cardId":"BE_008","name":"魔古将领","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_008.webp","heroClasses":["中立"],"rarity":"EPIC"},
   "BE_009": {"cardId":"BE_009","name":"古神主谋尤格-萨隆","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_009.webp","heroClasses":["中立"],"rarity":"LEGENDARY"},
   "BE_012": {"cardId":"BE_012","name":"黑暗执事","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_012.webp","heroClasses":["牧师"],"rarity":"EPIC"},
@@ -49,7 +49,7 @@ export const HEARTH_ARENA_CURRENT_CARDS: Readonly<Record<string, HearthArenaCard
   "BE_228": {"cardId":"BE_228","name":"祖拉玛特的仆从","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_228.webp","heroClasses":["牧师"],"rarity":"RARE"},
   "BE_229": {"cardId":"BE_229","name":"流沙塑型者","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_229.webp","heroClasses":["圣骑士"],"rarity":"RARE"},
   "BE_230": {"cardId":"BE_230","name":"拉维兹","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_230.webp","heroClasses":["恶魔猎手"],"rarity":"LEGENDARY"},
-  "BE_250": {"cardId":"BE_250","name":"诺甘农的圆盘 新 33 &darr; 碧蓝女王辛达苟萨","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_250.webp","heroClasses":["法师"],"rarity":"LEGENDARY"},
+  "BE_250": {"cardId":"BE_250","name":"诺甘农的圆盘","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_250.webp","heroClasses":["法师"],"rarity":"LEGENDARY"},
   "BE_251": {"cardId":"BE_251","name":"星界之泉","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_251.webp","heroClasses":["法师"],"rarity":"COMMON"},
   "BE_252": {"cardId":"BE_252","name":"星圣的召唤","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_252.webp","heroClasses":["法师"],"rarity":"RARE"},
   "BE_255": {"cardId":"BE_255","name":"始生浮龙","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_255.webp","heroClasses":["中立"],"rarity":"COMMON"},
@@ -71,7 +71,7 @@ export const HEARTH_ARENA_CURRENT_CARDS: Readonly<Record<string, HearthArenaCard
   "BE_325": {"cardId":"BE_325","name":"凶煞降临","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_325.webp","heroClasses":["死亡骑士"],"rarity":"COMMON"},
   "BE_327": {"cardId":"BE_327","name":"秘典翻译官","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_327.webp","heroClasses":["中立"],"rarity":"EPIC"},
   "BE_337": {"cardId":"BE_337","name":"地母塞拉赞恩","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_337.webp","heroClasses":["萨满祭司"],"rarity":"LEGENDARY"},
-  "BE_349": {"cardId":"BE_349","name":"附眼战槌 新 99 &darr; 统一着装","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_349.webp","heroClasses":["萨满祭司"],"rarity":"COMMON"},
+  "BE_349": {"cardId":"BE_349","name":"附眼战槌","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_349.webp","heroClasses":["萨满祭司"],"rarity":"COMMON"},
   "BE_541": {"cardId":"BE_541","name":"恩佐斯的密探","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_541.webp","heroClasses":["潜行者"],"rarity":"RARE"},
   "BE_550": {"cardId":"BE_550","name":"坦克战团","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_550.webp","heroClasses":["猎人"],"rarity":"RARE"},
   "BE_552": {"cardId":"BE_552","name":"喷火器","imageUrl":"https://cdn.heartharena.com/images/renders/zhCN/BE_552.webp","heroClasses":["猎人"],"rarity":"COMMON"},
