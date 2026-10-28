@@ -31,6 +31,7 @@ const HEARTH_ARENA_WEB_SOURCES = [
 ] as const;
 const CACHE_FILE_NAME = "hearthstone-arena-ratings.json";
 const FIRESTONE_CLASS_CACHE_SCHEMA_VERSION = 1;
+const HEARTH_ARENA_CARD_METADATA_SCHEMA_VERSION = 1;
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5000;
 const LARGE_FETCH_TIMEOUT_MS = 30_000;
@@ -170,6 +171,10 @@ export class ArenaRatingService {
       this.cachedTable = cached;
       this.cachedTableCacheMtimeMs = cachedResult.mtimeMs;
       if (!cached.firestone || !hasFirestoneDraftStats(cached.firestone) || !hasHearthArenaWebStats(cached.hearthArenaWeb)) {
+        this.cachedTableLoadedAt = 0;
+        return this.refresh(cached, cacheWarnings, cachedResult.mtimeMs);
+      }
+      if (cached.hearthArenaWeb?.schemaVersion !== HEARTH_ARENA_CARD_METADATA_SCHEMA_VERSION) {
         this.cachedTableLoadedAt = 0;
         return this.refresh(cached, cacheWarnings, cachedResult.mtimeMs);
       }
@@ -331,7 +336,10 @@ export class ArenaRatingService {
         return undefined;
       });
       const needsHearthArena = !cached || version !== cached.version;
-      const needsHearthArenaWeb = cacheIsStale || !hasHearthArenaWebStats(cached.hearthArenaWeb);
+      const needsHearthArenaWeb =
+        cacheIsStale ||
+        !hasHearthArenaWebStats(cached.hearthArenaWeb) ||
+        cached.hearthArenaWeb?.schemaVersion !== HEARTH_ARENA_CARD_METADATA_SCHEMA_VERSION;
       const needsFirestone =
         !cached?.firestone ||
         firestoneVersion === undefined ||
@@ -602,6 +610,7 @@ function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | 
   if (!isRecord(value) || value.source !== "HearthArena Web" || typeof value.version !== "string" || !isRecord(value.locales)) {
     return undefined;
   }
+  const schemaVersion = numberValue(value.schemaVersion);
 
   const locales: HearthArenaWebLocaleRatingSource[] = [];
   for (const [locale, rawLocale] of Object.entries(value.locales)) {
@@ -626,7 +635,8 @@ function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | 
     });
   }
 
-  return buildHearthArenaWebSource(locales);
+  const source = buildHearthArenaWebSource(locales);
+  return source ? { ...source, schemaVersion } : undefined;
 }
 
 function parseHearthArenaWebLocale(locale: string, url: string, html: string): HearthArenaWebLocaleRatingSource {
@@ -652,6 +662,7 @@ function parseHearthArenaWebLocale(locale: string, url: string, html: string): H
         if (name) {
           const heroClass = HEARTH_ARENA_HERO_CLASS_BY_SLUG[sectionMatch[1] ?? ""];
           const previous = cards[cardId];
+          const rarity = hearthArenaRarity(cardMatch[1] ?? "");
           const heroClasses = heroClass === "中立" || previous?.heroClasses?.includes("中立")
             ? ["中立"]
             : [...new Set([...(previous?.heroClasses ?? []), ...(heroClass ? [heroClass] : [])])];
@@ -659,7 +670,8 @@ function parseHearthArenaWebLocale(locale: string, url: string, html: string): H
             cardId,
             name: previous?.name ?? name,
             imageUrl: previous?.imageUrl ?? parseHearthArenaImageUrl(cardMatch[2]),
-            heroClasses
+            heroClasses,
+            rarity: previous?.rarity ?? rarity
           };
         }
       }
@@ -705,6 +717,7 @@ function buildHearthArenaWebSource(locales: readonly HearthArenaWebLocaleRatingS
             ...previous,
             ...card,
             name: previous.name,
+            rarity: previous.rarity ?? card.rarity,
             heroClasses: previous.heroClasses?.includes("中立")
               ? ["中立"]
               : [...new Set([...(previous.heroClasses ?? []), ...(card.heroClasses ?? [])])]
@@ -715,6 +728,7 @@ function buildHearthArenaWebSource(locales: readonly HearthArenaWebLocaleRatingS
 
   return {
     source: "HearthArena Web",
+    schemaVersion: HEARTH_ARENA_CARD_METADATA_SCHEMA_VERSION,
     version: locales.map((locale) => `${locale.locale}:${locale.version}`).sort().join("|"),
     locales: byLocale,
     cards
@@ -739,11 +753,16 @@ function parseHearthArenaCards(value: unknown): Readonly<Record<string, HearthAr
     const heroClasses = Array.isArray(rawCard.heroClasses)
       ? rawCard.heroClasses.filter((heroClass): heroClass is string => typeof heroClass === "string")
       : undefined;
+    const rarity = typeof rawCard.rarity === "string" &&
+      ["FREE", "COMMON", "RARE", "EPIC", "LEGENDARY", "UNKNOWN"].includes(rawCard.rarity)
+      ? rawCard.rarity as HearthArenaCardMetadata["rarity"]
+      : undefined;
     cards[cardId] = {
       cardId,
       name,
       ...(imageUrl ? { imageUrl } : {}),
-      ...(heroClasses?.length ? { heroClasses } : {})
+      ...(heroClasses?.length ? { heroClasses } : {}),
+      ...(rarity ? { rarity } : {})
     };
   }
   return cards;
@@ -767,6 +786,15 @@ function parseHearthArenaImageUrl(value: unknown): string | undefined {
 
 function localePriority(locale: string): number {
   return locale === "zh-cn" ? 0 : locale === "zh-tw" ? 1 : 2;
+}
+
+function hearthArenaRarity(value: string): HearthArenaCardMetadata["rarity"] {
+  if (value.includes("legendaries")) return "LEGENDARY";
+  if (value.includes("epics")) return "EPIC";
+  if (value.includes("rares")) return "RARE";
+  if (value.includes("commons")) return "COMMON";
+  if (value.includes("frees")) return "FREE";
+  return undefined;
 }
 
 function parseFirestone(value: unknown, draftValue: unknown | readonly unknown[] | undefined, version: string | undefined): FirestoneRatingSource {

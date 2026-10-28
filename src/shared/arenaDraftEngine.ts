@@ -124,6 +124,7 @@ export class ArenaDraftEngine {
         name: metadata.name,
         collectible: true,
         heroClasses: metadata.heroClasses,
+        rarity: metadata.rarity,
         imageUrl: metadata.imageUrl
       });
       indexedCardIds.add(normalizeCardId(metadata.cardId));
@@ -222,9 +223,12 @@ export class ArenaDraftEngine {
       this.pendingFuzzyScreenChoices = [];
       return false;
     }
+    const allowHeroPortraits = this.hero === undefined && names.filter((name) =>
+      this.findCardInfoByRecognizedName(name, true)?.card.cardType === "英雄"
+    ).length >= 2;
 
     names.forEach((name, screenSlot) => {
-      const match = name ? this.findCardInfoByRecognizedName(name) : undefined;
+      const match = name ? this.findCardInfoByRecognizedName(name, allowHeroPortraits) : undefined;
       if (!match) {
         this.pendingFuzzyScreenChoices[screenSlot] = undefined;
         if (this.pendingTeamCore) {
@@ -271,11 +275,11 @@ export class ArenaDraftEngine {
     return true;
   }
 
-  private findCardInfoByRecognizedName(name: string): RecognizedCardMatch | undefined {
+  private findCardInfoByRecognizedName(name: string, allowHeroPortraits = false): RecognizedCardMatch | undefined {
     const normalized = normalizeCardName(name);
-    const exact = this.findArenaScreenCardInfo(this.cardInfoByName.get(normalized));
+    const exact = this.findArenaScreenCardInfo(this.cardInfoByName.get(normalized), allowHeroPortraits);
     const fuzzyName = normalizeOcrCardName(name);
-    const normalizedExact = this.findArenaScreenCardInfo(this.cardInfoByOcrName.get(fuzzyName));
+    const normalizedExact = this.findArenaScreenCardInfo(this.cardInfoByOcrName.get(fuzzyName), allowHeroPortraits);
     if (exact || normalizedExact || fuzzyName.length < 3) {
       const card = exact ?? normalizedExact;
       return card ? { card, confidence: "exact" } : undefined;
@@ -295,7 +299,7 @@ export class ArenaDraftEngine {
       if (distance === undefined) {
         continue;
       }
-      const card = this.findArenaScreenCardInfo(this.cardInfoByName.get(cardName));
+      const card = this.findArenaScreenCardInfo(this.cardInfoByName.get(cardName), allowHeroPortraits);
       if (!card) {
         continue;
       }
@@ -312,26 +316,33 @@ export class ArenaDraftEngine {
       : undefined;
   }
 
-  private findArenaScreenCardInfo(matches: readonly CardInfo[] | undefined): CardInfo | undefined {
-    const candidates = matches?.filter((card) => this.isArenaScreenCardCandidate(card));
+  private findArenaScreenCardInfo(
+    matches: readonly CardInfo[] | undefined,
+    allowHeroPortraits = false
+  ): CardInfo | undefined {
+    const candidates = matches?.filter((card) => this.isArenaScreenCardCandidate(card, allowHeroPortraits));
     return candidates?.find((card) =>
       getArenaCardRating(this.ratings, card.cardId ?? card.id, this.hero?.className) !== undefined
     )
+      ?? candidates?.find((card) => card.cardType !== "英雄" && card.collectible === true)
+      ?? candidates?.find((card) => card.cardType === "英雄")
       ?? candidates?.find((card) => card.collectible === true)
       ?? candidates?.[0];
   }
 
-  private isArenaScreenCardCandidate(card: CardInfo): boolean {
+  private isArenaScreenCardCandidate(card: CardInfo, allowHeroPortraits = false): boolean {
     const cardId = (card.cardId ?? card.id ?? "").toUpperCase();
-    if (cardId.startsWith("HERO_")) {
-      return false;
+    const isOrdinaryHeroPortrait = cardId.startsWith("HERO_");
+    const isHeroCard = card.cardType === "英雄" || (card.cardType === undefined && isOrdinaryHeroPortrait);
+    if (isHeroCard) {
+      return allowHeroPortraits ||
+        (!isOrdinaryHeroPortrait && this.acceptingTeamPreview && !this.pendingTeamCore);
     }
-    const isLegendaryTeamHero =
+    const isLegendaryTeamCard =
       this.acceptingTeamPreview &&
       !this.pendingTeamCore &&
-      card.cardType === "英雄" &&
       card.rarity === "LEGENDARY";
-    if (isLegendaryTeamHero) {
+    if (isLegendaryTeamCard) {
       return true;
     }
     if (card.cardType && !ARENA_SCREEN_CARD_TYPES.has(card.cardType)) {

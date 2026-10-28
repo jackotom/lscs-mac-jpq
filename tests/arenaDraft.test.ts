@@ -875,6 +875,92 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     ]);
   });
 
+  it("recognizes every hero portrait during the Arena hero choice", () => {
+    const heroes = [
+      ["HERO_01", "加尔鲁什·地狱咆哮"],
+      ["HERO_02", "萨尔"],
+      ["HERO_03", "瓦莉拉·萨古纳尔"],
+      ["HERO_04", "乌瑟尔·光明使者"],
+      ["HERO_05", "雷克萨"],
+      ["HERO_06", "玛法里奥·怒风"],
+      ["HERO_07", "古尔丹"],
+      ["HERO_08", "吉安娜·普罗德摩尔"],
+      ["HERO_09", "安度因·乌瑞恩"],
+      ["HERO_10", "伊利丹·怒风"],
+      ["HERO_11", "巫妖王"]
+    ] as const;
+    const heroCardDb = createCardDatabase([
+      ...heroes.map(([cardId, name], index) => ({
+        dbfId: 7000 + index,
+        cardId,
+        name,
+        cardType: "英雄",
+        collectible: true
+      }))
+    ]);
+
+    const frames = [heroes.slice(0, 3), heroes.slice(3, 6), heroes.slice(6, 9), [heroes[9], heroes[10], heroes[0]] as const];
+    for (const frame of frames) {
+      const engine = new ArenaDraftEngine({ cardDatabase: heroCardDb });
+      engine.applyArenaLine("D 12:00:00.000 Arena.SetDraftMode - DRAFTING");
+      expect(engine.applyScreenChoices(frame.map(([, name]) => name))).toBe(true);
+      expect(engine.getState().currentChoices.map(({ cardId, name }) => [cardId, name])).toEqual(
+        frame.map(([cardId, name]) => [cardId, name])
+      );
+    }
+  });
+
+  it("recognizes a new legendary minion as the Arena team core", () => {
+    const legendaryMinionRatings: ArenaRatingTable = {
+      source: "current arena",
+      version: 119,
+      fetchedAt: "2026-10-28T00:00:00.000Z",
+      ratings: { Warrior: { BE_557: 84 } },
+      hearthArenaWeb: {
+        schemaVersion: 1,
+        source: "HearthArena Web",
+        version: "current",
+        locales: {
+          "zh-cn": {
+            locale: "zh-cn",
+            url: "https://www.heartharena.com/zh-cn/tierlist",
+            version: "current",
+            fetchedAt: "2026-10-28T00:00:00.000Z",
+            ratingCount: 1,
+            ratings: { Warrior: { BE_557: 84 } },
+            cards: {}
+          }
+        },
+        cards: {
+          BE_557: {
+            cardId: "BE_557",
+            name: "塞特斯",
+            rarity: "LEGENDARY",
+            heroClasses: ["战士"]
+          }
+        }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: cardDb, ratings: legendaryMinionRatings });
+    engine.applyArenaText([
+      "D 12:00:00.000 Arena.SetDraftMode - DRAFTING",
+      "D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_01"
+    ].join("\n"));
+
+    expect(engine.applyScreenChoices(["塞特斯", "Sample Singleton", "Sample Pair"])).toBe(true);
+    expect(engine.getState().currentChoices[0]).toMatchObject({ cardId: "BE_557", score: 84 });
+    engine.applyArenaLine("D 12:00:01.000 Client chooses: 塞特斯 (BE_557)");
+    engine.applyArenaLine("D 12:00:02.000 Client chooses: 塞特斯 (BE_557)");
+    engine.applyArenaLine("D 12:00:03.000 Client chooses: Sample Pair (TEST_002)");
+
+    expect(engine.getState()).toMatchObject({
+      draftCount: 4,
+      deck: expect.arrayContaining([
+        expect.objectContaining({ cardId: "BE_557", name: "塞特斯", count: 1 })
+      ])
+    });
+  });
+
   it("uses the rated card when OCR matches duplicate card names", () => {
     const duplicateNameCardDb = createCardDatabase([
       { dbfId: 4001, name: "恐狼前锋", cardId: "EX1_162", collectible: true },

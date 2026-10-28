@@ -77,6 +77,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Hunter: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -120,6 +121,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Priest: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -233,6 +235,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Priest: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -290,6 +293,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-22T00:00:00.000Z",
         ratings: {},
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -420,6 +424,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Hunter: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -483,6 +488,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-22T00:00:00.000Z",
         ratings: { Priest: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -559,6 +565,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Hunter: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -654,6 +661,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-22T00:00:00.000Z",
         ratings: { Priest: { TEST_001: 88 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-cn:web-v1",
           locales: {
@@ -831,6 +839,7 @@ describe("ArenaRatingService", () => {
       version: 4,
       ratings: { Hunter: { TEST_002: 91 } },
       hearthArenaWeb: {
+        schemaVersion: 1,
         source: "HearthArena Web",
         locales: {
           "zh-cn": {
@@ -840,7 +849,8 @@ describe("ArenaRatingService", () => {
                 cardId: "TEST_002",
                 name: "测试牌",
                 imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/TEST_002.webp",
-                heroClasses: ["猎人"]
+                heroClasses: ["猎人"],
+                rarity: "COMMON"
               }
             },
             ratings: { Hunter: { TEST_002: 97 } }
@@ -855,7 +865,8 @@ describe("ArenaRatingService", () => {
             cardId: "TEST_002",
             name: "测试牌",
             imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/TEST_002.webp",
-            heroClasses: ["猎人"]
+            heroClasses: ["猎人"],
+            rarity: "COMMON"
           }
         }
       },
@@ -889,18 +900,36 @@ describe("ArenaRatingService", () => {
     expect(fetcher).toHaveBeenCalledTimes(10);
   });
 
-  it("keeps new Arena-only card names from the live tier list", async () => {
+  it("upgrades fresh rating caches and keeps new Arena-only card metadata", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "arena-rating-new-cards-"));
     tempDirs.push(root);
     const cachePath = path.join(root, "ratings.json");
-    const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     await writeFile(cachePath, JSON.stringify({
       source: "cached",
       version: 119,
-      fetchedAt: old.toISOString(),
-      ratings: { Neutral: {} }
+      fetchedAt: new Date().toISOString(),
+      ratings: { Neutral: { BE_204: 105 } },
+      hearthArenaWeb: {
+        source: "HearthArena Web",
+        version: "old-without-card-metadata",
+        locales: {
+          "zh-cn": {
+            locale: "zh-cn",
+            url: "https://www.heartharena.com/zh-cn/tierlist",
+            version: "old",
+            fetchedAt: new Date().toISOString(),
+            ratingCount: 1,
+            ratings: { Neutral: { BE_204: 105 } }
+          }
+        }
+      },
+      firestone: {
+        source: "Firestone",
+        version: "old",
+        lastUpdated: new Date().toISOString(),
+        ratings: { BE_204: { pickRate: 52.5 } }
+      }
     }), "utf8");
-    await utimes(cachePath, old, old);
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("haVersion")) {
@@ -947,8 +976,10 @@ describe("ArenaRatingService", () => {
       cardId: "BE_204",
       name: "滑行者巨怪",
       imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/BE_204.webp",
-      heroClasses: ["中立"]
+      heroClasses: ["中立"],
+      rarity: "COMMON"
     });
+    expect(result.table?.hearthArenaWeb?.schemaVersion).toBe(1);
   });
 
   it("refreshes fresh legacy Firestone caches that do not include draft buckets", async () => {
@@ -1110,6 +1141,7 @@ describe("ArenaRatingService", () => {
         fetchedAt: "2026-07-10T00:00:00.000Z",
         ratings: { Warrior: { TEST_005: 80 } },
         hearthArenaWeb: {
+          schemaVersion: 1,
           source: "HearthArena Web",
           version: "zh-tw:cached-web-v1",
           locales: {

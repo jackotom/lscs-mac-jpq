@@ -1,4 +1,5 @@
 import { formatSourceLabel, type DataSourceProvenance } from "./dataSourceProvenance.js";
+import type { CardRarity } from "./cardDatabase.js";
 
 export interface ArenaRatingTable {
   readonly source: string;
@@ -16,6 +17,7 @@ export interface HearthArenaCardMetadata {
   readonly name: string;
   readonly imageUrl?: string;
   readonly heroClasses?: readonly string[];
+  readonly rarity?: CardRarity;
 }
 
 export interface HearthArenaWebLocaleRatingSource {
@@ -30,6 +32,7 @@ export interface HearthArenaWebLocaleRatingSource {
 
 export interface HearthArenaWebRatingSource {
   readonly source: "HearthArena Web";
+  readonly schemaVersion?: number;
   readonly version: string;
   readonly locales: Readonly<Record<string, HearthArenaWebLocaleRatingSource>>;
   readonly cards?: Readonly<Record<string, HearthArenaCardMetadata>>;
