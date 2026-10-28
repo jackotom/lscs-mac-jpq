@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import { AlertTriangle, Library, Sparkles } from "lucide-react";
 import type { DeckCard, DeckSummary } from "../types";
 import { CardDetailBody } from "./CardDetailBody";
@@ -86,7 +87,7 @@ export function DeckPanel({ summary, cards, logIssue }: DeckPanelProps) {
                 <details className="card-detail-disclosure">
                   <summary className="deck-card-row">
                     {card.details?.cropImageUrl || card.details?.imageUrl ? (
-                      <img className="card-thumb" src={card.details.cropImageUrl ?? card.details.imageUrl} alt="" loading="lazy" />
+                      <CardThumbnail className="card-thumb" card={card.details} />
                     ) : (
                       <span className="mana-cost">{card.cost ?? "—"}</span>
                     )}

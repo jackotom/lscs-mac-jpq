@@ -1,22 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { flushSync } from "react-dom";
-import App from "./App";
 import { markRendererReady } from "./rendererReady";
 import { parseTrackerSettings } from "./runtimeValidation";
 import { resolveTrackerTheme } from "./trackerTheme";
-import "./styles.css";
-import "./overlayStyles.css";
-import "./arenaChoiceOverlayStyles.css";
-import "./cardHoverStyles.css";
-import "./opponentOverlayStyles.css";
-import "./boardAttackOverlayStyles.css";
-import "./ladderDeckRecommendationStyles.css";
-import "./matchHistoryStyles.css";
-import "./desktopReplicaStyles.css";
-import "./homeNewsStyles.css";
-import "./arenaHeroRankingStyles.css";
-import "./lightOverlayStyles.css";
+import "./windowBaseStyles.css";
 
 export function TrackerThemeBridge() {
   const api = window.hearthstoneTracker;
@@ -76,6 +64,33 @@ const isHealthOverlay = overlaySearchParams.get("friendly-health-overlay") === "
   overlaySearchParams.get("opponent-health-overlay") === "1";
 const isSecretOverlay = overlaySearchParams.get("secret-overlay") === "1";
 const isSmartCounterOverlay = overlaySearchParams.get("smart-counter-overlay") === "1";
+const isQaRoute = [...overlaySearchParams.keys()].some((key) => key.startsWith("qa-"));
+const isAuxiliaryOverlay = !isQaRoute && (
+  isBoardAttackOverlay || isSingleAttackOverlay || isHealthOverlay || isSecretOverlay || isSmartCounterOverlay ||
+  overlaySearchParams.get("arena-choice-overlay") === "1"
+);
+const isTrackerOverlay = !isQaRoute && (
+  overlaySearchParams.get("overlay") === "1" || overlaySearchParams.get("opponent-overlay") === "1"
+);
+const isUtilityOverlay = !isQaRoute && (
+  overlaySearchParams.get("ladder-deck-overlay") === "1" ||
+  overlaySearchParams.get("arena-hero-ranking-overlay") === "1" ||
+  overlaySearchParams.get("card-preview") === "1"
+);
+const Renderer = React.lazy(() => isAuxiliaryOverlay
+  ? import("./AuxiliaryOverlayEntry")
+  : isTrackerOverlay
+    ? import("./TrackerOverlayEntry")
+    : isUtilityOverlay
+      ? import("./UtilityOverlayEntry")
+      : import("./App"));
+
+function MarkRendererReadyAfterMount() {
+  React.useEffect(() => {
+    queueMicrotask(() => markRendererReady(document));
+  }, []);
+  return null;
+}
 
 if (isBoardAttackOverlay) {
   document.documentElement.classList.add("board-attack-overlay-document");
@@ -103,9 +118,11 @@ if (rootElement) {
     root.render(
       <React.StrictMode>
         <TrackerThemeBridge />
-        <App />
+        <React.Suspense fallback={null}>
+          <Renderer />
+          <MarkRendererReadyAfterMount />
+        </React.Suspense>
       </React.StrictMode>
     );
   });
-  markRendererReady(document);
 }

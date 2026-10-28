@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import { Check, Crown, Star } from "lucide-react";
 import { getArenaScoreQuality } from "../../shared/arenaRatings";
 import type { ArenaCardChoice, ArenaState } from "../../shared/types";
@@ -61,7 +62,7 @@ export function ArenaPanel({ state }: ArenaPanelProps) {
                 <details className="card-detail-disclosure arena-choice-disclosure">
                   <summary className="arena-choice-row">
                     {choice.details?.cropImageUrl || choice.details?.imageUrl ? (
-                      <img className="card-thumb" src={choice.details.cropImageUrl ?? choice.details.imageUrl} alt="" loading="lazy" />
+                      <CardThumbnail className="card-thumb" card={choice.details} />
                     ) : null}
                     <div>
                       <strong title={choice.name} aria-label={choice.name}>{choice.name}</strong>
@@ -97,7 +98,7 @@ export function ArenaPanel({ state }: ArenaPanelProps) {
           {visibleDeck.map((card) => (
             <li key={card.cardId ?? card.name}>
               {card.details?.cropImageUrl || card.details?.imageUrl ? (
-                <img className="card-thumb" src={card.details.cropImageUrl ?? card.details.imageUrl} alt="" loading="lazy" />
+                <CardThumbnail className="card-thumb" card={card.details} />
               ) : null}
               <span title={card.name}>{card.name}</span>
               <strong>x{card.count}</strong>
@@ -123,7 +124,7 @@ export function ArenaPanel({ state }: ArenaPanelProps) {
             {pendingRedraftDeck.map((card) => (
               <li key={card.cardId ?? card.name}>
                 {card.details?.cropImageUrl || card.details?.imageUrl ? (
-                  <img className="card-thumb" src={card.details.cropImageUrl ?? card.details.imageUrl} alt="" loading="lazy" />
+                  <CardThumbnail className="card-thumb" card={card.details} />
                 ) : null}
                 <span title={card.name}>{card.name}</span>
                 <strong>x{card.count}</strong>

@@ -13,13 +13,19 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function hearthArenaHtml(cardId: string, score: number, classSlug = "hunter", dtClass = `${classSlug} commons`) {
+function hearthArenaHtml(
+  cardId: string,
+  score: number,
+  classSlug = "hunter",
+  dtClass = `${classSlug} commons`,
+  cardName = "测试牌"
+) {
   return `
     <section class="tab tierlist ${classSlug}" id="${classSlug}">
       <ul>
         <li>
           <dl class="card score_100">
-            <dt class="${dtClass}" data-card-image="https://cdn.heartharena.com/images/renders/zhCN/${cardId}.webp">测试牌</dt>
+            <dt class="${dtClass}" data-card-image="https://cdn.heartharena.com/images/renders/zhCN/${cardId}.webp">${cardName}</dt>
             <dd class="score score_100">${score}↑</dd>
           </dl>
         </li>
@@ -829,11 +835,27 @@ describe("ArenaRatingService", () => {
         locales: {
           "zh-cn": {
             ratingCount: 1,
+            cards: {
+              TEST_002: {
+                cardId: "TEST_002",
+                name: "测试牌",
+                imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/TEST_002.webp",
+                heroClasses: ["猎人"]
+              }
+            },
             ratings: { Hunter: { TEST_002: 97 } }
           },
           "zh-tw": {
             ratingCount: 1,
             ratings: { Hunter: { TEST_002: 96 } }
+          }
+        },
+        cards: {
+          TEST_002: {
+            cardId: "TEST_002",
+            name: "测试牌",
+            imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/TEST_002.webp",
+            heroClasses: ["猎人"]
           }
         }
       },
@@ -865,6 +887,68 @@ describe("ArenaRatingService", () => {
     expect(getArenaScore(result.table, "TEST_002", "Hunter")).toBe(97);
     expect(getArenaScoreSourceLabel(result.table)).toContain("HearthArena官网");
     expect(fetcher).toHaveBeenCalledTimes(10);
+  });
+
+  it("keeps new Arena-only card names from the live tier list", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "arena-rating-new-cards-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "ratings.json");
+    const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await writeFile(cachePath, JSON.stringify({
+      source: "cached",
+      version: 119,
+      fetchedAt: old.toISOString(),
+      ratings: { Neutral: {} }
+    }), "utf8");
+    await utimes(cachePath, old, old);
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("haVersion")) {
+        return { ok: true, status: 200, json: async () => ({ haVersion: 119 }) } as Response;
+      }
+      if (init?.method === "HEAD") {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ etag: "current" })
+        } as Response;
+      }
+      if (url.includes("heartharena.com/zh-cn/tierlist")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => hearthArenaHtml(
+            "BE_204",
+            105,
+            "any",
+            "any commons",
+            "滑行者巨怪\n<span class=\"new\">新</span>"
+          )
+        } as Response;
+      }
+      if (url.includes("heartharena.com/zh-tw/tierlist")) {
+        return { ok: true, status: 200, text: async () => hearthArenaHtml("BE_204", 104, "any") } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          lastUpdated: "2026-10-28T00:00:00.000Z",
+          lastUpdateDate: "2026-10-28T00:00:00.000Z",
+          stats: []
+        })
+      } as Response;
+    });
+
+    const { ArenaRatingService } = await import("../src/main/arenaRatingService.js");
+    const result = await new ArenaRatingService(cachePath, fetcher).loadRatings();
+
+    expect(result.table?.hearthArenaWeb?.cards?.BE_204).toEqual({
+      cardId: "BE_204",
+      name: "滑行者巨怪",
+      imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/BE_204.webp",
+      heroClasses: ["中立"]
+    });
   });
 
   it("refreshes fresh legacy Firestone caches that do not include draft buckets", async () => {

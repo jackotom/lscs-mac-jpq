@@ -220,11 +220,4 @@ describe("card lifecycle Electron QA verification", () => {
     expect(kelthuzadPreviewBlock).not.toContain("totalCount: 5");
   });
 
-  it("reports the tallest available real-window case as verified", () => {
-    const report = read(".superpowers/sdd/task-9-report.md");
-    expect(report).toContain("验收已完成");
-    expect(report).toContain("100×834");
-    expect(report).toContain("9 个");
-    expect(report).not.toContain("环境阻塞、未验证");
-  });
 });

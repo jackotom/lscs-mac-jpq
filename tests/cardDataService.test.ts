@@ -20,6 +20,24 @@ afterEach(async () => {
 });
 
 describe("CardDataService", () => {
+  it("audit regression uses registered provenance instead of a cached permission claim", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "card-source-claim-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "cards.json");
+    await writeFile(cachePath, JSON.stringify({
+      schemaVersion: 1, fetchedAt: new Date().toISOString(), version: "sample",
+      cards: [{ dbfId: 123, cardId: "TEST_123", name: "样本卡牌" }],
+      sources: [{ id: "blizzard-cn-cards", label: "已全部授权", urls: ["javascript:alert(1)"], authorization: { status: "authorized", note: "缓存中的声明" } }]
+    }));
+    const fetcher = vi.fn(async () => { throw new Error("No network in cache-only regression"); });
+    const result = await new CardDataService(cachePath, fetcher as never).loadCardDatabase({ preferCache: true });
+    expect(result.database?.["123"]).toEqual(expect.objectContaining({ name: "样本卡牌" }));
+    expect(result.sources?.[0]).toMatchObject({ label: "国服炉石卡牌站", authorization: { status: "pending-confirmation" } });
+    expect(result.sources?.[0]?.urls).not.toContain("javascript:alert(1)");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("reads the old cache format and upgrades it after a successful refresh", async () => {
     const { CardDataService } = await import("../src/main/cardDataService.js");
     const root = await mkdtemp(path.join(os.tmpdir(), "card-data-schema-upgrade-"));
@@ -237,7 +255,11 @@ describe("CardDataService", () => {
 
     const result = await new CardDataService(cachePath, fetchMock as never).loadCardDatabase();
 
-    expect(result.source).toBe("Blizzard 官方卡牌浏览器");
+    expect(result.source).toBe("混合来源：国服炉石卡牌站 + HearthstoneJSON");
+    expect((result as { sources?: readonly { id: string }[] }).sources?.map((source) => source.id)).toEqual([
+      "blizzard-cn-cards",
+      "hearthstonejson-cards"
+    ]);
     expect(result.cardCount).toBe(4);
     expect(result.database?.["1001"]).toEqual(expect.objectContaining({ name: "官网新名字", cardId: "TEST_001" }));
     expect(result.database?.["1003"]).toEqual(expect.objectContaining({ name: "旧库额外卡" }));
@@ -628,6 +650,31 @@ describe("CardDataService", () => {
       cardType: "法术"
     }));
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("static.zerotoheroes.com"), expect.any(Object));
+  });
+
+  it("rejects a foreign response when a required card ID cannot be parsed", async () => {
+    const { CardDataService } = await import("../src/main/cardDataService.js");
+    const root = await mkdtemp(path.join(os.tmpdir(), "invalid-cap-card-supplement-service-"));
+    tempDirs.push(root);
+    const cachePath = path.join(root, "official-cards.json");
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://hs.blizzard.cn/cards/") {
+        return responseText('<script src="https://hs.res.netease.com/pc/zt/version/js/cards/index_cap.js"></script>');
+      }
+      if (url.includes("hs-cards-api-server")) {
+        return responseJson({ code: 0, data: { total: 1, list: [{ id: 129888, name: "通缉海报", collectible: 1 }] } });
+      }
+      if (url.includes("api.hearthstonejson.com")) return response([]);
+      if (url.includes("static.zerotoheroes.com") || url.includes("static.firestoneapp.com")) {
+        return response(foreignFullSource([{ dbfId: 0, id: "CAP_407", name: "" }]));
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await new CardDataService(cachePath, fetchMock as never).loadCardDatabase({ forceRefresh: true });
+
+    expect(result.database?.["129888"]).toEqual(expect.not.objectContaining({ cardId: "CAP_407" }));
+    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining("Firestone") ]));
   });
 
   it("force-refreshes an existing foreign supplement instead of pinning its first version", { timeout: 15_000 }, async () => {

@@ -136,8 +136,8 @@ export function listCardLibrary(cardDb: CardDatabase, input?: unknown): CardLibr
   const heroClasses = sortText(uniqueStrings(cards.flatMap((card) => card.heroClasses ?? [])));
   const cardTypes = sortText(uniqueStrings(cards.map((card) => card.cardType).filter((type): type is string => Boolean(type))));
   const normalizedSearch = normalizeSearchText(query.query);
-  const items = cards
-    .filter((card) => matchesCardLibraryQuery(card, query, normalizedSearch))
+  const matchedCards = cards.filter((card) => matchesCardLibraryQuery(card, query, normalizedSearch));
+  const items = (isExactCardIdentifierQuery(matchedCards, query.query) ? matchedCards : uniqueLibraryReprints(matchedCards))
     .sort(compareCardInfo)
     .map((card) => toCardDetails(cardDb, card));
   const start = (query.page - 1) * query.pageSize;
@@ -151,6 +151,47 @@ export function listCardLibrary(cardDb: CardDatabase, input?: unknown): CardLibr
     cardTypes,
     warnings: []
   };
+}
+
+function uniqueLibraryReprints(cards: readonly CardInfo[]): CardInfo[] {
+  const unique = new Map<string, CardInfo>();
+  for (const card of cards) {
+    // Browsing represents one current card per name, type, and class. The complete
+    // database remains indexed by dbfId for logs and exact identifier searches.
+    const key = JSON.stringify([
+      card.name.normalize("NFKC"), card.cardType,
+      [...(card.heroClasses ?? [])].sort()
+    ]);
+    const previous = unique.get(key);
+    if (!previous || compareLibraryEdition(card, previous) < 0) unique.set(key, card);
+  }
+  return [...unique.values()];
+}
+
+function isExactCardIdentifierQuery(cards: readonly CardInfo[], query: string): boolean {
+  const normalized = normalizeCardId(query);
+  return Boolean(normalized) && cards.some((card) =>
+    String(card.dbfId) === normalized ||
+    [card.cardId, card.id].some((identifier) => identifier && normalizeCardId(identifier) === normalized)
+  );
+}
+
+function compareLibraryEdition(left: CardInfo, right: CardInfo): number {
+  const preference = (card: CardInfo): readonly [number, number, string, number] => {
+    const cardId = card.cardId ?? card.id ?? "";
+    const edition = /^CORE_/i.test(cardId) ? 0 : /^VAN_/i.test(cardId) ? 2 : 1;
+    // CORE is the maintained official edition, ordinary IDs are the canonical
+    // release, and VAN is the historical vanilla snapshot. Artwork only settles
+    // otherwise equivalent source records; dbfId is a stable final tie-breaker.
+    return [edition, card.imageUrl || card.cropImageUrl ? 0 : 1, normalizeCardId(cardId), card.dbfId];
+  };
+  const leftPreference = preference(left);
+  const rightPreference = preference(right);
+  for (let index = 0; index < leftPreference.length; index += 1) {
+    if (leftPreference[index] < rightPreference[index]) return -1;
+    if (leftPreference[index] > rightPreference[index]) return 1;
+  }
+  return 0;
 }
 
 export function createCardLibraryErrorResult(input: unknown, error: string, warnings: readonly string[] = []): CardLibraryResult {

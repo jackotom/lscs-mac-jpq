@@ -95,7 +95,7 @@ describe("CardLibraryPanel", () => {
     expect(screen.getByLabelText("已选卡牌：火球术")).toHaveTextContent("造成 6 点伤害。");
   });
 
-  it("falls back to the full card image when the cropped thumbnail fails", () => {
+  it("uses the current full card image before a stale cropped thumbnail", () => {
     renderPanel({
       cards: [{
         ...cards[0],
@@ -104,14 +104,14 @@ describe("CardLibraryPanel", () => {
       }]
     });
 
-    const croppedImage = document.querySelector<HTMLImageElement>(".card-library-art img");
-    expect(croppedImage).toHaveAttribute("src", "https://cards.example.test/crop/fireball.jpg");
+    const fullImage = document.querySelector<HTMLImageElement>(".card-library-art img");
+    expect(fullImage).toHaveAttribute("src", "https://cards.example.test/full/fireball.jpg");
 
-    fireEvent.error(croppedImage!);
+    fireEvent.error(fullImage!);
 
     expect(document.querySelector<HTMLImageElement>(".card-library-art img")).toHaveAttribute(
       "src",
-      "https://cards.example.test/full/fireball.jpg"
+      "https://cards.example.test/crop/fireball.jpg"
     );
   });
 
@@ -126,9 +126,9 @@ describe("CardLibraryPanel", () => {
 
     fireEvent.error(document.querySelector<HTMLImageElement>(".card-library-art img")!);
 
-    const fullImage = document.querySelector<HTMLImageElement>(".card-library-art img");
-    expect(fullImage).toHaveAttribute("src", "https://cards.example.test/full/fireball.jpg");
-    fireEvent.error(fullImage!);
+    const croppedImage = document.querySelector<HTMLImageElement>(".card-library-art img");
+    expect(croppedImage).toHaveAttribute("src", "https://cards.example.test/crop/fireball.jpg");
+    fireEvent.error(croppedImage!);
 
     expect(document.querySelector(".card-library-art")).toHaveClass("is-empty");
     expect(document.querySelector(".card-library-art")).toHaveAccessibleName("卡图不可用");
@@ -150,7 +150,7 @@ describe("CardLibraryPanel", () => {
 
     expect(document.querySelector<HTMLImageElement>(".card-library-art img")).toHaveAttribute(
       "src",
-      "https://art.hearthstonejson.com/v1/tiles/CORE_EX1_144.jpg"
+      "https://art.hearthstonejson.com/v1/render/latest/zhCN/256x/CORE_EX1_144.png"
     );
     expect(screen.queryByLabelText("卡图不可用")).not.toBeInTheDocument();
   });

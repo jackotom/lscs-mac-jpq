@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
+import { ARENA_SOURCE_PROVENANCE, mergeSourceProvenance, type DataSourceProvenance } from "../shared/dataSourceProvenance.js";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
 import type {
   ArenaRatingTable,
@@ -10,11 +11,12 @@ import type {
   FirestoneClassRatingSource,
   FirestoneDraftBucket,
   FirestoneRatingSource,
+  HearthArenaCardMetadata,
   HearthArenaWebLocaleRatingSource,
   HearthArenaWebRatingSource
 } from "../shared/arenaRatings.js";
 
-const SOURCE = "Arena Tracker / HearthArena";
+const SOURCE = "混合竞技场来源";
 const VERSION_URL = "https://raw.githubusercontent.com/supertriodo/Arena-Tracker/master/HearthArena/haVersion.json";
 const RATINGS_URL = "https://raw.githubusercontent.com/supertriodo/Arena-Tracker/master/HearthArena/hearthArena.json";
 const FIRESTONE_CARD_STATS_URL = "https://static.zerotoheroes.com/api/arena/stats/cards/arena-underground/last-patch/global.gz.json?v=6";
@@ -31,6 +33,7 @@ const CACHE_FILE_NAME = "hearthstone-arena-ratings.json";
 const FIRESTONE_CLASS_CACHE_SCHEMA_VERSION = 1;
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5000;
+const LARGE_FETCH_TIMEOUT_MS = 30_000;
 const FETCH_RETRY_DELAY_MS = 150;
 const FETCH_ATTEMPTS = 2;
 const HEARTH_ARENA_CLASS_BY_SLUG: Readonly<Record<string, string>> = {
@@ -47,6 +50,21 @@ const HEARTH_ARENA_CLASS_BY_SLUG: Readonly<Record<string, string>> = {
   warrior: "Warrior",
   any: "Neutral",
   neutral: "Neutral"
+};
+const HEARTH_ARENA_HERO_CLASS_BY_SLUG: Readonly<Record<string, string>> = {
+  "death-knight": "死亡骑士",
+  "demon-hunter": "恶魔猎手",
+  druid: "德鲁伊",
+  hunter: "猎人",
+  mage: "法师",
+  paladin: "圣骑士",
+  priest: "牧师",
+  rogue: "盗贼",
+  shaman: "萨满祭司",
+  warlock: "术士",
+  warrior: "战士",
+  any: "中立",
+  neutral: "中立"
 };
 
 export interface ArenaRatingLoadResult {
@@ -253,8 +271,8 @@ export class ArenaRatingService {
 
     try {
       const [overviewPayload, cardPayload] = await Promise.all([
-        this.fetchJson(FIRESTONE_CLASS_OVERVIEW_URL),
-        this.fetchJson(firestoneClassCardsUrl(classSlug))
+        this.fetchJson(FIRESTONE_CLASS_OVERVIEW_URL, LARGE_FETCH_TIMEOUT_MS),
+        this.fetchJson(firestoneClassCardsUrl(classSlug), LARGE_FETCH_TIMEOUT_MS)
       ]);
       const source = parseFirestoneClass(overviewPayload, cardPayload, classSlug);
       const cachePath = this.getClassCachePath(classSlug);
@@ -350,11 +368,11 @@ export class ArenaRatingService {
       let firestone = cached?.firestone;
       if (needsFirestone) {
         try {
-          const cardStatsPayload = await this.fetchJson(FIRESTONE_CARD_STATS_URL);
+          const cardStatsPayload = await this.fetchJson(FIRESTONE_CARD_STATS_URL, LARGE_FETCH_TIMEOUT_MS);
           const draftStatsPayloads = await Promise.all(
             FIRESTONE_DRAFT_STATS_URLS.map(async (url) => {
               try {
-                return await this.fetchJson(url);
+                return await this.fetchJson(url, LARGE_FETCH_TIMEOUT_MS);
               } catch (error) {
                 warnings.push(`Firestone 选牌统计读取失败：${formatError(error)}`);
                 return undefined;
@@ -375,6 +393,11 @@ export class ArenaRatingService {
         version,
         fetchedAt: new Date().toISOString(),
         ratings,
+        sources: mergeSourceProvenance([
+          ARENA_SOURCE_PROVENANCE.arenaTracker,
+          ...(hearthArenaWeb ? [ARENA_SOURCE_PROVENANCE.hearthArenaWeb] : []),
+          ...(firestone ? [ARENA_SOURCE_PROVENANCE.firestoneArena] : [])
+        ]),
         hearthArenaWeb,
         firestone,
         firestoneClasses: this.cachedTable?.firestoneClasses ?? cached?.firestoneClasses
@@ -435,10 +458,10 @@ export class ArenaRatingService {
     return path.join(parsed.dir, `${parsed.name}-firestone-${classSlug}${parsed.ext || ".json"}`);
   }
 
-  private async fetchJson(url: string): Promise<unknown> {
+  private async fetchJson(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<unknown> {
     return this.withShortRetry(async () => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await this.fetcher(url, { headers: { accept: "application/json" }, signal: controller.signal });
         if (!response.ok) {
@@ -484,7 +507,7 @@ export class ArenaRatingService {
   private async fetchVersionHeader(url: string): Promise<string> {
     return this.withShortRetry(async () => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), LARGE_FETCH_TIMEOUT_MS);
       try {
         const response = await this.fetcher(url, {
           method: "HEAD",
@@ -553,7 +576,26 @@ function parseCachedTable(value: unknown): ArenaRatingTable | undefined {
   const ratings = parseRatings(value.ratings);
   const hearthArenaWeb = parseHearthArenaWebCache(value.hearthArenaWeb);
   const firestone = parseFirestoneCache(value.firestone);
-  return { source: value.source, version: value.version, fetchedAt: value.fetchedAt, ratings, hearthArenaWeb, firestone };
+  return {
+    source: value.source,
+    version: value.version,
+    fetchedAt: value.fetchedAt,
+    ratings,
+    sources: parseSourceProvenance(value.sources),
+    hearthArenaWeb,
+    firestone
+  };
+}
+
+function parseSourceProvenance(value: unknown): readonly DataSourceProvenance[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sources = value.filter((source): source is DataSourceProvenance =>
+    isRecord(source) && typeof source.id === "string" && typeof source.label === "string" &&
+    Array.isArray(source.urls) && isRecord(source.authorization) &&
+    (source.authorization.status === "authorized" || source.authorization.status === "pending-confirmation" || source.authorization.status === "unknown") &&
+    typeof source.authorization.note === "string"
+  );
+  return sources.length === value.length ? mergeSourceProvenance(sources) : undefined;
 }
 
 function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | undefined {
@@ -579,7 +621,8 @@ function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | 
       version: rawLocale.version,
       fetchedAt: rawLocale.fetchedAt,
       ratingCount,
-      ratings
+      ratings,
+      cards: parseHearthArenaCards(rawLocale.cards)
     });
   }
 
@@ -588,9 +631,10 @@ function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | 
 
 function parseHearthArenaWebLocale(locale: string, url: string, html: string): HearthArenaWebLocaleRatingSource {
   const ratings: Record<string, Record<string, number>> = {};
+  const cards: Record<string, HearthArenaCardMetadata> = {};
   const sectionPattern = /<section class="tab tierlist [^"]*" id="([^"]+)">([\s\S]*?)(?=<section class="tab tierlist [^"]*" id="|<section class="footer"|$)/g;
   const cardPattern =
-    /<dl class="card[^"]*">\s*<dt class="([^"]*)"[^>]*data-card-image="([^"]+)"[^>]*>[\s\S]*?<\/dt>\s*<dd class="score[^"]*">\s*([^<]+?)\s*<\/dd>/g;
+    /<dl class="card[^"]*">\s*<dt class="([^"]*)"[^>]*data-card-image="([^"]+)"[^>]*>([\s\S]*?)<\/dt>\s*<dd class="score[^"]*">\s*([^<]+?)\s*<\/dd>/g;
 
   for (const sectionMatch of html.matchAll(sectionPattern)) {
     const className = HEARTH_ARENA_CLASS_BY_SLUG[sectionMatch[1] ?? ""];
@@ -601,9 +645,23 @@ function parseHearthArenaWebLocale(locale: string, url: string, html: string): H
     const classRatings = ratings[className] ?? {};
     for (const cardMatch of (sectionMatch[2] ?? "").matchAll(cardPattern)) {
       const cardId = extractCardIdFromImageUrl(cardMatch[2] ?? "");
-      const score = parseScoreText(cardMatch[3] ?? "");
+      const score = parseScoreText(cardMatch[4] ?? "");
       if (cardId && score !== undefined) {
         classRatings[cardId] = score;
+        const name = parseHearthArenaCardName(cardMatch[3] ?? "");
+        if (name) {
+          const heroClass = HEARTH_ARENA_HERO_CLASS_BY_SLUG[sectionMatch[1] ?? ""];
+          const previous = cards[cardId];
+          const heroClasses = heroClass === "中立" || previous?.heroClasses?.includes("中立")
+            ? ["中立"]
+            : [...new Set([...(previous?.heroClasses ?? []), ...(heroClass ? [heroClass] : [])])];
+          cards[cardId] = {
+            cardId,
+            name: previous?.name ?? name,
+            imageUrl: previous?.imageUrl ?? parseHearthArenaImageUrl(cardMatch[2]),
+            heroClasses
+          };
+        }
       }
     }
     if (Object.keys(classRatings).length) {
@@ -622,7 +680,8 @@ function parseHearthArenaWebLocale(locale: string, url: string, html: string): H
     version: shortHash(html),
     fetchedAt: new Date().toISOString(),
     ratingCount,
-    ratings
+    ratings,
+    cards
   };
 }
 
@@ -635,12 +694,79 @@ function buildHearthArenaWebSource(locales: readonly HearthArenaWebLocaleRatingS
   for (const locale of locales) {
     byLocale[locale.locale] = locale;
   }
+  const cards: Record<string, HearthArenaCardMetadata> = {};
+  for (const locale of [...locales].sort((left, right) =>
+    localePriority(left.locale) - localePriority(right.locale)
+  )) {
+    for (const card of Object.values(locale.cards ?? {})) {
+      const previous = cards[card.cardId];
+      cards[card.cardId] = previous
+        ? {
+            ...previous,
+            ...card,
+            name: previous.name,
+            heroClasses: previous.heroClasses?.includes("中立")
+              ? ["中立"]
+              : [...new Set([...(previous.heroClasses ?? []), ...(card.heroClasses ?? [])])]
+          }
+        : card;
+    }
+  }
 
   return {
     source: "HearthArena Web",
     version: locales.map((locale) => `${locale.locale}:${locale.version}`).sort().join("|"),
-    locales: byLocale
+    locales: byLocale,
+    cards
   };
+}
+
+function parseHearthArenaCards(value: unknown): Readonly<Record<string, HearthArenaCardMetadata>> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const cards: Record<string, HearthArenaCardMetadata> = {};
+  for (const rawCard of Object.values(value)) {
+    if (!isRecord(rawCard) || typeof rawCard.cardId !== "string" || typeof rawCard.name !== "string") {
+      continue;
+    }
+    const cardId = rawCard.cardId.trim().toUpperCase();
+    const name = rawCard.name.trim();
+    if (!cardId || !name) {
+      continue;
+    }
+    const imageUrl = parseHearthArenaImageUrl(rawCard.imageUrl);
+    const heroClasses = Array.isArray(rawCard.heroClasses)
+      ? rawCard.heroClasses.filter((heroClass): heroClass is string => typeof heroClass === "string")
+      : undefined;
+    cards[cardId] = {
+      cardId,
+      name,
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(heroClasses?.length ? { heroClasses } : {})
+    };
+  }
+  return cards;
+}
+
+function parseHearthArenaCardName(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+(?:新|New)$/iu, "")
+    .trim();
+}
+
+function parseHearthArenaImageUrl(value: unknown): string | undefined {
+  return typeof value === "string" && /^https:\/\/cdn\.heartharena\.com\/images\/renders\/[^"'\\\s]+$/i.test(value)
+    ? value
+    : undefined;
+}
+
+function localePriority(locale: string): number {
+  return locale === "zh-cn" ? 0 : locale === "zh-tw" ? 1 : 2;
 }
 
 function parseFirestone(value: unknown, draftValue: unknown | readonly unknown[] | undefined, version: string | undefined): FirestoneRatingSource {

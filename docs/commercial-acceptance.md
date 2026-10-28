@@ -35,8 +35,10 @@
 ## 发布验证
 
 - 发布前在 Apple Silicon Mac 上运行 `npm run verify:release`；任何一步失败都不得交付。
+- Mac App Store 包另运行 `npm run verify:mas-arm64`。普通包的验证结果不得代替 MAS sandbox、签名、产物或启动结论。
+- MAS 验收写出脱敏 manifest，只记录 commit、版本、Info.plist 哈希、sandbox/signature/pkg 与运行检查结果；不记录证书、profile 内容或账号信息。
 - 自动验收证据保存在 `outputs/release-verification`，包括三类日志回放结果、主窗口与全部悬浮窗截图、检查数据和启动耗时。
-- `npm test`、`npm run typecheck`、`npm run build` 全部通过。
+- 发布门禁只运行一次完整 `npm test`；签名打包阶段完成原生组件、类型检查和正式构建，避免对未改代码重复运行测试或构建。
 - 安装包必须使用稳定 Apple 开发签名并通过 `codesign --verify --deep --strict`；临时签名包不得作为交付物。
 - 安装包必须通过 `plutil` 验证 `NSScreenCaptureUsageDescription` 存在，首次授权后重启应用并实测屏幕识别成功。
 - 用代表性普通对局日志和竞技场日志启动打包版，检查主窗口、小窗和退出清理。

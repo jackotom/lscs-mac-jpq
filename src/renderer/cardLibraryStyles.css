@@ -166,6 +166,25 @@
   line-height: 1.2;
 }
 
+.card-library-sources {
+  margin: 0 0 10px;
+  border: 1px solid rgba(180, 205, 230, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #b9c9d8;
+  font-size: 12px;
+}
+
+.card-library-sources summary { cursor: pointer; color: #e5edf6; font-weight: 700; }
+.card-library-sources ul { display: grid; gap: 8px; margin: 9px 0 0; padding: 0; list-style: none; }
+.card-library-sources li { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.card-library-sources li p { flex-basis: 100%; margin: 0; line-height: 1.4; }
+.card-library-sources a { color: #8ecbff; }
+.card-library-source-status { border-radius: 999px; padding: 1px 6px; font-size: 11px; }
+.card-library-source-status.is-authorized { color: #9ee7bb; background: rgba(66, 180, 111, 0.16); }
+.card-library-source-status.is-pending-confirmation { color: #f6d58c; background: rgba(188, 135, 42, 0.16); }
+.card-library-source-status.is-unknown { color: #c8d0da; background: rgba(148, 163, 184, 0.16); }
+
 .card-library-results-bar span {
   overflow: hidden;
   text-overflow: ellipsis;

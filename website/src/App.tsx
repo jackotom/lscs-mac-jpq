@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 
-const releaseVersion = "0.7.5";
+const releaseVersion = "0.7.9";
 const releaseUrl = import.meta.env.VITE_DOWNLOAD_URL || `https://acyg.me/lsjpq/hearthstone-tracker-mac-arm64-v${releaseVersion}.zip`;
 const changelogUrl = "https://github.com/jackotom/lscs-mac-jpq/blob/main/CHANGELOG.md";
 

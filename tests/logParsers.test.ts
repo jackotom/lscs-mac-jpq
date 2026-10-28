@@ -132,12 +132,12 @@ describe("log parsers", () => {
       "D 11:00:00.000 GameState.DebugPrintPower() - CREATE_GAME",
       "D 12:00:00.000 GameState.DebugPrintPower() - CREATE_GAME",
       "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=1, PlayerName=UNKNOWN HUMAN PLAYER",
-      "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=昏沉的幽灵#511319",
+      "D 12:00:00.000 GameState.DebugPrintGame() - PlayerID=2, PlayerName=TestPlayer#1234",
       "D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME",
       "D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=火羽精灵 id=37 zone=DECK cardId=CORE_UNG_809 player=2] tag=ZONE value=HAND"
     ].join("\n"));
 
-    expect(currentGame).toContain("PlayerID=2, PlayerName=昏沉的幽灵#511319");
+    expect(currentGame).toContain("PlayerID=2, PlayerName=TestPlayer#1234");
     expect(currentGame).not.toContain("11:00:00.000");
   });
 

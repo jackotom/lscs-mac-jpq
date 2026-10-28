@@ -848,6 +848,41 @@ body:has(.overlay-shell) {
   -webkit-backdrop-filter: blur(9px) saturate(1.06);
 }
 
+.overlay-shell:has(.overlay-normal) .overlay-deck-summary {
+  min-height: 30px;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 3px;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact > .overlay-deck-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-identity-compact > svg {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.overlay-shell:has(.overlay-normal) .overlay-deck-status-compact {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #a9c5d7;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .overlay-shell:has(.overlay-normal) > .overlay-header {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 4px;

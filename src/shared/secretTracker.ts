@@ -98,7 +98,14 @@ export class SecretTracker {
     hadSecretActivity: boolean;
   }> = [];
 
-  constructor(private readonly database?: CardDatabase) {}
+  constructor(private database?: CardDatabase) {}
+
+  setCardDatabase(database?: CardDatabase) {
+    this.database = database;
+    for (const slot of this.slots.values()) {
+      this.rebuildCandidates(slot);
+    }
+  }
 
   setOpponentClass(heroClass?: string) {
     this.opponentClass = normalizeHeroClass(heroClass);

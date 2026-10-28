@@ -1,3 +1,4 @@
+import { CardThumbnail } from "./CardThumbnail";
 import {
   useEffect,
   useId,
@@ -583,7 +584,7 @@ function HistoryArtwork({
         cardId: item.cardId ?? item.details?.cardId,
         cropImageUrl: item.details?.cropImageUrl,
         imageUrl: item.details?.imageUrl
-      });
+      }, "image-first");
   const sourcesKey = sources.join("\n");
   const [sourceState, setSourceState] = useState({ key: sourcesKey, index: 0 });
   const sourceIndex = sourceState.key === sourcesKey ? sourceState.index : 0;
@@ -649,7 +650,7 @@ function CardRows({
               </span>
               <span className="overlay-card-art">
                 {item.thumbnailUrl
-                  ? <img className="overlay-card-art-image" src={item.thumbnailUrl} alt="" loading="lazy" />
+                  ? <CardThumbnail className="overlay-card-art-image" card={item.details} fallbackUrl={item.thumbnailUrl} />
                   : null}
                 <strong title={item.name}>{item.name}</strong>
               </span>

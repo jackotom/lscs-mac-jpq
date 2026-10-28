@@ -89,11 +89,47 @@ export class ArenaDraftEngine {
 
   setCardDatabase(cardDatabase?: CardDatabase) {
     this.cardDatabase = cardDatabase;
-    this.cardNameByCardId = cardDatabase ? new Map(createCardIdNameLookup(cardDatabase)) : new Map();
+    this.rebuildCardIndexes();
+    this.rebuildScores();
+  }
+
+  setRatings(ratings?: ArenaRatingTable) {
+    this.ratings = ratings;
+    if (ratings) {
+      this.error = undefined;
+    }
+    this.rebuildCardIndexes();
+    this.rebuildScores();
+  }
+
+  private rebuildCardIndexes() {
+    this.cardNameByCardId = this.cardDatabase ? new Map(createCardIdNameLookup(this.cardDatabase)) : new Map();
     this.cardInfoByCardId = new Map();
     this.cardInfoByName = new Map();
     this.cardInfoByOcrName = new Map();
-    for (const card of cardDatabase ? listCardInfos(cardDatabase) : []) {
+    const cards = this.cardDatabase ? [...listCardInfos(this.cardDatabase)] : [];
+    const indexedCardIds = new Set(cards.flatMap((card) => {
+      const cardId = card.cardId ?? card.id;
+      return cardId ? [normalizeCardId(cardId)] : [];
+    }));
+
+    for (const [index, metadata] of Object.values(this.ratings?.hearthArenaWeb?.cards ?? {}).entries()) {
+      if (indexedCardIds.has(normalizeCardId(metadata.cardId))) {
+        continue;
+      }
+      cards.push({
+        dbfId: 2_000_000_000 + index,
+        cardId: metadata.cardId,
+        id: metadata.cardId,
+        name: metadata.name,
+        collectible: true,
+        heroClasses: metadata.heroClasses,
+        imageUrl: metadata.imageUrl
+      });
+      indexedCardIds.add(normalizeCardId(metadata.cardId));
+    }
+
+    for (const card of cards) {
       if (card.cardId ?? card.id) {
         this.cardInfoByCardId.set(normalizeCardId(card.cardId ?? card.id!), card);
       }
@@ -106,15 +142,6 @@ export class ArenaDraftEngine {
       ocrMatches.push(card);
       this.cardInfoByOcrName.set(ocrName, ocrMatches);
     }
-    this.rebuildScores();
-  }
-
-  setRatings(ratings?: ArenaRatingTable) {
-    this.ratings = ratings;
-    if (ratings) {
-      this.error = undefined;
-    }
-    this.rebuildScores();
   }
 
   setError(error?: string) {

@@ -25,6 +25,7 @@ import type { HomeNewsResult } from "../shared/homeNews";
 import type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 import type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
 import type { AppPermissionId, AppPermissionSummary } from "../shared/appPermissions";
+import type { DecisionInsight } from "../shared/decisionInsights";
 
 export type { ArenaInsightsResult, ArenaReward, ArenaRunRecord } from "../shared/arenaInsights";
 export type { CollectionInsightsResult, CollectionSnapshot, CosmeticItem, PackOpeningRecord } from "../shared/collectionInsights";
@@ -76,6 +77,7 @@ export interface HearthstoneTrackerApi {
   getHomeNews?: () => Promise<HomeNewsResult>;
   getArenaHeroWinRateRanking?: () => Promise<ArenaHeroWinRateRankingResult>;
   openHomeNewsItem?: (itemId: string) => Promise<void>;
+  openDataSourceUrl?: (url: string) => Promise<void>;
   getTrackerSettings?: () => Promise<TrackerSettings>;
   setTrackerSettings?: (settings: TrackerSettings) => Promise<TrackerSettings>;
   restoreDefaultSettings?: () => Promise<TrackerSettings>;
@@ -222,7 +224,7 @@ export interface OverlayDeckSummary {
   drawnCards: number;
 }
 
-export type OverlayDeckIdentityStatus = "confirmed" | "candidates" | "automatic" | "waiting" | "arena";
+export type OverlayDeckIdentityStatus = "confirmed" | "candidates" | "automatic" | "manual" | "waiting" | "arena";
 
 export interface OverlayDeckIdentity {
   name: string;
@@ -313,6 +315,7 @@ export interface MatchPulseView {
 }
 
 export interface OverlayPanelViewModel {
+  decisionInsight?: DecisionInsight;
   cardTracking: OverlayCardTrackingView;
   summary: OverlayDeckSummary;
   deckIdentity: OverlayDeckIdentity;

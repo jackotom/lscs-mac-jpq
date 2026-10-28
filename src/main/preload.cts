@@ -125,6 +125,8 @@ const settingsApi = {
 };
 
 const arenaHeroRankingApi = {
+  getArenaHeroWinRateRanking: () =>
+    ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking") as Promise<ArenaHeroWinRateRankingResult>,
   onArenaHeroWinRateRankingUpdate: (callback: (result: ArenaHeroWinRateRankingResult) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, result: ArenaHeroWinRateRankingResult) => callback(result);
     ipcRenderer.on("tracker:arena-hero-win-rate-ranking:update", listener);
@@ -170,8 +172,7 @@ const mainApi = {
     readonly coins?: readonly CosmeticItem[];
   }) => ipcRenderer.invoke("tracker:update-cosmetics", cosmetics) as Promise<CollectionSnapshot>,
   getHomeNews: () => ipcRenderer.invoke("tracker:get-home-news") as Promise<HomeNewsResult>,
-  getArenaHeroWinRateRanking: () =>
-    ipcRenderer.invoke("tracker:get-arena-hero-win-rate-ranking") as Promise<ArenaHeroWinRateRankingResult>,
+  openDataSourceUrl: (url: string) => ipcRenderer.invoke("tracker:open-data-source-url", url) as Promise<void>,
   openHomeNewsItem: (itemId: string) =>
     ipcRenderer.invoke("tracker:open-home-news-item", itemId) as Promise<void>,
   discoverLogs: () => ipcRenderer.invoke("tracker:discover-logs") as Promise<LogCandidate[]>,

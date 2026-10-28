@@ -100,7 +100,7 @@ describe("MatchHistoryStore", () => {
     });
   });
 
-  it("keeps only the latest 100 matches", async () => {
+  it("audit regression preserves more than 100 matches inside the retention period", async () => {
     const store = await createStore();
     for (let index = 0; index < 101; index += 1) {
       await store.add(createMatch(index, index % 2 === 0 ? "win" : "loss"));
@@ -110,9 +110,9 @@ describe("MatchHistoryStore", () => {
 
     expect(history.status).toBe("ok");
     if (history.status === "ok") {
-      expect(history.matches).toHaveLength(100);
+      expect(history.matches).toHaveLength(101);
       expect(history.matches[0]?.id).toBe("match-100");
-      expect(history.matches.at(-1)?.id).toBe("match-1");
+      expect(history.matches.at(-1)?.id).toBe("match-0");
     }
   });
 
@@ -132,7 +132,7 @@ describe("MatchHistoryStore", () => {
     });
   });
 
-  it("sorts out-of-order inserts by endedAt and keeps the true latest 100", async () => {
+  it("sorts out-of-order inserts without deleting retained matches", async () => {
     const store = await createStore();
     await store.add(createMatch(100, "win"));
     for (let index = 0; index < 100; index += 1) {
@@ -143,10 +143,9 @@ describe("MatchHistoryStore", () => {
 
     expect(history.status).toBe("ok");
     if (history.status === "ok") {
-      expect(history.matches).toHaveLength(100);
+      expect(history.matches).toHaveLength(101);
       expect(history.matches[0]?.id).toBe("match-100");
-      expect(history.matches.at(-1)?.id).toBe("match-1");
-      expect(history.matches.some((match) => match.id === "match-0")).toBe(false);
+      expect(history.matches.at(-1)?.id).toBe("match-0");
     }
   });
 

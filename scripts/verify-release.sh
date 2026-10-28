@@ -465,22 +465,10 @@ if [[ "${VERIFY_ARENA_REDRAFT_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
-echo "[1/7] 完整测试"
+echo "[1/5] 完整测试"
 npm test
-npm test -- \
-  tests/mainWindowVisibility.test.ts \
-  tests/automaticOverlayController.test.ts \
-  tests/opponentOverlayWindowController.test.ts \
-  tests/trackerSettingsStore.test.ts \
-  tests/overlayWindowBounds.test.ts
 
-echo "[2/7] 类型检查"
-npm run typecheck
-
-echo "[3/7] 正式构建"
-npm run build
-
-echo "[4/7] 签名打包"
+echo "[2/5] 签名打包"
 npm run package:mac-arm64
 require_file "$root_dir/outputs/炉石记牌器-mac-arm64.zip"
 if [[ ! -s "$metrics_file" || "$(head -n 1 "$metrics_file")" != "$metrics_header" ]]; then
@@ -488,7 +476,7 @@ if [[ ! -s "$metrics_file" || "$(head -n 1 "$metrics_file")" != "$metrics_header
   exit 1
 fi
 
-echo "[5/7] 代表性日志回放与窗口截图"
+echo "[3/5] 代表性日志回放与窗口截图"
 prepare_arena_redraft_fixtures
 run_capture normal-replay fixtures/logs/session-2026-07-10
 run_capture auto-match-replay fixtures/logs/auto-match-session
@@ -527,7 +515,7 @@ require_file "$inspections_dir/smart-counter-overlay.json"
 require_file "$inspections_dir/arena-hero-ranking-overlay.json"
 require_file "$inspections_dir/three-window-layout.json"
 
-echo "[6/7] 组件、签名、权限说明与架构"
+echo "[4/5] 组件、签名、权限说明与架构"
 expected_app_version="$(node -p 'require("./package.json").version')"
 actual_short_version="$(plutil -extract CFBundleShortVersionString raw "$app_path/Contents/Info.plist")"
 actual_build_version="$(plutil -extract CFBundleVersion raw "$app_path/Contents/Info.plist")"
@@ -560,7 +548,7 @@ if ! grep -Fq 'Timestamp=' <<<"$signature_details"; then
   exit 1
 fi
 
-echo "[7/7] 安装包启动"
+echo "[5/5] 安装包启动"
 launch_user_data="$evidence_dir/user-data/launch-check"
 rm -rf "$launch_user_data"
 mkdir -p "$launch_user_data"

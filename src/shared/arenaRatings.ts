@@ -1,11 +1,21 @@
+import { formatSourceLabel, type DataSourceProvenance } from "./dataSourceProvenance.js";
+
 export interface ArenaRatingTable {
   readonly source: string;
   readonly version: number;
   readonly fetchedAt: string;
   readonly ratings: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  readonly sources?: readonly DataSourceProvenance[];
   readonly hearthArenaWeb?: HearthArenaWebRatingSource;
   readonly firestone?: FirestoneRatingSource;
   readonly firestoneClasses?: Readonly<Record<string, FirestoneClassRatingSource>>;
+}
+
+export interface HearthArenaCardMetadata {
+  readonly cardId: string;
+  readonly name: string;
+  readonly imageUrl?: string;
+  readonly heroClasses?: readonly string[];
 }
 
 export interface HearthArenaWebLocaleRatingSource {
@@ -15,12 +25,14 @@ export interface HearthArenaWebLocaleRatingSource {
   readonly fetchedAt: string;
   readonly ratingCount: number;
   readonly ratings: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  readonly cards?: Readonly<Record<string, HearthArenaCardMetadata>>;
 }
 
 export interface HearthArenaWebRatingSource {
   readonly source: "HearthArena Web";
   readonly version: string;
   readonly locales: Readonly<Record<string, HearthArenaWebLocaleRatingSource>>;
+  readonly cards?: Readonly<Record<string, HearthArenaCardMetadata>>;
 }
 
 export interface FirestoneCardRating {
@@ -162,7 +174,7 @@ export function getArenaScoreSourceLabel(table: ArenaRatingTable | undefined): s
     return undefined;
   }
 
-  const parts = [`${table.source} v${table.version}`];
+  const parts = [formatSourceLabel(table.sources ?? []) ?? table.source, `v${table.version}`];
   if (table.hearthArenaWeb) {
     parts.push("HearthArena官网");
   }

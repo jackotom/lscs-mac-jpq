@@ -1900,6 +1900,42 @@ D 12:00:03.100 PowerTaskList.DebugPrintPower() - tag=ATK value=6
     expect(engine.getState().opponentSecrets).toEqual([]);
   });
 
+  it("audit regression: keeps active secret exclusions when the card database refreshes", () => {
+    const initialDatabase = createCardDatabase([
+      { id: 1, cardId: "EX1_287", name: "法术反制", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 2, cardId: "DMF_236", name: "法术反制替代", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 3, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" },
+      { id: 4, cardId: "TEST_SPELL", name: "测试法术", type: "SPELL" }
+    ]);
+    const refreshedDatabase = createCardDatabase([
+      { id: 11, cardId: "EX1_287", name: "法术反制（刷新）", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 12, cardId: "DMF_236", name: "法术反制替代（刷新）", collectible: true, type: "SPELL", playerClass: "MAGE", mechanics: ["SECRET"] },
+      { id: 13, cardId: "HERO_MAGE", name: "法师英雄", type: "HERO", playerClass: "MAGE" },
+      { id: 14, cardId: "TEST_SPELL", name: "测试法术", type: "SPELL" }
+    ]);
+    const engine = new TrackerEngine({ cardDatabase: initialDatabase });
+    engine.setFriendlyController(1);
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - FULL_ENTITY - Updating Entity=[entityName=法师英雄 id=2 zone=PLAY cardId=HERO_MAGE player=2] CardID=HERO_MAGE
+D 12:00:02.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=UNKNOWN ENTITY id=70 zone=HAND cardId= player=2] tag=ZONE value=SECRET
+D 12:00:03.000 PowerTaskList.DebugPrintPower() - BLOCK_START BlockType=PLAY Entity=[entityName=测试法术 id=50 zone=HAND cardId=TEST_SPELL player=1]
+D 12:00:03.100 PowerTaskList.DebugPrintPower() - BLOCK_END
+`);
+    expect(engine.getState().opponentSecrets?.[0].candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "EX1_287", status: "excluded", exclusionReason: "spell-played-without-trigger" }),
+      expect.objectContaining({ cardId: "DMF_236", status: "excluded", exclusionReason: "spell-played-without-trigger" })
+    ]));
+
+    engine.setCardDatabase(refreshedDatabase);
+
+    expect(engine.getState().opponentSecrets?.[0]).toMatchObject({ entityId: "70" });
+    expect(engine.getState().opponentSecrets?.[0].candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cardId: "EX1_287", name: "法术反制（刷新）", status: "excluded", exclusionReason: "spell-played-without-trigger" }),
+      expect.objectContaining({ cardId: "DMF_236", name: "法术反制替代（刷新）", status: "excluded", exclusionReason: "spell-played-without-trigger" })
+    ]));
+  });
+
   it("counts hero attack once and excludes weapons and non-combat board entities", () => {
     const richDb = createCardDatabase([
       { id: 1, cardId: "HERO", name: "测试英雄", type: "HERO" },
@@ -2813,6 +2849,26 @@ D 12:10:01.000 PowerTaskList.DebugPrintPower() -     TAG_CHANGE Entity=[entityNa
       deck: [{ name: "Fireball", count: 2, remaining: 1, drawn: 1, played: 0 }],
       summary: { totalCards: 2, remainingCards: 1, drawnCards: 1 }
     });
+  });
+
+  it("marks a manual deck through a game and clears the source when collection or Arena decks replace it", () => {
+    const engine = new TrackerEngine({
+      collectionDecks: [createCollectionDeck("collection", "收藏套牌", [{ name: "Collection Card", count: 30 }])]
+    });
+    engine.setFriendlyController(1);
+    engine.importDeck("12x Manual Card");
+    engine.applyText(`
+D 12:00:00.000 PowerTaskList.DebugPrintPower() - CREATE_GAME
+D 12:00:01.000 PowerTaskList.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Manual Card id=64 zone=DECK zonePos=1 cardId=MANUAL_CARD player=1] tag=ZONE value=HAND
+`);
+
+    expect(engine.getState()).toMatchObject({ manualDeck: true, deck: [expect.objectContaining({ name: "Manual Card", count: 12 })] });
+
+    expect(engine.previewCollectionDeck("collection")).toBe(true);
+    expect(engine.getState()).toMatchObject({ manualDeck: false, deckName: "收藏套牌" });
+
+    engine.loadDeckCards([{ name: "Arena Card", count: 30 }], "竞技场牌库");
+    expect(engine.getState()).toMatchObject({ manualDeck: false, deckName: "竞技场牌库" });
   });
 
   it("keeps the confirmed collection deck identity between games", () => {

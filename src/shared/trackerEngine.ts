@@ -178,6 +178,7 @@ export class TrackerEngine {
   private deckCode: string | undefined;
   private deckName: string | undefined;
   private autoMatchedDeckId: string | undefined;
+  private manualDeck = false;
   private deckIdentity: DeckIdentityEvidence = createWaitingDeckIdentity();
   private deckRows = new Map<string, CardTrackerRow>();
   private opponentRows = new Map<string, CardTrackerRow>();
@@ -268,7 +269,7 @@ export class TrackerEngine {
 
   setCardDatabase(cardDatabase?: CardDatabase) {
     this.cardDatabase = cardDatabase;
-    this.secretTracker = new SecretTracker(cardDatabase);
+    this.secretTracker.setCardDatabase(cardDatabase);
     this.cardNameByCardId = cardDatabase ? new Map(createCardIdNameLookup(cardDatabase)) : new Map();
     this.cardInfoByCardId = new Map();
     this.cardInfoByName = new Map();
@@ -300,6 +301,7 @@ export class TrackerEngine {
     this.deckCode = imported.rawCode;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = imported.cards.length > 0;
     this.resetDeckIdentity();
     this.deckRows = new Map(createEmptyDeckRows(imported.cards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
@@ -414,6 +416,7 @@ export class TrackerEngine {
     this.deckCode = deck.rawDeckString;
     this.deckName = deck.name ?? "当前套牌";
     this.autoMatchedDeckId = deck.id;
+    this.manualDeck = false;
     this.confirmExplicitDeckIdentity(deck.id, source);
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
@@ -434,6 +437,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = false;
     this.resetDeckIdentity();
     this.deckRows.clear();
     this.deckRowsByCardId.clear();
@@ -456,6 +460,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = "等待精确识别";
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = false;
     this.resetDeckIdentity();
     this.deckRows = new Map([
       [
@@ -480,6 +485,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = name;
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = false;
     this.resetDeckIdentity();
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
@@ -639,6 +645,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = name;
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = false;
     this.resetDeckIdentity();
     this.deckRows = nextRows;
     this.rebuildDeckCardIdIndex();
@@ -655,6 +662,7 @@ export class TrackerEngine {
     this.deckCode = undefined;
     this.deckName = undefined;
     this.autoMatchedDeckId = undefined;
+    this.manualDeck = false;
     this.resetDeckIdentity();
     this.deckRows.clear();
     this.deckRowsByCardId.clear();
@@ -675,6 +683,7 @@ export class TrackerEngine {
       this.deckCode = undefined;
       this.deckName = undefined;
       this.autoMatchedDeckId = undefined;
+      this.manualDeck = false;
       this.resetDeckIdentity();
     }
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
@@ -721,6 +730,7 @@ export class TrackerEngine {
       this.deckCode = undefined;
       this.deckName = undefined;
       this.autoMatchedDeckId = undefined;
+      this.manualDeck = false;
       this.resetDeckIdentity();
       this.deckRows.clear();
       this.deckRowsByCardId.clear();
@@ -857,6 +867,7 @@ export class TrackerEngine {
       deckCode: this.deckCode,
       deckName: this.deckName,
       autoMatchedDeckId: this.autoMatchedDeckId,
+      manualDeck: this.manualDeck,
       deckIdentity: this.deckIdentity,
       deck: deck.map((row) => this.withCardDetails(row, true)),
       friendlyHand,
@@ -1709,6 +1720,7 @@ export class TrackerEngine {
     this.deckCode = deck.rawDeckString;
     this.deckName = deck.name ?? "自动匹配套牌";
     this.autoMatchedDeckId = deck.id;
+    this.manualDeck = false;
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.initializeGeneratedDeckRow(generatedDeckCard);
@@ -1724,6 +1736,7 @@ export class TrackerEngine {
     this.deckCode = deck.rawDeckString;
     this.deckName = deck.name ?? "当前套牌";
     this.autoMatchedDeckId = deck.id;
+    this.manualDeck = false;
     this.deckRows = new Map(createEmptyDeckRows(this.deckCards).map((row) => [deckCardKey(row), row]));
     this.rebuildDeckCardIdIndex();
     this.initializeMissingCollectionDeckRow(missingDeckCard, deck);

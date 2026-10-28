@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Database, ImageOff, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cardArtworkSources, type CardDetails } from "../../shared/cardDatabase";
+import type { DataSourceProvenance } from "../../shared/dataSourceProvenance";
 import "../cardLibraryStyles.css";
 import { CardDetailBody } from "./CardDetailBody";
 import { CardHoverPreview } from "./CardHoverPreview";
@@ -26,6 +27,7 @@ export interface CardLibraryPanelProps {
   readonly query: string;
   readonly loading: boolean;
   readonly error?: string;
+  readonly sources?: readonly DataSourceProvenance[];
   readonly page: CardLibraryPage;
   readonly onSearch: (query: string) => void;
   readonly onClassChange: (className: string) => void;
@@ -41,6 +43,7 @@ export function CardLibraryPanel({
   query,
   loading,
   error,
+  sources = [],
   page,
   onSearch,
   onClassChange,
@@ -126,6 +129,23 @@ export function CardLibraryPanel({
         <span>{query.trim() ? `关键词：${query.trim()}` : "悬停查看完整效果"}</span>
       </div>
 
+      {sources.length > 0 ? <details className="card-library-sources">
+        <summary>数据来源</summary>
+        <ul>
+          {sources.map((source) => <li key={source.id}>
+            <strong>{source.label}</strong>
+            <span className={`card-library-source-status is-${source.authorization.status}`}>{authorizationLabel(source.authorization.status)}</span>
+            <p>{source.authorization.note}</p>
+            {source.urls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" onClick={(event) => {
+              const open = window.hearthstoneTracker?.openDataSourceUrl;
+              if (!open) return;
+              event.preventDefault();
+              void open(url);
+            }}>官网链接</a>)}
+          </li>)}
+        </ul>
+      </details> : null}
+
       <div className="card-library-results">
         {loading && cards.length === 0 ? <LoadingState /> : error && cards.length === 0 ? <ErrorState error={error} /> : cards.length === 0 ? <EmptyState /> : (
           <>
@@ -181,6 +201,10 @@ export function CardLibraryPanel({
   );
 }
 
+function authorizationLabel(status: DataSourceProvenance["authorization"]["status"]): string {
+  return status === "authorized" ? "已获当前用途授权" : status === "pending-confirmation" ? "授权待确认" : "授权状态未知";
+}
+
 function CardLibraryTile({
   card,
   selected,
@@ -219,7 +243,8 @@ function CardLibraryTile({
 }
 
 function CardArtwork({ card }: { card: CardLibraryCard }) {
-  const sources = cardArtworkSources(card);
+  // The official full image is current while some official crop assets lag behind it.
+  const sources = cardArtworkSources(card, "image-first");
   const sourcesKey = sources.join("\n");
   const [sourceIndex, setSourceIndex] = useState(0);
   const source = sources[sourceIndex];

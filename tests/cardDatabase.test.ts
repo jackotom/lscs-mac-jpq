@@ -580,6 +580,27 @@ describe("card database details", () => {
     expect(searched.items).toEqual([expect.objectContaining({ dbfId: 4003, attack: 2, health: 4, text: "战吼：冻结一个敌人。" })]);
   });
 
+  it("shows one current card per name, type, and class while exact identifiers keep historical versions available", () => {
+    const base = { collectible: true, name: "背刺", playerClass: "ROGUE", cost: 0, type: "SPELL" };
+    const database = createCardDatabase([
+      { ...base, dbfId: 68348, cardId: "VAN_CS2_072", text: "对一个未受伤的随从造成$2点\n伤害。" },
+      { ...base, dbfId: 69521, cardId: "CORE_CS2_072", spellSchool: "SHADOW", text: "对一个未受伤的随从造成2点伤害。" },
+      { ...base, dbfId: 180, cardId: "CS2_072", health: 0, spell_school_id: 6, text: "对一个未受伤的随从造成 2点 伤害。", image: "https://example.test/current.png" },
+      { ...base, dbfId: 90001, cardId: "OTHER_BACKSTAB", playerClass: "MAGE", text: "造成4点伤害。" },
+      { ...base, dbfId: 90002, cardId: "CORE_CS2_072", cost: 1, text: "对一个未受伤的随从造成2点伤害。" },
+      { ...base, dbfId: 90003, cardId: "VAN_CS2_072", text: "对一个未受伤的随从造成3点伤害。" }
+    ]);
+
+    const page = listCardLibrary(database, { query: "背刺", pageSize: 1 });
+    expect(page.total).toBe(2);
+    expect(page.items).toEqual([expect.objectContaining({ dbfId: 69521 })]);
+    expect(listCardLibrary(database, { query: "背刺", pageSize: 100 }).items.map(card => card.dbfId).sort((a, b) => a - b))
+      .toEqual([69521, 90001]);
+    expect(getCardInfo(database, 68348)?.cardId).toBe("VAN_CS2_072");
+    expect(getCardInfo(database, 69521)?.cardId).toBe("CORE_CS2_072");
+    expect(listCardLibrary(database, { query: "VAN_CS2_072" }).total).toBe(2);
+  });
+
   it("omits internal placeholder cards from the browseable database", () => {
     const database = createCardDatabase([
       { dbfId: 5001, collectible: true, cardId: "REAL_CARD", name: "真实卡牌", type: "SPELL" },

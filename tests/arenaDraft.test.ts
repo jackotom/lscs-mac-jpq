@@ -834,6 +834,47 @@ D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05
     expect(engine.applyScreenChoices(["Sample Pair", "Sample Pair", "Sample Multi"])).toBe(false);
   });
 
+  it("recognizes current Arena-only cards supplied by the live tier list", () => {
+    const currentArenaRatings: ArenaRatingTable = {
+      source: "current arena",
+      version: 119,
+      fetchedAt: "2026-10-28T00:00:00.000Z",
+      ratings: { Neutral: { BE_204: 105 } },
+      hearthArenaWeb: {
+        source: "HearthArena Web",
+        version: "current",
+        locales: {},
+        cards: {
+          BE_204: {
+            cardId: "BE_204",
+            name: "滑行者巨怪",
+            imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/BE_204.webp",
+            heroClasses: ["中立"]
+          }
+        }
+      }
+    };
+    const engine = new ArenaDraftEngine({ cardDatabase: cardDb, ratings: currentArenaRatings });
+    engine.applyArenaText([
+      "D 12:00:00.000 Arena.SetDraftMode - DRAFTING",
+      "D 12:00:00.001 DraftManager.OnChosen(): hero=HERO_05"
+    ].join("\n"));
+
+    expect(engine.applyScreenChoices(["滑行者巨怪", "Sample Singleton", "Sample Pair"])).toBe(true);
+    expect(engine.getState().currentChoices).toEqual([
+      expect.objectContaining({
+        cardId: "BE_204",
+        name: "滑行者巨怪",
+        score: 105,
+        details: expect.objectContaining({
+          imageUrl: "https://cdn.heartharena.com/images/renders/zhCN/BE_204.webp"
+        })
+      }),
+      expect.objectContaining({ cardId: "TEST_001", name: "Sample Singleton" }),
+      expect.objectContaining({ cardId: "TEST_002", name: "Sample Pair" })
+    ]);
+  });
+
   it("uses the rated card when OCR matches duplicate card names", () => {
     const duplicateNameCardDb = createCardDatabase([
       { dbfId: 4001, name: "恐狼前锋", cardId: "EX1_162", collectible: true },

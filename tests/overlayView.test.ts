@@ -403,6 +403,23 @@ describe("overlay view", () => {
     expect(view.recentDraws).toEqual([]);
   });
 
+  it("audit regression: keeps an explicitly imported manual deck visible while automatic identity is still waiting", () => {
+    const tracking = structuredClone(createEmptyCardTracking("manual-game"));
+    const friendlyCurrent = tracking.friendly.current as unknown as Record<string, unknown>;
+    friendlyCurrent.deck = { status: "known", knownCount: 1, totalCount: 1, cards: [{ cardKey: "MANUAL_001", name: "导入卡牌", count: 1 }] };
+    const state = createPublicTrackerState({
+      manualDeck: true,
+      deckIdentity: { status: "waiting", source: "inferred", observedDistinctCards: 0, candidateCount: 0, bestScore: 0, scoreLead: 0 },
+      deck: [{ name: "导入卡牌", count: 1, remaining: 1, drawn: 0, played: 0 }],
+      summary: { totalCards: 1, remainingCards: 1, drawnCards: 0, opponentPlayedCount: 0 },
+      cardTracking: tracking
+    });
+
+    const view = toOverlayPanelViewModel(state);
+    expect(view.deckIdentity).toMatchObject({ status: "manual", name: "手动牌表", detail: "按导入牌表记牌" });
+    expect(view.cardTracking.current.deck.cards).toHaveLength(1);
+  });
+
   it.each([
     [{ constructedScreenMode: "standard" as const }, "停留在选牌页，记牌器会自动查找。", "进入选牌页"],
     [{ gameActive: true }, "继续对局，出现更多卡牌后会自动查找。", "继续对局"],

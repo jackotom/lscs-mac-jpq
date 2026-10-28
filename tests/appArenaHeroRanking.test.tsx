@@ -8,12 +8,15 @@ afterEach(() => {
 });
 
 describe("arena hero ranking window", () => {
-  it("shows loading immediately and waits for the main-process update without starting a second fetch", async () => {
+  it("audit regression: reads the latest main-process snapshot after subscribing so a startup push cannot be lost", async () => {
     let publish!: (result: ArenaHeroWinRateRankingResult) => void;
-    const getArenaHeroWinRateRanking = vi.fn(async (): Promise<ArenaHeroWinRateRankingResult> => ({
-      status: "error",
-      message: "renderer must not fetch"
-    }));
+    const snapshot: ArenaHeroWinRateRankingResult = {
+      status: "ok",
+      source: "公开统计",
+      updatedAt: "2026-07-23T08:00:00.000Z",
+      entries: [{ rank: 1, heroName: "萨满祭司", heroClass: "SHAMAN", winRate: 53.9, games: 36_740 }]
+    };
+    const getArenaHeroWinRateRanking = vi.fn(async (): Promise<ArenaHeroWinRateRankingResult> => snapshot);
     window.history.replaceState({}, "", "/?arena-hero-ranking-overlay=1");
     window.hearthstoneTracker = {
       getArenaHeroWinRateRanking,
@@ -28,7 +31,8 @@ describe("arena hero ranking window", () => {
     render(<App />);
 
     expect(screen.getByRole("status")).toHaveTextContent("正在读取排行");
-    expect(getArenaHeroWinRateRanking).not.toHaveBeenCalled();
+    expect(await screen.findByText("萨满祭司")).toBeInTheDocument();
+    expect(getArenaHeroWinRateRanking).toHaveBeenCalledTimes(1);
 
     act(() => publish({
       status: "ok",
@@ -37,8 +41,7 @@ describe("arena hero ranking window", () => {
       entries: [{ rank: 1, heroName: "萨满祭司", heroClass: "SHAMAN", winRate: 53.9, games: 36_740 }]
     }));
 
-    expect(await screen.findByText("萨满祭司")).toBeInTheDocument();
     expect(screen.getByText("53.9%")).toBeInTheDocument();
-    expect(getArenaHeroWinRateRanking).not.toHaveBeenCalled();
+    expect(getArenaHeroWinRateRanking).toHaveBeenCalledTimes(1);
   });
 });
