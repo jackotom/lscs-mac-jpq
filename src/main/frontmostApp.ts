@@ -21,7 +21,7 @@ export async function getFrontmostAppName(helperPath = resolveFrontmostAppHelper
   const promise = readFrontmostName(helperPath).then((name) => {
     cachedHelperPath = helperPath;
     cachedName = name;
-    cacheExpiresAt = Date.now() + 200;
+    cacheExpiresAt = Date.now() + 750;
     return name;
   }).finally(() => { if (pendingRead?.promise === promise) pendingRead = undefined; });
   pendingRead = { helperPath, promise };

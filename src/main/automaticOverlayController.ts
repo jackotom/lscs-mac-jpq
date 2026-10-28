@@ -26,7 +26,7 @@ export class AutomaticOverlayController {
 
   constructor(private readonly host: AutomaticOverlayHost) {}
 
-  start(intervalMs = 350) {
+  start(intervalMs = 700) {
     if (this.monitor) {
       return;
     }

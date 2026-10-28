@@ -1828,7 +1828,7 @@ function startBoardAttackOverlayMonitor() {
   }
   boardAttackOverlayMonitor = setInterval(() => {
     void refreshBoardAttackOverlayWindow();
-  }, 250);
+  }, 500);
   boardAttackOverlayMonitor.unref();
   void refreshBoardAttackOverlayWindow();
 }
@@ -1926,7 +1926,7 @@ async function refreshAuxiliaryOverlayWindow(
     return;
   }
   const window = await createWindow();
-  if (window && !window.isDestroyed()) window.showInactive();
+  if (window && !window.isDestroyed() && !window.isVisible()) window.showInactive();
 }
 
 async function resolveHearthstoneDisplay() {
@@ -2287,7 +2287,7 @@ async function refreshSmartCounterOverlayWindows(
 
   await Promise.all(visibleCounters.map(async (counter, index) => {
     const window = await createSmartCounterOverlayWindow(counter.id, displayBounds, index, { workArea });
-    if (window && !window.isDestroyed()) window.showInactive();
+    if (window && !window.isDestroyed() && !window.isVisible()) window.showInactive();
   }));
 }
 
@@ -2754,7 +2754,7 @@ function startArenaChoiceOverlayMonitor() {
   if (arenaChoiceOverlayMonitor) return;
   arenaChoiceOverlayMonitor = setInterval(() => {
     void refreshArenaChoiceOverlayWindow();
-  }, 350);
+  }, 500);
   arenaChoiceOverlayMonitor.unref();
 }
 
@@ -2810,8 +2810,12 @@ async function refreshArenaChoiceOverlayWindow() {
       return;
     }
     if (!window.isDestroyed()) {
-      window.setBounds(getArenaChoiceOverlayBounds());
-      window.showInactive();
+      const bounds = getArenaChoiceOverlayBounds();
+      const current = window.getBounds();
+      if (current.x !== bounds.x || current.y !== bounds.y || current.width !== bounds.width || current.height !== bounds.height) {
+        window.setBounds(bounds);
+      }
+      if (!window.isVisible()) window.showInactive();
     }
   } finally {
     arenaChoiceOverlayRefreshInFlight = false;

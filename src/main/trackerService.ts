@@ -951,7 +951,7 @@ export class TrackerService {
     this.stopArenaScreenRecognition();
     this.arenaScreenRecognitionTimer = setInterval(() => {
       void this.refreshArenaScreenChoices(sessionContext);
-    }, 450);
+    }, 900);
     this.arenaScreenRecognitionTimer.unref();
   }
 
