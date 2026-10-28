@@ -5,6 +5,7 @@ import path from "node:path";
 import { toFirestoneClassSlug } from "../shared/arenaRatings.js";
 import { ARENA_SOURCE_PROVENANCE, mergeSourceProvenance, type DataSourceProvenance } from "../shared/dataSourceProvenance.js";
 import { readValidatedJsonCache, writeValidatedJsonCache } from "./atomicJsonCache.js";
+import { HEARTH_ARENA_CURRENT_CARDS } from "../shared/hearthArenaCurrentCards.js";
 import type {
   ArenaRatingTable,
   FirestoneCardRating,
@@ -176,7 +177,11 @@ export class ArenaRatingService {
       }
       if (cached.hearthArenaWeb?.schemaVersion !== HEARTH_ARENA_CARD_METADATA_SCHEMA_VERSION) {
         this.cachedTableLoadedAt = 0;
-        return this.refresh(cached, cacheWarnings, cachedResult.mtimeMs);
+        this.startBaseRefresh(cached);
+        return {
+          table: cached,
+          warnings: [...cacheWarnings, "竞技场牌名索引正在后台升级；当前新牌已使用内置最新牌表"]
+        };
       }
       if (await this.isStale(cachedResult.mtimeMs)) {
         this.cachedTableLoadedAt = 0;
@@ -636,7 +641,9 @@ function parseHearthArenaWebCache(value: unknown): HearthArenaWebRatingSource | 
   }
 
   const source = buildHearthArenaWebSource(locales);
-  return source ? { ...source, schemaVersion } : undefined;
+  return source
+    ? { ...source, schemaVersion, cards: { ...HEARTH_ARENA_CURRENT_CARDS, ...source.cards } }
+    : undefined;
 }
 
 function parseHearthArenaWebLocale(locale: string, url: string, html: string): HearthArenaWebLocaleRatingSource {

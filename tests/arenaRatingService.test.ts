@@ -979,7 +979,10 @@ describe("ArenaRatingService", () => {
       heroClasses: ["中立"],
       rarity: "COMMON"
     });
-    expect(result.table?.hearthArenaWeb?.schemaVersion).toBe(1);
+    await vi.waitFor(async () => {
+      const cached = JSON.parse(await readFile(cachePath, "utf8"));
+      expect(cached.hearthArenaWeb?.schemaVersion).toBe(1);
+    });
   });
 
   it("refreshes fresh legacy Firestone caches that do not include draft buckets", async () => {
